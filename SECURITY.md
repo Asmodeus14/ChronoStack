@@ -8,10 +8,7 @@ ChronoStack is in its **design phase**. No releases exist, so there is no deploy
 
 **Please do not report security vulnerabilities through public issues, discussions or pull requests.**
 
-Preferred channel: **GitHub private vulnerability reporting** (the "Report a vulnerability" button on the repository's Security tab).
-
-> [!WARNING]
-> **Owner action required.** Private vulnerability reporting must be enabled in the repository settings (Settings → Code security → Private vulnerability reporting) before the repository goes public. No email contact has been set up yet, and none is invented here.
+Use **GitHub private vulnerability reporting**: open the repository's [Security tab](https://github.com/Asmodeus14/ChronoStack/security) and click **"Report a vulnerability"**. It is enabled for this repository. There is no separate email contact.
 
 Please include:
 

@@ -32,11 +32,11 @@
 |---|---|---|
 | CONTRIBUTING.md | ✅ | Design-phase contribution paths; build/test commands deferred honestly |
 | CODE_OF_CONDUCT.md | ⛔ Owner | Adopts Contributor Covenant 3.0 by reference. **The owner must paste the full official text and provide a reporting contact.** |
-| SECURITY.md | ⛔ Owner | Policy written. **The owner must enable GitHub private vulnerability reporting.** |
+| SECURITY.md | ✅ | GitHub private vulnerability reporting enabled (2026-11-13) |
 | LICENSE | ✅ | `MIT OR Apache-2.0`, decided by the owner on 2026-11-13 ([LICENSING.md](development/LICENSING.md)). MIT copyright line is "The ChronoStack Contributors"; the owner may change it. |
 | Issue templates (bug, feature) | ✅ | |
 | PR template (testing + docs checklists) | ✅ | |
-| Discussions form (`ideas.yml`) | ⚠️ | Requires Discussions to be enabled with an **Ideas** category whose slug is `ideas` |
+| Discussions form (`ideas.yml`) | ✅ | Discussions enabled; the **Ideas** category (slug `ideas`) exists |
 | Maintainers / governance | ⛔ Owner | No maintainers are listed. Add a `MAINTAINERS` section or `CODEOWNERS` once known. |
 
 ### CI and tooling
@@ -56,10 +56,11 @@
 
 | Item | Status | Notes |
 |---|---|---|
-| Repository description and topics | ⚠️ Owner | Text prepared in [REPOSITORY_SETUP.md](development/REPOSITORY_SETUP.md); apply in settings |
+| Repository description and topics | ✅ | Applied 2026-11-13: description plus 14 topics; Wiki off |
+| Visibility | ✅ | **Public** since 2026-11-13: https://github.com/Asmodeus14/ChronoStack |
 | Social preview image | ⛔ Owner | Concept only |
-| Branch protection | ⚠️ Owner | Recommended settings documented |
-| `git init` and first commit | ⚠️ Owner | The directory is not a git repository yet |
+| Branch protection | ⚠️ Owner | Not enabled yet; recommended settings are in REPOSITORY_SETUP.md |
+| Git repository | ✅ | Initialized; `main` pushed |
 
 ## 2. Positioning review
 
