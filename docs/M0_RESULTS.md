@@ -113,8 +113,8 @@ This empirically confirms that `MINUTE_COUNT = 60` and that the sub-stepping des
 ## Open items
 
 1. **Docker Desktop for Mac (arm64).** Not tested; no Mac was available. It is required by the gate, so it is carried into M1 as a blocking manual check before alpha.
-2. **arm64 run.** The QEMU build was stopped when the host ran low on memory. Rerun with `python spike/run_m0.py --only arm64` on a machine with more free memory, or on a native arm64 runner in CI.
-3. **Native Linux host (Docker Engine).** Expected to be easier than Docker Desktop (no VM boundary). It runs in M1 CI on `ubuntu-latest`.
+2. **arm64 run.** The QEMU build was stopped when the host ran low on memory. **Partly closed by M1 CI (2026-11-13):** the M1 e2e test passes on a native `ubuntu-24.04-arm` runner. Postgres (musl), Redis (glibc), Node (musl) and Debian bullseye (glibc) were all virtualized on aarch64, with probes and restart checks passing. The full M0 no-hang suite has not yet been run on arm64.
+3. **Native Linux host (Docker Engine).** **Closed by M1 CI:** the e2e test passes on `ubuntu-latest` (x86_64) and `ubuntu-24.04-arm`.
 4. **Not covered by M0:**
    - `timer_settime(TIMER_ABSTIME)` on POSIX timers
    - `mq_timed*`
