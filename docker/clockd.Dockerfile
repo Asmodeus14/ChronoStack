@@ -17,7 +17,7 @@ RUN cargo test --release -p chronostack-clockd \
 # --- glibc preload library, linked against glibc 2.17 symbols via zig -------
 # (a gcc build on a new distro would require GLIBC_2.34 and fail to load in
 #  older images such as Debian bullseye or Ubuntu 20.04)
-FROM alpine:3.20 AS shim-gnu
+FROM alpine:3.24 AS shim-gnu
 RUN apk add --no-cache zig
 WORKDIR /src
 COPY shim shim
@@ -26,7 +26,7 @@ RUN arch="$(uname -m)" \
       -o "/libchronoclock-${arch}-gnu.so" shim/chronoclock.c -ldl -lpthread
 
 # --- musl preload library ------------------------------------------------------
-FROM alpine:3.20 AS shim-musl
+FROM alpine:3.24 AS shim-musl
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /src
 COPY shim shim
@@ -35,7 +35,7 @@ RUN arch="$(uname -m)" \
       -o "/libchronoclock-${arch}-musl.so" shim/chronoclock.c
 
 # --- runtime -------------------------------------------------------------------
-FROM alpine:3.20
+FROM alpine:3.24
 COPY --from=clockd /clockd /usr/local/bin/clockd
 COPY --from=shim-gnu /libchronoclock-*-gnu.so /opt/chronostack/lib/
 COPY --from=shim-musl /libchronoclock-*-musl.so /opt/chronostack/lib/
