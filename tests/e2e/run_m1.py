@@ -118,13 +118,15 @@ def main():
 def run_checks(cli):
     # --- doctor: plan, shim in PID 1, probes ---------------------------------
     # Services (e.g. Postgres initdb) may still be starting right after `up`.
+    healthy = ["db", "cache", "app", "legacy"]
     deadline = time.monotonic() + 90
     while True:
         rc, out, err = cs(cli, "doctor", "--json")
-        if rc == 0 or time.monotonic() > deadline:
+        d = json.loads(out)
+        ready = {s["service"]: (s["probe"] or {}).get("status") == "ok" for s in d["services"]}
+        if all(ready.get(n) for n in healthy) or time.monotonic() > deadline:
             break
         time.sleep(2)
-    d = json.loads(out)
     svc = {s["service"]: s for s in d["services"]}
     for name in ["db", "cache", "app", "legacy"]:
         s = svc[name]
@@ -134,7 +136,15 @@ def run_checks(cli):
     w = svc["whoami"]
     check("doctor: static Go image (whoami) flagged not virtualizable",
           w["virtualized"] is False and "static" in (w["reason"] or ""), w["reason"] or "")
-    check("doctor exit code 0 when healthy", rc == 0, f"rc={rc}")
+    web = svc["web"]
+    go = (web["processes"] or {}).get("go_processes", [])
+    check("doctor: Go server in an Alpine image (caddy) flagged", "caddy" in go and web["shim_in_pid1"] is False,
+          f"go={go} shim_in_pid1={web['shim_in_pid1']}")
+    for name in healthy:
+        g = (svc[name]["processes"] or {}).get("go_processes")
+        check(f"doctor: no false Go detection in {name}", g == [], str(g))
+    check("doctor: exactly one service needs attention (web)", d["problems"] == 1 and rc == 3,
+          f"problems={d['problems']} rc={rc}")
 
     s = session()
     check("session: clockd published on 127.0.0.1 only", True, f"port {s['port']}")

@@ -179,6 +179,100 @@ pub fn shim_loaded(compose: &Compose, service: &str) -> Option<bool> {
     }
 }
 
+/// Processes in a service whose clock reads bypass the shim.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ProcessReport {
+    pub processes_checked: usize,
+    /// Go binaries: the Go runtime reads the clock via the vDSO directly, so
+    /// time is NOT virtualized even when the shim is loaded (found with Gitea
+    /// in M1 external-project testing: PID 1 was a C supervisor, the server Go).
+    pub go_processes: Vec<String>,
+}
+
+/// Phase 1 (any user): list processes with their uid and name. `/proc/<pid>/status`
+/// and `cmdline` are world-readable.
+const PROCESS_LIST: &str = r#"
+for p in $(ls -d /proc/[0-9]* 2>/dev/null); do
+  pid=${p#/proc/}
+  [ "$pid" = "$$" ] && continue
+  uid=$(awk '/^Uid:/ {print $2}' "$p/status" 2>/dev/null)
+  name=$(tr '\0' '\n' < "$p/cmdline" 2>/dev/null | head -n 1)
+  [ -z "$uid" ] || [ -z "$name" ] && continue
+  echo "p|$pid|$uid|$name"
+done
+"#;
+
+/// Phase 2 (run as the processes' own uid): inspect the *real* executable via
+/// `/proc/<pid>/exe`. The command line can lie: Gitea's wrapper uses
+/// `exec -a "$0"`. `.gopclntab` is a section name present in Go binaries
+/// (stripped or not) and absent from C/C++ runtimes (checked: redis, postgres, node).
+const GO_CHECK: &str = r#"
+for pid; do
+  if grep -qF .gopclntab "/proc/$pid/exe" 2>/dev/null; then echo "go|$pid"; else echo "ok|$pid"; fi
+done
+"#;
+
+/// Scan every process of a running service. `None` = could not tell (no shell).
+pub fn process_report(compose: &Compose, service: &str) -> Option<ProcessReport> {
+    let out = docker::output(&compose.args(&[
+        "exec",
+        "-T",
+        "--user",
+        "0",
+        service,
+        "sh",
+        "-c",
+        PROCESS_LIST,
+    ]))
+    .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    // uid -> [(pid, name)]
+    let mut by_uid: std::collections::BTreeMap<String, Vec<(String, String)>> = Default::default();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut parts = line.splitn(4, '|');
+        if parts.next() != Some("p") {
+            continue;
+        }
+        let (Some(pid), Some(uid), Some(name)) = (parts.next(), parts.next(), parts.next()) else {
+            continue;
+        };
+        if !uid.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        by_uid
+            .entry(uid.into())
+            .or_default()
+            .push((pid.into(), name.into()));
+    }
+    let mut report = ProcessReport::default();
+    for (uid, procs) in &by_uid {
+        let mut args = compose.args(&[
+            "exec", "-T", "--user", uid, service, "sh", "-c", GO_CHECK, "sh",
+        ]);
+        args.extend(procs.iter().map(|(pid, _)| pid.clone()));
+        let Ok(o) = docker::output(&args) else {
+            continue;
+        };
+        for line in String::from_utf8_lossy(&o.stdout).lines() {
+            let Some((kind, pid)) = line.split_once('|') else {
+                continue;
+            };
+            report.processes_checked += 1;
+            if kind == "go" {
+                if let Some((_, name)) = procs.iter().find(|(p, _)| p == pid) {
+                    let name = name.rsplit('/').next().unwrap_or(name).to_string();
+                    if !report.go_processes.contains(&name) {
+                        report.go_processes.push(name);
+                    }
+                }
+            }
+        }
+    }
+    Some(report)
+}
+
 /// Services Compose reports as running.
 pub fn running_services(compose: &Compose) -> Result<Vec<String>> {
     let out = docker::run(&compose.args(&["ps", "--format", "json"]))?;

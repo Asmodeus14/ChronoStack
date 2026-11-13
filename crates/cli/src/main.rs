@@ -436,6 +436,11 @@ fn doctor(json_out: bool) -> Result<i32> {
         } else {
             None
         };
+        let procs = if p.virtualized && is_running {
+            probe::process_report(&compose, &p.service)
+        } else {
+            None
+        };
         let pr = probes.iter().find(|r| r.service == p.service);
         rows.push(json!({
             "service": p.service,
@@ -446,12 +451,18 @@ fn doctor(json_out: bool) -> Result<i32> {
             "reason": p.reason,
             "running": is_running,
             "shim_in_pid1": shim,
+            "processes": procs,
             "probe": pr,
         }));
     }
     let problems = rows.iter().filter(|r| {
         r["virtualized"] == true
-            && (r["running"] == false || r["shim_in_pid1"] == false || r["probe"]["status"] != "ok")
+            && (r["running"] == false
+                || r["shim_in_pid1"] == false
+                || r["probe"]["status"] != "ok"
+                || r["processes"]["go_processes"]
+                    .as_array()
+                    .is_some_and(|g| !g.is_empty()))
     });
     let problem_count = problems.count();
 
@@ -519,6 +530,17 @@ fn doctor(json_out: bool) -> Result<i32> {
                     "  {}: shim not loaded in PID 1 — the main process may be statically linked (Go?) or setuid",
                     r["service"].as_str().unwrap_or("")
                 )
+            }))
+            .chain(rows.iter().filter_map(|r| {
+                let go = r["processes"]["go_processes"].as_array()?;
+                (!go.is_empty()).then(|| {
+                    let names: Vec<_> = go.iter().filter_map(|v| v.as_str()).collect();
+                    format!(
+                        "  {}: Go process(es) {} read the clock directly (vDSO) and will NOT see virtual time, even though other processes do",
+                        r["service"].as_str().unwrap_or(""),
+                        names.join(", ")
+                    )
+                })
             }))
             .collect();
         if !notes.is_empty() {

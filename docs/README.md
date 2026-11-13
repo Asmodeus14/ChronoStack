@@ -27,6 +27,7 @@ ChronoStack is in its **design phase**. These documents are the research and pla
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, time domains, control and data flow, failure modes, API
 - [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md): ADR-001 to ADR-017
 - [M0_RESULTS.md](M0_RESULTS.md): feasibility spike results and exit-gate verdict
+- [M1_RESULTS.md](M1_RESULTS.md): controller and CLI results, including 3 external projects
 
 ## Planning
 

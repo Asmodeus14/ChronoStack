@@ -119,7 +119,8 @@ Nothing is supported until automated tests prove it ([testing strategy](docs/TES
 - Time only moves **forward**.
 - Application timers (`setTimeout`, `asyncio.sleep`, node-cron, APScheduler) do not fire early. Use triggers.
 - Postgres `now()` is fixed for the length of a transaction.
-- Go and statically linked programs are not virtualized.
+- Go and statically linked programs are not virtualized (`chronostack doctor` flags them, including Go servers behind a C supervisor).
+- The ChronoStack copy can't run alongside your normal stack if your project publishes fixed host ports or sets `container_name`.
 - Data written with virtual timestamps stays in ChronoStack's volumes.
 
 Full list: [docs/RISKS_AND_LIMITATIONS.md](docs/RISKS_AND_LIMITATIONS.md)

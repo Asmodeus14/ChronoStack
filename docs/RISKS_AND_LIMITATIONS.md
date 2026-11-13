@@ -10,6 +10,8 @@
 | R3 | Docker Desktop volume/mmap behaviour differs from Linux | Low–Medium | Critical | Controller + named volume (ADR-004); test on Docker Desktop, OrbStack | M0 |
 | R4 | glibc symbol versioning / musl differences break interposition | Medium | High | `dlvsym`, per-libc builds, matrix tests | M0 |
 | R5 | pg_cron skips jobs on jumps > 3 h (**source-verified**, not hypothetical) | Certain without mitigation | Medium | Automatic sub-stepping ≤ 1 h (ADR-005 amendment); negative test SCH-PGCRON-2 | M0 (confirm), M2 |
+| R13 | ChronoStack copy collides with the user's running stack on fixed host ports / `container_name` (found in M1 on awesome-compose) | High for such projects | Medium | Strip host ports and container names in the override (M2 candidate) | M2 |
+| R14 | Go processes started by a C supervisor or wrapper look healthy if only PID 1 is checked (found in M1, Gitea) | Was certain | High (silent wrong time) | `doctor` scans every process's real executable for Go (`.gopclntab`) | M1 ✅ |
 | R11 | Many sub-steps make long advances slow | Medium | Medium | Fast commit+probe path (< 100 ms); sub-stepping only when pg_cron detected | M2 |
 | R6 | Compose edge cases (`network_mode`, `build`, profiles, `include`) | Medium | Medium | `compose config` JSON; test on real projects | M1 |
 | R7 | Postgres timeouts firing early when advancing during long statements | Medium | Low | Document; advance only between steps; barriers ensure idle | M2 |
@@ -30,7 +32,8 @@
 1. Time moves forward only.
 2. App timers (`setTimeout`, `asyncio.sleep`, `ScheduledExecutorService`, node-cron, APScheduler, Spring cron) do not fire early; use triggers.
 3. Postgres `now()` is fixed per transaction; long-lived transactions see the old time.
-4. Go, static binaries, setuid binaries, processes outside Compose: not virtualized.
+4. Go, static binaries, setuid binaries, processes outside Compose: not virtualized. `doctor` flags Go processes even when they run under a C supervisor.
+11. The ChronoStack copy of a project cannot run alongside your normal stack if the project publishes fixed host ports or sets `container_name`.
 5. Native host processes: Node only, via `chronostack/register`.
 6. External services (Stripe, SendGrid) are not virtualized; use their test-clock features or mocks.
 7. Data written with virtual timestamps persists in ChronoStack volumes.

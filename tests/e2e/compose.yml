@@ -21,3 +21,5 @@ services:
     command: ["sleep", "infinity"]
   whoami:
     image: traefik/whoami               # static Go binary on scratch: not virtualizable
+  web:
+    image: caddy:2-alpine               # musl loader present, but the server is Go: doctor must flag it

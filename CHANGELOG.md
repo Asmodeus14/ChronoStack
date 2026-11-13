@@ -51,6 +51,9 @@ No versions have been released. ChronoStack contains no runnable code yet.
   - the e2e test on Linux x86_64 and arm64.
   - Dependabot now covers cargo and docker.
 
+- `doctor` checks every process in each container and flags Go binaries (they bypass the shim), e.g. Gitea's server behind its C supervisor. Covered by a new e2e case (`caddy:2-alpine`).
+- `docs/M1_RESULTS.md`: M1 exit gate passed on 3 unmodified docker/awesome-compose projects.
+
 ### Changed
 
 - Architecture: the step / trigger / barrier engine moves to the host CLI, and no container receives the Docker socket (ADR-016).

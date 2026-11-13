@@ -35,7 +35,7 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 > - the glibc shim is built with zig against glibc 2.17, so it loads in older images such as Debian bullseye (pulled forward from M5);
 > - the CLI re-resolves the controller port if `clockd` restarts.
 >
-> **Still open for the exit gate:** run on 3 external real-world Compose projects.
+> **Exit gate passed:** 3 unmodified external projects from docker/awesome-compose. See [M1_RESULTS.md](M1_RESULTS.md). This found and fixed a `doctor` false-healthy for Go processes behind a supervisor.
 
 **Objective.** `chronostack up && chronostack advance 7d && chronostack now` on any unmodified compose project.
 
