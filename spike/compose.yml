@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# M0 feasibility spike stack. Hand-written on purpose (the override generator is M1).
+# Every target service mounts the clock volume read-only and preloads the shim.
+
+x-gnu: &gnu
+  volumes:
+    - clock:/chronostack:ro
+  environment:
+    LD_PRELOAD: /chronostack/lib/libchronoclock-gnu.so
+    CHRONOSTACK_CLOCK_PATH: /chronostack/clock
+  depends_on:
+    clockd: { condition: service_healthy }
+
+x-musl: &musl
+  volumes:
+    - clock:/chronostack:ro
+  environment:
+    LD_PRELOAD: /chronostack/lib/libchronoclock-musl.so
+    CHRONOSTACK_CLOCK_PATH: /chronostack/clock
+  depends_on:
+    clockd: { condition: service_healthy }
+
+services:
+  clockd:
+    build: { context: ., dockerfile: docker/Dockerfile, target: clockd }
+    image: chronostack-m0/clockd
+    volumes:
+      - clock:/chronostack
+
+  # --- data stores ---------------------------------------------------------
+  pg:
+    <<: *gnu
+    build: { context: ., dockerfile: docker/Dockerfile.pgcron }
+    image: chronostack-m0/postgres16-cron
+    environment:
+      LD_PRELOAD: /chronostack/lib/libchronoclock-gnu.so
+      CHRONOSTACK_CLOCK_PATH: /chronostack/clock
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=postgres
+      - -c
+      - cron.use_background_workers=on
+      - -c
+      - max_worker_processes=20
+  pga:
+    <<: *musl
+    image: postgres:16-alpine
+    environment:
+      LD_PRELOAD: /chronostack/lib/libchronoclock-musl.so
+      CHRONOSTACK_CLOCK_PATH: /chronostack/clock
+      POSTGRES_HOST_AUTH_METHOD: trust
+  redis:
+    <<: *gnu
+    image: redis:7
+  redisa:
+    <<: *musl
+    image: redis:7-alpine
+
+  # --- runtimes ------------------------------------------------------------
+  node:
+    <<: *gnu
+    image: node:22-slim
+    command: ["sleep", "infinity"]
+    volumes: [clock:/chronostack:ro, ./tests/node:/t:ro]
+  nodea:
+    <<: *musl
+    image: node:22-alpine
+    command: ["sleep", "infinity"]
+    volumes: [clock:/chronostack:ro, ./tests/node:/t:ro]
+  py310:
+    <<: *gnu
+    image: python:3.10-slim
+    command: ["sleep", "infinity"]
+    volumes: [clock:/chronostack:ro, ./tests/python:/t:ro]
+  py312:
+    <<: *gnu
+    image: python:3.12-slim
+    command: ["sleep", "infinity"]
+    volumes: [clock:/chronostack:ro, ./tests/python:/t:ro]
+  py312a:
+    <<: *musl
+    image: python:3.12-alpine
+    command: ["sleep", "infinity"]
+    volumes: [clock:/chronostack:ro, ./tests/python:/t:ro]
+  java:
+    <<: *gnu
+    image: eclipse-temurin:21-jdk
+    command: ["sleep", "infinity"]
+    volumes: [clock:/chronostack:ro, ./tests/java:/t:ro]
+
+  # --- C probes / negative tests ------------------------------------------
+  toolsg:
+    <<: *gnu
+    build: { context: ., dockerfile: docker/Dockerfile, target: tools-gnu }
+    image: chronostack-m0/tools-gnu
+  toolsm:
+    <<: *musl
+    build: { context: ., dockerfile: docker/Dockerfile, target: tools-musl }
+    image: chronostack-m0/tools-musl
+
+volumes:
+  clock: {}

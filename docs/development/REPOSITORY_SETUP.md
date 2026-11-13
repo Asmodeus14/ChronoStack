@@ -1,0 +1,94 @@
+# Repository Setup & Metadata (plan)
+
+This records what was set up during the documentation phase, what is deliberately deferred, and the metadata the owner should apply on GitHub.
+
+## Added now
+
+| File | Why now |
+|---|---|
+| `.gitignore` | Avoid committing build output, `.chronostack/` session data (contains a token) and editor files |
+| `.gitattributes` | Normalize line endings; the repository is being authored on Windows and will be built on Linux |
+| `.editorconfig` | Consistent whitespace across Markdown, YAML, Rust and C |
+| `.github/` | Templates, CI skeleton, Dependabot (see [OPEN_SOURCE_READINESS.md](../OPEN_SOURCE_READINESS.md)) |
+
+## Deferred until M1 (no code yet, so these would only be for appearance)
+
+**`Cargo.toml` workspace** (proposed content, to create in M1):
+
+```toml
+[workspace]
+resolver = "2"
+members = ["crates/cli", "crates/clockd", "crates/core"]
+
+[workspace.package]
+version = "0.1.0-alpha.0"
+edition = "2021"          # re-evaluate edition 2024 at M1
+rust-version = "TBD"      # set MSRV at M1
+license = "MIT OR Apache-2.0"   # pending owner decision (LICENSING.md)
+repository = "TBD"        # owner to supply once the GitHub repo exists
+homepage = "TBD"
+description = "Stripe Test Clocks for your Docker Compose stack"
+keywords = ["testing", "time", "docker-compose", "faketime", "devtools"]
+categories = ["development-tools::testing", "command-line-utilities"]
+
+[workspace.lints.rust]
+unsafe_code = "deny"       # crates needing unsafe (mmap) opt out explicitly and document why
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+```
+
+- **`rustfmt.toml`:** not needed. The default rustfmt style is enough; add one only if a specific option is agreed on.
+- **`clippy.toml`:** not needed at first. Workspace lints (above) cover the policy. Add `msrv` there once `rust-version` is set.
+
+**npm package (v0.2, not published):**
+
+```json
+{
+  "name": "chronostack",
+  "version": "0.0.0",
+  "private": true,
+  "license": "(MIT OR Apache-2.0)",
+  "description": "Node SDK for ChronoStack (planned)",
+  "exports": { "./register": "./register.js" }
+}
+```
+
+- Keep `"private": true` until the release process is validated.
+- The package name `chronostack` has **not** been checked or reserved on npm. That is an owner action.
+
+## GitHub repository metadata (owner applies in repository settings)
+
+- **Description** (≤ 350 chars): `Stripe Test Clocks for your Docker Compose stack: advance time across Postgres, Redis and your services, run the jobs that depend on it, and verify the results. (Design phase — not yet usable.)`
+- **Topics:**
+  - `testing`, `integration-testing`, `time-travel`, `faketime`, `ld-preload`
+  - `docker-compose`, `postgresql`, `redis`
+  - `developer-tools`, `rust`, `mcp`, `saas`
+- **Features:**
+  - enable Issues and Discussions (categories: Announcements, Q&A, **Ideas**);
+  - enable private vulnerability reporting;
+  - Wiki off.
+- **Branch protection on `main`:**
+  - require pull requests;
+  - require the `docs` check, and the `rust` check once it runs;
+  - no force pushes.
+
+## Social preview image concept (not created)
+
+- Size: 1280×640.
+- Dark background with a horizontal timeline.
+- Four service "lanes" (Postgres, Redis, API, Worker) all ticking to the same marker labelled `Day 14 · 03:00`.
+- A clock glyph sits on the controller lane.
+- Wordmark "ChronoStack" with the tagline "Stripe Test Clocks for your Docker Compose stack".
+- No logos of third-party products unless their trademark guidelines allow it.
+
+## Repository initialisation (owner)
+
+The directory is not yet a git repository. Suggested sequence:
+
+1. `git init -b main`
+2. Review the files.
+3. Make the initial commit.
+4. Create the GitHub repository (keep it **private** until the readiness checklist is complete).
+5. Push.
+6. Apply the metadata above.

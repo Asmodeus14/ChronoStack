@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Add when the manifests exist (Dependabot errors on missing manifests):
+  # - package-ecosystem: "cargo"           # after Cargo.toml (M1)
+  #   directory: "/"
+  #   schedule: { interval: "weekly" }
+  # - package-ecosystem: "docker"          # after docker/clockd.Dockerfile (M1)
+  #   directory: "/docker"
+  #   schedule: { interval: "weekly" }
+  # - package-ecosystem: "npm"             # after sdk/node/package.json (M4)
+  #   directory: "/sdk/node"
+  #   schedule: { interval: "weekly" }

@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a capability — start from the developer problem
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check docs/FEATURE_ROADMAP.md and docs/MVP_SCOPE.md first. Larger architectural proposals fit better in Discussions → Ideas.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What developer problem does this solve?
+      description: Describe the situation and pain, not the solution. Who hits it and how often?
+      placeholder: "When testing our annual renewal flow, we need to ..."
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you handle it today?
+      description: Current workaround or tool, and why it falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Optional. CLI / config / API sketch welcome.
+  - type: textarea
+    id: stack
+    attributes:
+      label: Your stack
+      description: Runtimes, databases, schedulers/queues involved (e.g. Node + BullMQ + Postgres).
+  - type: dropdown
+    id: help
+    attributes:
+      label: Would you help build or test it?
+      options:
+        - "Yes, I could contribute code"
+        - "Yes, I could test it"
+        - "Not right now"

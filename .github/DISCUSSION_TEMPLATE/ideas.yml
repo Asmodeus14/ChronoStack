@@ -1,0 +1,33 @@
+# Form for the "Ideas" discussion category (slug must be `ideas`).
+# Requires Discussions to be enabled with an "Ideas" category.
+title: "[Proposal] "
+labels: ["architecture"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for architectural proposals and larger feature ideas. If it is accepted, it becomes an ADR in docs/ARCHITECTURE_DECISIONS.md.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / context
+      description: What problem or limitation motivates this? Link affected ADRs or docs.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options considered
+      description: At least two options, with trade-offs.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Primary sources (man pages, upstream source lines, docs) or experiment results. Mark anything unverified as an assumption.
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Which docs, milestones, tests or compatibility claims change?

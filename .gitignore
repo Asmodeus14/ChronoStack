@@ -1,0 +1,31 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# C shim build output
+/shim/build/
+*.o
+*.so
+*.dylib
+
+# Node
+node_modules/
+npm-debug.log*
+
+# ChronoStack runtime state (contains session token, reports)
+.chronostack/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# M0 spike raw logs (results/*.json and *.md are kept as evidence)
+spike/results/*.log

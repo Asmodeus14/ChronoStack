@@ -1,0 +1,66 @@
+name: Bug report
+description: Something is wrong (in the docs today; in ChronoStack once it exists)
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Security issues must not be reported here** — see SECURITY.md.
+        ChronoStack is in its design phase; documentation errors (wrong technical claims, broken links) are valid bugs.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Documentation / technical claim
+        - CLI
+        - clockd controller
+        - Preload library (libchronoclock)
+        - Scenarios / triggers / barriers
+        - Fault proxy
+        - MCP server
+        - Node SDK
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Host OS + version, Docker Engine/Desktop version, `docker compose version`, ChronoStack version or commit, affected images (e.g. postgres:16-alpine).
+      placeholder: |
+        Host: macOS 15.1 (arm64)
+        Docker Desktop 4.x, Compose v2.x
+        ChronoStack: commit abc1234
+        Images: postgres:16, redis:7-alpine
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. Include the relevant compose / chronostack.yml snippet (remove secrets).
+      placeholder: |
+        1. chronostack up
+        2. chronostack advance 2d
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include error output, and `chronostack doctor` output when available. For hangs, say which process hung and for how long.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context / sources
+      description: For documentation claims, link the primary source (man page, upstream source file and line) that contradicts the docs.

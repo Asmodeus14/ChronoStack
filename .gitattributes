@@ -1,0 +1,8 @@
+# Normalize line endings in the repository; check out LF everywhere
+# (shell scripts and Linux containers require LF).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.so binary
