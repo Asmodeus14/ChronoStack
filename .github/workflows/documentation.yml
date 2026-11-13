@@ -16,7 +16,7 @@ jobs:
     name: Internal link check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # --offline: checks relative links and files only (no network), so the job
       # is deterministic. External URLs are reviewed manually per
       # docs/SOURCE_VERIFICATION.md.
