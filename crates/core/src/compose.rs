@@ -37,6 +37,9 @@ pub struct Service {
     pub platform: Option<String>,
     /// `None` value = variable passed through from the host environment.
     pub environment: BTreeMap<String, Option<String>>,
+    /// Host ports this service publishes (e.g. `80`, `127.0.0.1:3000`).
+    pub published_ports: Vec<String>,
+    pub container_name: Option<String>,
 }
 
 /// The resolved Compose project.
@@ -91,6 +94,30 @@ pub fn parse_config(json_text: &str) -> Result<Project, String> {
                     .and_then(Value::as_str)
                     .map(str::to_string),
                 environment,
+                published_ports: s
+                    .get("ports")
+                    .and_then(Value::as_array)
+                    .map(|ports| {
+                        ports
+                            .iter()
+                            .filter_map(|p| {
+                                let published = match p.get("published")? {
+                                    Value::String(v) if !v.is_empty() => v.clone(),
+                                    Value::Number(n) => n.to_string(),
+                                    _ => return None,
+                                };
+                                Some(match p.get("host_ip").and_then(Value::as_str) {
+                                    Some(ip) if !ip.is_empty() => format!("{ip}:{published}"),
+                                    _ => published,
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                container_name: s
+                    .get("container_name")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
             });
         }
     }
@@ -226,8 +253,39 @@ pub struct ClockdSpec<'a> {
     pub token: &'a str,
 }
 
-/// Build the override document.
-pub fn generate_override(plans: &[ServicePlan], clockd: &ClockdSpec<'_>) -> Value {
+/// Marker the CLI turns into Compose's `!reset` YAML tag (JSON cannot carry tags).
+pub const RESET_MARKER: &str = "__chronostack_reset__";
+
+/// Fields removed in the ChronoStack copy so it can run next to the user's own
+/// stack: fixed host ports and `container_name` would collide (R13).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Isolation {
+    pub service: String,
+    pub dropped_ports: Vec<String>,
+    pub dropped_container_name: Option<String>,
+}
+
+/// Services that need isolation.
+pub fn isolation_for(project: &Project) -> Vec<Isolation> {
+    project
+        .services
+        .iter()
+        .filter(|s| !s.published_ports.is_empty() || s.container_name.is_some())
+        .map(|s| Isolation {
+            service: s.name.clone(),
+            dropped_ports: s.published_ports.clone(),
+            dropped_container_name: s.container_name.clone(),
+        })
+        .collect()
+}
+
+/// Build the override document. `isolate` = services whose host ports and
+/// container names are reset (empty with `--keep-ports`).
+pub fn generate_override(
+    plans: &[ServicePlan],
+    clockd: &ClockdSpec<'_>,
+    isolate: &[Isolation],
+) -> Value {
     let mut services = Map::new();
     services.insert(
         paths::CLOCKD_SERVICE.into(),
@@ -257,6 +315,19 @@ pub fn generate_override(plans: &[ServicePlan], clockd: &ClockdSpec<'_>) -> Valu
                 "depends_on": { paths::CLOCKD_SERVICE: { "condition": "service_healthy" } },
             }),
         );
+    }
+    for iso in isolate {
+        let entry = services
+            .entry(iso.service.clone())
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("service entries are objects");
+        if !iso.dropped_ports.is_empty() {
+            entry.insert("ports".into(), json!({ RESET_MARKER: [] }));
+        }
+        if iso.dropped_container_name.is_some() {
+            entry.insert("container_name".into(), json!({ RESET_MARKER: null }));
+        }
     }
     json!({ "services": services, "volumes": { paths::VOLUME: {} } })
 }
@@ -363,6 +434,8 @@ mod tests {
             has_build: false,
             platform: None,
             environment: BTreeMap::new(),
+            published_ports: vec![],
+            container_name: None,
         };
         let mut i = info("arm64", Some(Libc::Gnu));
         i.image_ld_preload = Some("/lib/a.so /lib/b.so".into());
@@ -405,6 +478,7 @@ mod tests {
                 image: "chronostack/clockd:dev",
                 token: "t0k",
             },
+            &[],
         );
         let svcs = doc["services"].as_object().unwrap();
         assert_eq!(
@@ -431,5 +505,37 @@ mod tests {
             "service_healthy"
         );
         assert!(doc["volumes"]["chronostack"].is_object());
+    }
+
+    #[test]
+    fn isolation_resets_ports_and_container_name() {
+        let p = parse_config(
+            r#"{"name":"x","services":{
+              "web":{"image":"nginx","container_name":"fixed",
+                     "ports":[{"mode":"ingress","target":80,"published":"8080","protocol":"tcp"},
+                              {"target":443,"published":"443","host_ip":"127.0.0.1"}]},
+              "db":{"image":"postgres","expose":["5432"]},
+              "anon":{"image":"x","ports":[{"target":9000}]}}}"#,
+        )
+        .unwrap();
+        let iso = isolation_for(&p);
+        assert_eq!(
+            iso.len(),
+            1,
+            "db (expose only) and anon (random host port) are untouched"
+        );
+        assert_eq!(iso[0].dropped_ports, vec!["8080", "127.0.0.1:443"]);
+        assert_eq!(iso[0].dropped_container_name.as_deref(), Some("fixed"));
+        let doc = generate_override(
+            &[],
+            &ClockdSpec {
+                image: "i",
+                token: "t",
+            },
+            &iso,
+        );
+        assert_eq!(doc["services"]["web"]["ports"][RESET_MARKER], json!([]));
+        assert!(doc["services"]["web"]["container_name"][RESET_MARKER].is_null());
+        assert!(doc["services"].get("db").is_none());
     }
 }

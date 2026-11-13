@@ -40,13 +40,14 @@ Acceptance script (manual and automated):
 | Component | Status in v0.1 | Gate |
 |---|---|---|
 | PostgreSQL 16 (debian, alpine) | Supported | PG-1..5, PG-9, PG-10 |
-| pg_cron | Supported via automatic sub-stepping (≤ 1 h; source shows jumps > 3 h skip runs) | PG-7..9 |
+| pg_cron | Supported. Schedule-aware stops at each fixed-time job minute (UTC); falls back to 1 h sub-steps for unsupported schedules or a non-UTC `cron.timezone` | `tests/e2e/run_m2.py` |
 | Redis 7 (debian, alpine) | Supported | RD-1..6 |
 | Node 20/22 (debian, alpine) — wall clock | Supported | RT-NODE |
 | Python 3.11–3.13 (debian) — wall clock | Supported | RT-PY |
-| BullMQ | Supported with trigger; dwell-only behaviour unresolved | SCH-BULL |
-| Celery beat | Supported with `beat_max_loop_interval ≤ 1` (default scheduler otherwise waits up to 300 s) | SCH-CEL |
-| node-cron, APScheduler, Spring cron | Trigger required | NEG-4 |
+| BullMQ (delayed jobs, job schedulers) | Supported, fires on its own within about 1 s of an advance (measured) | `tests/e2e/run_schedulers.py` |
+| Celery beat | Supported with `beat_max_loop_interval ≤ 1`: fires within about 2 s (measured). The default scheduler may sleep up to 300 s. | `tests/e2e/run_schedulers.py` |
+| node-cron | Trigger required: never fires on its own (measured) | `tests/e2e/run_schedulers.py` |
+| APScheduler, Spring cron | Trigger required (expected; not yet measured) | — |
 | Python 3.10 (wall clock) | Supported target (M0: no hangs even without deadline translation) | RT-PY |
 | JVM 17/21, Ruby 3.x | Experimental (M0: JVM 21 reads + no-hang pass with translation; `parkUntil` hangs without it) | no-hang suite passes |
 | Go, static binaries, setuid binaries | Unsupported | NEG-1/2 |

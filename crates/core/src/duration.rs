@@ -104,6 +104,11 @@ pub fn format_utc(unix_ns: i64) -> String {
     )
 }
 
+/// `(year, month, day)` for days since 1970-01-01 (used by the cron matcher).
+pub(crate) fn civil_from_days_pub(days: i64) -> (i64, u32, u32) {
+    civil_from_days(days)
+}
+
 /// Howard Hinnant's `civil_from_days`.
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;

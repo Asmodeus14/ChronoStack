@@ -61,7 +61,11 @@ No versions have been released. ChronoStack contains no runnable code yet.
   - `advance --to/--step/--max-jump/--dwell/--dry-run`, and `chronostack config`.
 - `examples/saas-trial-demo`: 14-day trial, 24 h sessions, daily 03:00 job (Node, Postgres, Redis).
 - `tests/e2e/run_m2.py`: demo lifecycle, determinism repeats, and pg_cron (negative and positive). Runs in CI.
-- Dependency: `serde_yaml` 0.9 (upstream archived; to be replaced by a maintained parser).
+- pg_cron schedule-aware stepping: stops only at fixed-time job minutes (3 virtual days: 92 s → 6.4 s), with an hourly fallback. Includes `core::cron`.
+- Isolation: the ChronoStack copy drops published host ports and `container_name` via Compose `!reset` (override is now YAML; `up --keep-ports` to opt out).
+- Scheduler compatibility matrix (`tests/e2e/run_schedulers.py`): BullMQ and Celery beat fire on their own; node-cron needs a trigger.
+- Nightly CI: the demo 10× on Linux x86_64 and arm64, plus the scheduler matrix.
+- Dependency: `serde_norway` 0.9 (maintained fork of `serde_yaml`).
 
 ### Changed
 

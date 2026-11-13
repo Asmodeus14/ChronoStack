@@ -7,6 +7,7 @@ mod docker;
 mod engine;
 mod probe;
 mod session;
+mod yaml;
 
 use std::fs;
 use std::path::Path;
@@ -55,6 +56,10 @@ enum Cmd {
             default_value = "chronostack/clockd:dev"
         )]
         clockd_image: String,
+        /// Keep published host ports and container names in the ChronoStack copy.
+        /// By default they are removed so the copy can run next to your own stack.
+        #[arg(long)]
+        keep_ports: bool,
     },
     /// Stop the ChronoStack stack (your own stack and files are untouched).
     Down {
@@ -133,7 +138,10 @@ fn main() {
 
 fn run(cli: Cli) -> Result<i32> {
     match cli.cmd {
-        Cmd::Up { ref clockd_image } => up(&cli, clockd_image).map(|_| 0),
+        Cmd::Up {
+            ref clockd_image,
+            keep_ports,
+        } => up(&cli, clockd_image, keep_ports).map(|_| 0),
         Cmd::Down { volumes } => down(volumes).map(|_| 0),
         Cmd::Now { json } => {
             let mut s = Session::load()?;
@@ -340,7 +348,24 @@ fn probe_spec(svc: &compose::Service, image: &str) -> ProbeSpec {
     }
 }
 
-fn up(cli: &Cli, clockd_image: &str) -> Result<()> {
+const OVERRIDE_FILE: &str = "compose.override.yml";
+
+/// Compose's `!reset` tag needs Docker Compose >= 2.24.
+fn compose_supports_reset() -> bool {
+    let Ok(v) = docker::run(&docker::s(&["compose", "version", "--short"])) else {
+        return false;
+    };
+    let nums: Vec<u64> = v
+        .trim()
+        .trim_start_matches('v')
+        .split(['.', '-', '+'])
+        .take(2)
+        .filter_map(|x| x.parse().ok())
+        .collect();
+    matches!(nums.as_slice(), [major, minor] if (*major, *minor) >= (2, 24))
+}
+
+fn up(cli: &Cli, clockd_image: &str, keep_ports: bool) -> Result<()> {
     if Session::path().exists() {
         bail!(
             "a ChronoStack session already exists in this directory; run `chronostack down` first"
@@ -406,15 +431,27 @@ fn up(cli: &Cli, clockd_image: &str) -> Result<()> {
 
     let token = session::new_token()?;
     let plans: Vec<ServicePlan> = entries.iter().map(|e| e.plan.clone()).collect();
+    let mut isolate = if keep_ports {
+        vec![]
+    } else {
+        compose::isolation_for(&project)
+    };
+    if !isolate.is_empty() && !compose_supports_reset() {
+        eprintln!(
+            "warning: Docker Compose < 2.24 cannot remove published ports (`!reset`);              the ChronoStack copy keeps them and cannot run next to your own stack"
+        );
+        isolate.clear();
+    }
     let doc = compose::generate_override(
         &plans,
         &ClockdSpec {
             image: clockd_image,
             token: &token,
         },
+        &isolate,
     );
-    let override_path = Path::new(session::DIR).join("compose.override.json");
-    fs::write(&override_path, serde_json::to_string_pretty(&doc)?)?;
+    let override_path = Path::new(session::DIR).join(OVERRIDE_FILE);
+    fs::write(&override_path, yaml::to_compose_yaml(&doc)?)?;
     session::restrict(&override_path);
 
     let mut all_files = files.clone();
@@ -444,6 +481,25 @@ fn up(cli: &Cli, clockd_image: &str) -> Result<()> {
 
     println!();
     print_plan_table(&session);
+    if !isolate.is_empty() {
+        println!(
+            "
+isolated from your own stack (use `up --keep-ports` to keep these):"
+        );
+        for i in &isolate {
+            let mut what = Vec::new();
+            if !i.dropped_ports.is_empty() {
+                what.push(format!(
+                    "host ports {} not published",
+                    i.dropped_ports.join(", ")
+                ));
+            }
+            if let Some(n) = &i.dropped_container_name {
+                what.push(format!("container_name `{n}` not used"));
+            }
+            println!("  {}: {}", i.service, what.join("; "));
+        }
+    }
     println!();
     print_clock(&st, false);
     println!(
@@ -485,7 +541,8 @@ fn down(volumes: bool) -> Result<()> {
         args.push("-v");
     }
     docker::run_inherit(&s.compose().args(&args))?;
-    let _ = fs::remove_file(Path::new(session::DIR).join("compose.override.json"));
+    let _ = fs::remove_file(Path::new(session::DIR).join(OVERRIDE_FILE));
+    let _ = fs::remove_file(Path::new(session::DIR).join("compose.override.json")); // pre-M2 sessions
     fs::remove_file(Session::path())?;
     println!(
         "ChronoStack project `{}` is down.{}",

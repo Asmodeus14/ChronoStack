@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Scheduler compatibility matrix: does each scheduler fire on its own when
+# ChronoStack moves wall-clock time, or does it need a trigger?
+name: e2e-schedulers
+services:
+  redis:
+    image: redis:7-alpine
+  bullmq:
+    build: ./node
+    command: ["node", "bullmq-worker.js"]
+  nodecron:
+    build: ./node
+    command: ["node", "nodecron.js"]
+  celery:
+    build: ./celery
+    command: ["celery", "-A", "tasks", "worker", "-B", "--loglevel=INFO", "-s", "/tmp/celerybeat-schedule", "--concurrency=1"]

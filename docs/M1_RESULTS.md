@@ -50,6 +50,6 @@ These are unmodified projects from [docker/awesome-compose](https://github.com/d
 
 ## New known limitations (also in [RISKS_AND_LIMITATIONS](RISKS_AND_LIMITATIONS.md))
 
-- **Your normal stack and the ChronoStack copy cannot run at the same time** if the project publishes fixed host ports (80, 3000, 9090, …) or sets `container_name`. The copy keeps both. Candidate fix (M2): strip host ports and container names in the override, via Compose `!reset`, which still needs to be verified.
+- ~~Your normal stack and the ChronoStack copy cannot run at the same time~~ **Resolved after M2:** host ports and `container_name` are reset by default (`up --keep-ports` to opt out).
 - **Probes right after `up` can report `unavailable`** while services such as a database initialize. `doctor` is accurate; consider an `up --wait` option.
 - **First `up` is dominated by image pulls:** 73–194 s for the three projects, mostly downloads.

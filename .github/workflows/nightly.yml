@@ -1,0 +1,47 @@
+name: nightly
+
+# Determinism and compatibility checks that are too slow for every push:
+# - the demo lifecycle 10 times in a row, which must give identical outcomes (M2 gate)
+# - the scheduler compatibility matrix (BullMQ, Celery beat, node-cron)
+# macOS cannot run Linux containers on GitHub's runners; it stays a manual check.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  determinism:
+    name: Demo ×10 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+      - run: cargo build -p chronostack
+      - run: python3 tests/e2e/run_m2.py --cli target/debug/chronostack --repeat 10 --skip-pgcron
+
+  schedulers:
+    name: Scheduler matrix (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+      - run: cargo build -p chronostack
+      - run: python3 tests/e2e/run_schedulers.py --cli target/debug/chronostack

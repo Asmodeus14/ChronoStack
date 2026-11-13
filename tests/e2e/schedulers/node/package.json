@@ -1,0 +1,10 @@
+{
+  "name": "chronostack-scheduler-fixtures",
+  "private": true,
+  "license": "(MIT OR Apache-2.0)",
+  "dependencies": {
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.4.0",
+    "node-cron": "^3.0.3"
+  }
+}

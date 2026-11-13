@@ -190,9 +190,12 @@ def pgcron(cli):
         time.sleep(3)
 
         rc, plan = st.js("advance", "3d", "--dry-run")
-        check("pg_cron detected → max jump 1h (72 stops for 3d)",
-              plan.get("pg_cron") == ["db"] and plan.get("max_jump_ns") == H * 10**9 and len(plan.get("stops", [])) == 72,
-              f"pg_cron={plan.get('pg_cron')} max_jump={plan.get('max_jump_ns')} stops={len(plan.get('stops', []))}")
+        pinned = [x for x in plan.get("stops", []) if x.get("pinned")]
+        check("pg_cron detected → schedule-aware plan: 3 job stops at 03:00:01 + final stop",
+              plan.get("pg_cron") == ["db"] and plan.get("pg_cron_mode") == "schedule-aware"
+              and len(plan.get("stops", [])) == 4 and len(pinned) == 3
+              and all(x["at"].endswith("T03:00:01Z") for x in pinned),
+              f"mode={plan.get('pg_cron_mode')} stops={len(plan.get('stops', []))} pinned={[x['at'] for x in pinned]}")
 
         psql("truncate daily")
         rc, _ = st.js("advance", "3d", "--max-jump", "none", "--no-probe")
@@ -203,10 +206,19 @@ def pgcron(cli):
         psql("truncate daily")
         t0 = time.monotonic()
         rc, r = st.js("advance", "3d", "--no-probe")
+        took = time.monotonic() - t0
         time.sleep(4)
         n = int(psql("select count(*) from daily")[1].strip() or -1)
-        check("pg_cron: advance 3d with automatic sub-steps runs the daily job 3 times",
-              rc == 0 and n == 3, f"{n} runs, {len(r.get('stops', []))} stops, {time.monotonic() - t0:.0f}s")
+        check("pg_cron: advance 3d (schedule-aware) runs the daily job 3 times",
+              rc == 0 and n == 3 and r.get("pg_cron_mode") == "schedule-aware", f"{n} runs, {len(r.get('stops', []))} stops")
+        check("pg_cron: schedule-aware advance 3d is fast (< 30 s)", took < 30, f"{took:.1f}s (hourly mode took ~92s)")
+
+        psql("select cron.schedule('every30s', '30 seconds', 'select 1')")
+        rc, plan = st.js("advance", "3d", "--dry-run")
+        check("pg_cron fallback: unsupported schedule → hourly sub-steps (72 stops)",
+              plan.get("pg_cron_mode") == "hourly" and len(plan.get("stops", [])) == 72 and "30 seconds" in (plan.get("pg_cron_reason") or ""),
+              f"mode={plan.get('pg_cron_mode')} reason={plan.get('pg_cron_reason')}")
+        psql("select cron.unschedule('every30s')")
     finally:
         st.down()
 

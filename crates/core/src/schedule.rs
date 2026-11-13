@@ -48,18 +48,22 @@ pub struct Boundary {
     pub step_end: bool,
     /// Inserted only to respect `max_jump`.
     pub sub_step: bool,
+    /// A stop requested by an external scheduler (pg_cron job minute).
+    pub pinned: bool,
 }
 
 /// Hard cap on stops per advance, to refuse plans that would take hours.
 pub const MAX_BOUNDARIES: usize = 20_000;
 
-/// Plan an advance. `schedules` are `(trigger index, recurrence)`.
+/// Plan an advance. `schedules` are `(trigger index, recurrence)`; `pinned` are
+/// extra stops (e.g. pg_cron job minutes) — ignored outside `(from, to]`.
 pub fn plan(
     from: i64,
     to: i64,
     step: Option<i64>,
     max_jump: Option<i64>,
     schedules: &[(usize, Every)],
+    pinned: &[i64],
 ) -> Result<Vec<Boundary>, String> {
     if to <= from {
         return Err(
@@ -73,6 +77,7 @@ pub fn plan(
             scheduled: vec![],
             step_end: false,
             sub_step: false,
+            pinned: false,
         });
         f(b);
         Ok(())
@@ -111,6 +116,13 @@ pub fn plan(
         }
     }
 
+    if pinned.len() > MAX_BOUNDARIES {
+        return Err(format!("more than {MAX_BOUNDARIES} pinned stops"));
+    }
+    for &t in pinned.iter().filter(|&&t| t > from && t <= to) {
+        add(t, &|b| b.pinned = true)?;
+    }
+
     let mut out: Vec<Boundary> = Vec::with_capacity(points.len());
     let mut prev = from;
     for (_, b) in points {
@@ -125,6 +137,7 @@ pub fn plan(
                     scheduled: vec![],
                     step_end: false,
                     sub_step: true,
+                    pinned: false,
                 });
                 if out.len() > MAX_BOUNDARIES {
                     return Err(format!(
@@ -170,7 +183,7 @@ mod tests {
 
     #[test]
     fn single_jump_without_options() {
-        let p = plan(DAY0, DAY0 + 14 * D, None, None, &[]).unwrap();
+        let p = plan(DAY0, DAY0 + 14 * D, None, None, &[], &[]).unwrap();
         assert_eq!(p.len(), 1);
         assert!(p[0].step_end && !p[0].sub_step);
     }
@@ -178,7 +191,7 @@ mod tests {
     #[test]
     fn daily_trigger_runs_once_per_day_even_without_steps() {
         let s = [(0, Every::new(D, 3 * H).unwrap())];
-        let p = plan(DAY0 + H, DAY0 + H + 14 * D, None, None, &s).unwrap();
+        let p = plan(DAY0 + H, DAY0 + H + 14 * D, None, None, &s, &[]).unwrap();
         let runs: Vec<_> = p
             .iter()
             .filter(|b| b.scheduled == vec![0])
@@ -194,14 +207,14 @@ mod tests {
     fn steps_and_triggers_merge() {
         let s = [(0, Every::new(D, 0).unwrap())];
         // from midnight: step ends and daily midnight occurrences coincide.
-        let p = plan(DAY0, DAY0 + 3 * D, Some(D), None, &s).unwrap();
+        let p = plan(DAY0, DAY0 + 3 * D, Some(D), None, &s, &[]).unwrap();
         assert_eq!(p.len(), 3);
         assert!(p.iter().all(|b| b.step_end && b.scheduled == vec![0]));
     }
 
     #[test]
     fn max_jump_inserts_sub_steps() {
-        let p = plan(DAY0, DAY0 + 3 * D, None, Some(H), &[]).unwrap();
+        let p = plan(DAY0, DAY0 + 3 * D, None, Some(H), &[], &[]).unwrap();
         assert_eq!(p.len(), 72);
         assert_eq!(p.iter().filter(|b| b.sub_step).count(), 71);
         assert!(p.windows(2).all(|w| w[1].at_ns - w[0].at_ns <= H));
@@ -210,7 +223,7 @@ mod tests {
     #[test]
     fn max_jump_respected_around_triggers() {
         let s = [(0, Every::new(D, 3 * H + 30 * 60_000_000_000).unwrap())];
-        let p = plan(DAY0, DAY0 + D, None, Some(H), &s).unwrap();
+        let p = plan(DAY0, DAY0 + D, None, Some(H), &s, &[]).unwrap();
         let mut prev = DAY0;
         for b in &p {
             assert!(b.at_ns - prev <= H);
@@ -221,8 +234,24 @@ mod tests {
 
     #[test]
     fn rejects_backwards_and_huge_plans() {
-        assert!(plan(DAY0, DAY0, None, None, &[]).is_err());
-        assert!(plan(DAY0, DAY0 + 365 * D, None, Some(60_000_000_000), &[]).is_err());
-        assert!(plan(DAY0, DAY0 + D, Some(0), None, &[]).is_err());
+        assert!(plan(DAY0, DAY0, None, None, &[], &[]).is_err());
+        assert!(plan(DAY0, DAY0 + 365 * D, None, Some(60_000_000_000), &[], &[]).is_err());
+        assert!(plan(DAY0, DAY0 + D, Some(0), None, &[], &[]).is_err());
+    }
+
+    #[test]
+    fn pinned_stops_are_added_inside_the_window_only() {
+        let p = plan(
+            DAY0,
+            DAY0 + 3 * D,
+            None,
+            None,
+            &[],
+            &[DAY0, DAY0 + 3 * H, DAY0 + D + 3 * H, DAY0 + 5 * D],
+        )
+        .unwrap();
+        let pinned: Vec<_> = p.iter().filter(|b| b.pinned).map(|b| b.at_ns).collect();
+        assert_eq!(pinned, vec![DAY0 + 3 * H, DAY0 + D + 3 * H]);
+        assert_eq!(p.len(), 3);
     }
 }

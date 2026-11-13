@@ -64,8 +64,11 @@
 
 ## Known gaps and costs
 
-1. **pg_cron is slow to fast-forward:** about 30 s of real time per virtual day. pg_cron needs a launcher tick (≤ 1 s) at each hourly sub-step. Optimization idea: read `cron.job` schedules and jump directly to each job's minute; pg_cron runs current-minute jobs even after a large jump. Planned.
-2. **Scheduler matrix** (BullMQ, Celery beat, node-cron negative) from the M2 plan is **not yet automated**. Only pg_cron and the trigger approach are covered.
-3. **R13** (host-port / `container_name` collisions with a running user stack) is not addressed yet.
-4. **YAML parser:** `serde_yaml` 0.9 works, but upstream is archived. Track a maintained replacement.
-5. **Timed-out `exec` triggers:** the CLI kills its `docker exec`, but the process inside the container may keep running.
+Follow-ups after the M2 review (2026-11-13):
+
+1. ~~pg_cron is slow to fast-forward~~ **Fixed.** ChronoStack reads `cron.job` and stops at each fixed-time job's minute (UTC). 3 virtual days: **92 s → 6.4 s**, still 3 runs. This also confirms empirically that pg_cron runs the current minute's jobs after a large jump. It falls back to hourly sub-steps for unsupported schedules (e.g. `30 seconds`) or a non-UTC `cron.timezone`.
+2. ~~Scheduler matrix not automated~~ **Done:** `tests/e2e/run_schedulers.py`, run nightly. BullMQ job schedulers and delayed jobs fire on their own (about 1 s). Celery beat with `beat_max_loop_interval=1` fires (about 2 s). node-cron needs a trigger.
+3. ~~R13~~ **Fixed:** published host ports and `container_name` are reset with `!reset` by default (`up --keep-ports` to opt out).
+4. ~~YAML parser~~ **Replaced** with `serde_norway` 0.9.42, a maintained fork with the same API.
+5. **Determinism:** nightly CI runs the demo 10× on Linux x86_64 and arm64 (`.github/workflows/nightly.yml`). macOS remains a manual pre-alpha check.
+6. Still open: a timed-out `exec` trigger's process may keep running inside the container.

@@ -8,6 +8,7 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use chronostack_core::cron::Cron;
 use chronostack_core::duration::{format_span, format_utc};
 use chronostack_core::schedule::{self, Boundary};
 use serde::Serialize;
@@ -65,6 +66,7 @@ pub struct StopResult {
     pub at_ns: i64,
     pub step_end: bool,
     pub sub_step: bool,
+    pub pinned: bool,
     pub triggers: Vec<ActionResult>,
     pub barriers: Vec<ActionResult>,
     pub dwell_ms: u128,
@@ -99,6 +101,98 @@ fn detect_pg_cron(session: &Session) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+/// How pg_cron jobs will be handled during an advance.
+struct PgCronPlan {
+    /// `schedule-aware`, `hourly` or `off`.
+    mode: &'static str,
+    reason: Option<String>,
+    /// Stops at each fixed-time job's minute (+1 s).
+    pinned: Vec<i64>,
+}
+
+/// pg_cron evaluates schedules in `cron.timezone`; only UTC is planned exactly.
+fn utc_zone(tz: &str) -> bool {
+    matches!(
+        tz.trim().to_ascii_uppercase().as_str(),
+        "GMT" | "UTC" | "ETC/UTC" | "ETC/GMT" | "Z" | "ZULU" | "UCT"
+    )
+}
+
+fn psql_one(compose: &Compose, service: &str, user: &str, db: &str, sql: &str) -> Option<String> {
+    let args = compose.args(&[
+        "exec", "-T", service, "psql", "-U", user, "-d", db, "-Atc", sql,
+    ]);
+    let out = docker::output(&args).ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Read pg_cron's active schedules and decide how to step (see M2 results):
+/// after a jump of more than 3 h pg_cron still runs jobs matching the *current*
+/// minute, so stopping exactly on each fixed-time job's minute is enough.
+/// Wildcard jobs (`*/5 * * * *`) run once per stop either way.
+fn pg_cron_plan(session: &Session, services: &[String], from: i64, to: i64) -> PgCronPlan {
+    let hourly = |reason: String| PgCronPlan {
+        mode: "hourly",
+        reason: Some(reason),
+        pinned: vec![],
+    };
+    let compose = session.compose();
+    let mut pinned = Vec::new();
+    for svc in services {
+        let Some(ProbeSpec::Postgres { user, db }) = session
+            .services
+            .iter()
+            .find(|e| &e.plan.service == svc)
+            .map(|e| &e.probe)
+        else {
+            return hourly(format!("{svc}: not a Postgres probe target"));
+        };
+        let Some(tz) = psql_one(&compose, svc, user, db, "show cron.timezone") else {
+            return hourly(format!("{svc}: cannot read cron.timezone"));
+        };
+        if !utc_zone(&tz) {
+            return hourly(format!(
+                "{svc}: cron.timezone is {tz}, only UTC schedules are planned exactly"
+            ));
+        }
+        let cron_db = psql_one(&compose, svc, user, db, "show cron.database_name")
+            .unwrap_or_else(|| "postgres".into());
+        let Some(rows) = psql_one(
+            &compose,
+            svc,
+            user,
+            &cron_db,
+            "select schedule from cron.job where active",
+        ) else {
+            return hourly(format!("{svc}: cannot read cron.job in database {cron_db}"));
+        };
+        for schedule in rows.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            let cron = match Cron::parse(schedule) {
+                Ok(c) => c,
+                Err(e) => {
+                    return hourly(format!("{svc}: schedule `{schedule}` not supported ({e})"));
+                }
+            };
+            if cron.wildcard {
+                continue;
+            }
+            match cron.occurrences(from, to, 5_000) {
+                Ok(occ) => pinned.extend(occ.into_iter().map(|t| t + 1_000_000_000)),
+                Err(e) => return hourly(format!("{svc}: schedule `{schedule}`: {e}")),
+            }
+        }
+    }
+    pinned.sort_unstable();
+    pinned.dedup();
+    PgCronPlan {
+        mode: "schedule-aware",
+        reason: None,
+        pinned,
+    }
 }
 
 fn tail(s: &str, n: usize) -> String {
@@ -312,14 +406,23 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
         (MaxJump::Auto, None) => detect_pg_cron(session),
         _ => vec![],
     };
+    let pg = if pg_cron.is_empty() {
+        PgCronPlan {
+            mode: "off",
+            reason: None,
+            pinned: vec![],
+        }
+    } else {
+        pg_cron_plan(session, &pg_cron, from, to)
+    };
     let max_jump = match opts.max_jump {
         MaxJump::Disabled => None,
         MaxJump::Fixed(v) => Some(v),
         MaxJump::Auto => cfg
             .max_jump_ns
-            .or((!pg_cron.is_empty()).then_some(PG_CRON_MAX_JUMP_NS)),
+            .or((pg.mode == "hourly").then_some(PG_CRON_MAX_JUMP_NS)),
     };
-    let stops = schedule::plan(from, to, opts.step, max_jump, &cfg.schedules)
+    let stops = schedule::plan(from, to, opts.step, max_jump, &cfg.schedules, &pg.pinned)
         .map_err(anyhow::Error::msg)?;
 
     let barriers = &cfg.config.barriers;
@@ -342,23 +445,44 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
                 .iter()
                 .map(|b| {
                     json!({
-                        "at": format_utc(b.at_ns), "at_ns": b.at_ns, "step_end": b.step_end, "sub_step": b.sub_step,
+                        "at": format_utc(b.at_ns), "at_ns": b.at_ns, "step_end": b.step_end, "sub_step": b.sub_step, "pinned": b.pinned,
                         "triggers": b.scheduled.iter().map(|i| &cfg.config.triggers[*i].name).collect::<Vec<_>>(),
                     })
                 })
                 .collect();
             println!(
                 "{}",
-                json!({ "from_ns": from, "to_ns": to, "max_jump_ns": max_jump, "dwell_ns": dwell_ns, "pg_cron": pg_cron, "stops": list })
+                json!({ "from_ns": from, "to_ns": to, "max_jump_ns": max_jump, "dwell_ns": dwell_ns, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_reason": pg.reason, "stops": list })
             );
         } else {
             print_plan(&stops, cfg, from, max_jump, &pg_cron);
+            if pg.mode != "off" {
+                println!(
+                    "pg_cron: {}{}",
+                    pg.mode,
+                    pg.reason
+                        .as_deref()
+                        .map(|r| format!(" ({r})"))
+                        .unwrap_or_default()
+                );
+            }
         }
         return Ok(0);
     }
 
     if !opts.json {
         print_plan_header(&stops, from, max_jump, &pg_cron, dwell_ns, cfg);
+        if pg.mode != "off" {
+            println!(
+                "pg_cron: {} — {} job stop(s){}",
+                pg.mode,
+                stops.iter().filter(|b| b.pinned).count(),
+                pg.reason
+                    .as_deref()
+                    .map(|r| format!(" ({r})"))
+                    .unwrap_or_default()
+            );
+        }
     }
     let compose = session.compose();
     let step_triggers: Vec<usize> = cfg
@@ -387,6 +511,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
             at_ns: b.at_ns,
             step_end: b.step_end,
             sub_step: b.sub_step,
+            pinned: b.pinned,
             triggers: vec![],
             barriers: vec![],
             dwell_ms: 0,
@@ -415,7 +540,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
                     break 'stops;
                 }
             }
-        } else if dwell_ns > 0 && (b.step_end || b.sub_step) {
+        } else if dwell_ns > 0 && (b.step_end || b.sub_step || b.pinned) {
             std::thread::sleep(Duration::from_nanos(dwell_ns as u64));
             r.dwell_ms = (dwell_ns / 1_000_000) as u128;
         }
@@ -438,7 +563,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
             "{}",
             json!({
                 "ok": code == 0, "exit_code": code, "from_ns": from, "to_ns": to,
-                "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron,
+                "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron, "pg_cron_mode": pg.mode,
                 "trigger_runs": trigger_runs, "stops": results, "clock": end_state, "probes": probes,
             })
         );
@@ -519,6 +644,9 @@ fn print_stop(r: &StopResult, json: bool) {
         )
     };
     let mut parts = Vec::new();
+    if r.pinned {
+        parts.push("pg_cron job(s) due".to_string());
+    }
     if !r.triggers.is_empty() {
         parts.push(format!(
             "trigger {}",

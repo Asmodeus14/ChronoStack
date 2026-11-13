@@ -4,10 +4,12 @@
 //! - [`api`]: controller (`clockd`) HTTP API types.
 //! - [`duration`]: human durations (`14d`, `1h30m`) and timestamp formatting.
 //! - [`compose`]: resolved Compose model and override generation.
+//! - [`cron`]: cron expressions (for planning pg_cron jobs).
 //! - [`schedule`]: advance planning (steps, scheduled triggers, max-jump sub-steps).
 
 pub mod api;
 pub mod compose;
+pub mod cron;
 pub mod duration;
 pub mod page;
 pub mod schedule;

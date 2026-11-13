@@ -160,7 +160,7 @@ pub fn load(path: &Path, services: &[String]) -> Result<Resolved> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let config: Config =
-        serde_yaml::from_str(&text).with_context(|| format!("invalid {}", path.display()))?;
+        serde_norway::from_str(&text).with_context(|| format!("invalid {}", path.display()))?;
     let mut r =
         validate(config, services).with_context(|| format!("invalid {}", path.display()))?;
     r.path = Some(path.to_path_buf());
@@ -277,7 +277,7 @@ mod tests {
     use super::*;
 
     fn parse(y: &str) -> Result<Resolved> {
-        let c: Config = serde_yaml::from_str(y)?;
+        let c: Config = serde_norway::from_str(y)?;
         validate(c, &["worker".into(), "db".into(), "cache".into()])
     }
 

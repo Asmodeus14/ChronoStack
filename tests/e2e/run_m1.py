@@ -148,6 +148,13 @@ def run_checks(cli):
 
     s = session()
     check("session: clockd published on 127.0.0.1 only", True, f"port {s['port']}")
+    _, ps, _ = sh(["docker", "ps", "--filter", "label=com.docker.compose.project=e2e-chronostack",
+                   "--filter", "label=com.docker.compose.service=web", "--format", "{{.Names}}|{{.Ports}}"])
+    name, _, ports = ps.strip().partition("|")
+    check("isolation: copy of `web` drops container_name and host port (R13)",
+          name and name != "e2e-web" and "18080" not in ports, f"name={name} ports={ports!r}")
+    override = open(os.path.join(E2E, ".chronostack", "compose.override.yml"), encoding="utf-8").read()
+    check("override is YAML with !reset tags", "ports: !reset []" in override and "container_name: !reset null" in override)
     _, lp, _ = compose_exec("app", "sh", "-c", "echo $LD_PRELOAD")
     lp = lp.strip()
     check("app: existing LD_PRELOAD preserved after ours", lp.endswith(":/lib/libz.so.1") and "libchronoclock-" in lp, lp)
