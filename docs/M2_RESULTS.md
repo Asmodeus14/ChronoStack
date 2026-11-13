@@ -3,7 +3,7 @@
 **Date:** 2026-11-13
 **Exit gate** ([IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md#m2--step--trigger--barrier--reference-app-weeks-57)): *10/10 identical runs on Linux and 3/3 on macOS.*
 
-**Status: substantially met, with documented gaps.**
+**Status: met on Linux (10/10 identical runs on x86_64 and arm64 in nightly CI); macOS still untested.**
 
 - **Local:** 3/3 identical runs on Docker Desktop (WSL2). Ten local runs were not attempted because the machine is memory-constrained.
 - **CI:** one run per push on native Linux x86_64 and arm64.
@@ -70,5 +70,5 @@ Follow-ups after the M2 review (2026-11-13):
 2. ~~Scheduler matrix not automated~~ **Done:** `tests/e2e/run_schedulers.py`, run nightly. BullMQ job schedulers and delayed jobs fire on their own (about 1 s). Celery beat with `beat_max_loop_interval=1` fires (about 2 s). node-cron needs a trigger.
 3. ~~R13~~ **Fixed:** published host ports and `container_name` are reset with `!reset` by default (`up --keep-ports` to opt out).
 4. ~~YAML parser~~ **Replaced** with `serde_norway` 0.9.42, a maintained fork with the same API.
-5. **Determinism:** nightly CI runs the demo 10× on Linux x86_64 and arm64 (`.github/workflows/nightly.yml`). macOS remains a manual pre-alpha check.
+5. **Determinism: Linux part of the gate met.** The first nightly run (2026-11-13, [run 43431715026](https://github.com/Asmodeus14/ChronoStack/actions/runs/43431715026)) produced 10/10 identical outcomes on both Linux x86_64 and arm64. The scheduler matrix matched every expectation on both. macOS remains a manual pre-alpha check.
 6. Still open: a timed-out `exec` trigger's process may keep running inside the container.
