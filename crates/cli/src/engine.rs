@@ -372,11 +372,17 @@ fn run_exec(compose: &Compose, spec: &ExecSpec, timeout: Duration) -> (bool, Opt
 }
 
 fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
-    let agent = ureq::AgentBuilder::new().timeout(timeout).build();
-    let resp = agent.request(&spec.method, &spec.url).call();
-    let code = match resp {
-        Ok(r) => r.status(),
-        Err(ureq::Error::Status(c, _)) => c,
+    let agent = crate::client::agent(timeout);
+    let req = match ureq::http::Request::builder()
+        .method(spec.method.as_str())
+        .uri(&spec.url)
+        .body(())
+    {
+        Ok(r) => r,
+        Err(e) => return (false, Some(format!("bad request: {e}"))),
+    };
+    let code = match agent.run(req) {
+        Ok(r) => r.status().as_u16(),
         Err(e) => return (false, Some(e.to_string())),
     };
     let ok = match spec.status {
@@ -812,4 +818,59 @@ fn print_stop(r: &StopResult, json: bool) {
             parts.join("; ")
         }
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    /// One-shot HTTP server: returns the request line and answers with `status`.
+    fn serve_once(status: u16) -> (String, std::thread::JoinHandle<String>) {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/tick", l.local_addr().unwrap());
+        let h = std::thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let n = s.read(&mut buf).unwrap();
+            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            let _ = write!(
+                s,
+                "HTTP/1.1 {status} X\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+            );
+            req.lines().next().unwrap_or_default().to_string()
+        });
+        (url, h)
+    }
+
+    fn spec(url: String, method: &str, status: Option<u16>) -> HttpSpec {
+        HttpSpec {
+            url,
+            method: method.into(),
+            status,
+        }
+    }
+
+    #[test]
+    fn http_trigger_post_ok() {
+        let (url, h) = serve_once(204);
+        let (ok, detail) = run_http(&spec(url, "POST", None), Duration::from_secs(5));
+        assert!(ok, "{detail:?}");
+        assert_eq!(detail.as_deref(), Some("HTTP 204"));
+        assert!(h.join().unwrap().starts_with("POST /tick "));
+    }
+
+    #[test]
+    fn http_trigger_error_status_is_reported_not_raised() {
+        let (url, h) = serve_once(503);
+        let (ok, detail) = run_http(&spec(url, "GET", None), Duration::from_secs(5));
+        assert!(!ok);
+        assert_eq!(detail.as_deref(), Some("HTTP 503"));
+        h.join().unwrap();
+        let (url, h) = serve_once(503);
+        let (ok, _) = run_http(&spec(url, "GET", Some(503)), Duration::from_secs(5));
+        assert!(ok, "an expected non-2xx status counts as success");
+        h.join().unwrap();
+    }
 }

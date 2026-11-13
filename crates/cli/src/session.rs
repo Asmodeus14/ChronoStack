@@ -113,6 +113,6 @@ pub fn restrict(path: &Path) {
 /// 256-bit random token, hex encoded.
 pub fn new_token() -> Result<String> {
     let mut b = [0u8; 32];
-    getrandom::getrandom(&mut b).map_err(|e| anyhow::anyhow!("no OS randomness: {e}"))?;
+    getrandom::fill(&mut b).map_err(|e| anyhow::anyhow!("no OS randomness: {e}"))?;
     Ok(b.iter().map(|x| format!("{x:02x}")).collect())
 }

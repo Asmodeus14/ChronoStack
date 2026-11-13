@@ -5,6 +5,16 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 use chronostack_core::api::{AdvanceRequest, ApiError, ClockState};
 
+/// An HTTP agent with a global timeout that returns 4xx/5xx responses as `Ok`
+/// (callers inspect the status themselves).
+pub fn agent(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
 pub struct Client {
     agent: ureq::Agent,
     base: String,
@@ -13,30 +23,37 @@ pub struct Client {
 
 impl Client {
     pub fn new(base: String, token: String) -> Client {
-        let agent = ureq::AgentBuilder::new()
-            .timeout(Duration::from_secs(10))
-            .build();
-        Client { agent, base, token }
+        Client {
+            agent: agent(Duration::from_secs(10)),
+            base,
+            token,
+        }
     }
 
     fn call(&self, method: &str, path: &str, body: Option<&AdvanceRequest>) -> Result<ClockState> {
-        let req = self
-            .agent
-            .request(method, &format!("{}{path}", self.base))
-            .set("Authorization", &format!("Bearer {}", self.token));
-        let resp = match body {
-            Some(b) => req.send_json(b),
-            None if method == "POST" => req.send_string(""),
-            None => req.call(),
+        let url = format!("{}{path}", self.base);
+        let auth = format!("Bearer {}", self.token);
+        let resp = if method == "POST" {
+            let req = self.agent.post(&url).header("Authorization", &auth);
+            match body {
+                Some(b) => req.send_json(b),
+                None => req.send_empty(),
+            }
+        } else {
+            self.agent.get(&url).header("Authorization", &auth).call()
         };
         match resp {
-            Ok(r) => Ok(r.into_json()?),
-            Err(ureq::Error::Status(code, r)) => {
+            Ok(mut r) if r.status().is_success() => Ok(r.body_mut().read_json()?),
+            Ok(mut r) => {
                 let msg = r
-                    .into_json::<ApiError>()
+                    .body_mut()
+                    .read_json::<ApiError>()
                     .map(|e| e.error)
                     .unwrap_or_default();
-                Err(anyhow!("clockd returned HTTP {code}: {msg}"))
+                Err(anyhow!(
+                    "clockd returned HTTP {}: {msg}",
+                    r.status().as_u16()
+                ))
             }
             Err(e) => Err(anyhow!(
                 "cannot reach clockd at {} ({e}) — is the stack up? try `chronostack up`",
