@@ -1,9 +1,5 @@
 name: ci
 
-# Skeleton for future Rust + integration testing.
-# No code exists yet: the `rust` job only runs once a Cargo workspace (Cargo.toml) exists,
-# so this workflow never reports tests that do not exist.
-
 on:
   pull_request:
   push:
@@ -13,26 +9,16 @@ on:
 permissions:
   contents: read
 
-jobs:
-  detect:
-    name: Detect project components
-    runs-on: ubuntu-latest
-    outputs:
-      rust: ${{ steps.check.outputs.rust }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: check
-        run: |
-          if [ -f Cargo.toml ]; then echo "rust=true" >> "$GITHUB_OUTPUT"; else echo "rust=false" >> "$GITHUB_OUTPUT"; fi
+env:
+  CARGO_TERM_COLOR: always
 
+jobs:
   rust:
-    name: Rust (fmt, clippy, test)
-    needs: detect
-    if: needs.detect.outputs.rust == 'true'
+    name: Rust (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -42,9 +28,33 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # clockd's tests (clock page writer, seqlock stress) are Linux-only.
       - run: cargo test --workspace
 
-  # Planned (add when the corresponding code exists — see docs/TESTING_STRATEGY.md):
-  # - shim: build libchronoclock for x86_64/aarch64 × glibc/musl and run C tests in containers
-  # - integration: Docker-based tests (clock consistency, no-hang suite, Postgres/Redis matrix)
-  # - nightly: runtime + scheduler compatibility matrix
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --all-targets
+
+  e2e:
+    name: End-to-end (${{ matrix.os }})
+    # Real Docker on native Linux: x86_64 and arm64 (covers M0 open items 2 and 3).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build clockd image (runs clockd unit tests inside)
+        run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+      - name: Build CLI
+        run: cargo build -p chronostack
+      - name: Run e2e
+        run: python3 tests/e2e/run_m1.py --skip-image-build --cli target/debug/chronostack

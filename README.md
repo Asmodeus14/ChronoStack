@@ -4,9 +4,10 @@
 Move the whole stack — Postgres, Redis, and your services — forward in time together, run the scheduled jobs that depend on it, and check the results.
 
 > [!IMPORTANT]
-> **Status: design phase (pre-alpha). There is no runnable code yet.**
-> This repository contains the research, architecture and implementation plan for ChronoStack, plus a throwaway feasibility spike. Every `chronostack` command in this README is **proposed**, not implemented.
-> **M0 feasibility spike: gate passed on Docker Desktop/WSL2 x86_64** ([results](docs/M0_RESULTS.md)). Shared virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read. macOS and arm64 have not been tested yet.
+> **Status: pre-alpha. Usable from source on Linux and Windows hosts; not released.**
+> - **M0 feasibility spike: passed** ([results](docs/M0_RESULTS.md)). Virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read.
+> - **M1 (controller + core CLI): implemented.** `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe` and `doctor` work. They are tested end to end in CI on Linux x86_64 and arm64, and locally on Docker Desktop (Windows).
+> - Stepping with triggers and barriers, outage windows, scenarios and MCP are **planned** (M2–M4). macOS is untested.
 
 ---
 
@@ -41,15 +42,35 @@ None of these exercise the real interaction between database time (`now()`), cac
 - **Scenarios and failure reports.** Declarative YAML steps with SQL, Redis and HTTP assertions. Each run writes a JSON report.
 - **MCP server.** AI coding agents can control the timeline through a small, safe set of tools.
 
-### Proposed workflow (not implemented)
+### Workflow
+
+Commands marked *(planned)* are not implemented yet.
 
 ```console
 $ chronostack up                      # wraps your existing docker-compose.yml
 $ chronostack doctor                  # shows which services are virtualized
 $ chronostack advance 25h             # Redis session expires; trial still active
-$ chronostack advance 14d --step 1d   # daily job runs 14 times; trial expires
-$ chronostack run scenarios/trial.yml # pass/fail + .chronostack/report-<run>.json
+$ chronostack advance 14d --step 1d   # (planned, M2) daily job runs 14 times; trial expires
+$ chronostack run scenarios/trial.yml # (planned, M3) pass/fail + .chronostack/report-<run>.json
 ```
+
+### Try it from source (pre-alpha)
+
+You need Docker with Compose v2, and a stable Rust toolchain.
+
+```sh
+git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack
+docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .   # controller image
+cargo install --path crates/cli                                         # installs `chronostack`
+
+cd /path/to/your/compose/project
+chronostack up            # same compose file, no changes needed
+chronostack doctor        # what is virtualized, and why not
+chronostack advance 7d    # moves time and verifies every service sees it
+chronostack down -v
+```
+
+ChronoStack runs your project under a **separate** Compose project name (`<name>-chronostack`) with its own volumes. Your normal stack and its data are untouched, and your compose files are never modified.
 
 ## How it works
 

@@ -1,0 +1,32 @@
+[package]
+name = "chronostack-clockd"
+description = "ChronoStack controller: single writer of the shared virtual clock page, with a small local HTTP API"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "clockd"
+path = "src/main.rs"
+
+[dependencies]
+chronostack-core.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+memmap2 = "0.9"
+tiny_http = "0.12"
+
+# The clock page is shared memory accessed through atomics: this crate needs
+# `unsafe` for exactly two operations (mapping the page and viewing it as
+# `ClockPage`), both in clock.rs. Everything else stays safe.
+[lints.rust]
+unsafe_code = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

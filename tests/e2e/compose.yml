@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# M1 end-to-end fixture: an ordinary Compose file with no ChronoStack-specific
+# configuration. `chronostack up` must work on it unmodified.
+name: e2e
+services:
+  db:
+    image: postgres:16-alpine           # musl, Postgres probe
+    environment:
+      POSTGRES_PASSWORD: pw
+      POSTGRES_USER: shop
+      POSTGRES_DB: shop
+  cache:
+    image: redis:7                      # glibc (Debian bookworm)
+  app:
+    image: node:22-alpine               # musl, with a pre-existing LD_PRELOAD to preserve
+    command: ["sleep", "infinity"]
+    environment:
+      LD_PRELOAD: /lib/libz.so.1
+  legacy:
+    image: debian:bullseye-slim         # glibc 2.31: the shim must still load
+    command: ["sleep", "infinity"]
+  whoami:
+    image: traefik/whoami               # static Go binary on scratch: not virtualizable

@@ -1,0 +1,6 @@
+target/
+.git/
+.chronostack/
+spike/
+docs/
+**/node_modules/

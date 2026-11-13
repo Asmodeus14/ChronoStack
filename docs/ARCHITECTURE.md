@@ -2,6 +2,8 @@
 
 Status: **proposal; not implemented.** Decisions are justified in [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md). The evidence behind them is in [TECHNICAL_FEASIBILITY.md](TECHNICAL_FEASIBILITY.md) and [SOURCE_VERIFICATION.md](SOURCE_VERIFICATION.md).
 
+> **M1 implementation note.** Probes moved entirely into the CLI (`docker compose exec`); clockd has no probe endpoint ([ADR-016 amendment](ARCHITECTURE_DECISIONS.md#adr-016--orchestration-runs-in-the-host-cli-no-docker-socket-in-containers)). Virtual time is monotonic-anchored ([ADR-017](ARCHITECTURE_DECISIONS.md#adr-017--virtual-time-is-anchored-to-clock_monotonic)). `/v1/clock/advance` takes `{"by_ns"}` or `{"to_unix_ns"}`.
+
 > **Second-pass change (2026-11-13).** The step / trigger / barrier engine, `exec` triggers, scenarios and reports now run in the **host CLI**. The controller container (`clockd`) is reduced to five jobs: clock writer, small HTTP API, network probes, fault proxy and event log. As a result, no container needs the Docker socket ([ADR-016](ARCHITECTURE_DECISIONS.md#adr-016--orchestration-runs-in-the-host-cli-no-docker-socket-in-containers)). This resolves a contradiction between the first-pass ARCHITECTURE and SECURITY documents.
 
 ## 1. Component diagram
@@ -130,10 +132,10 @@ If no triggers or barriers are configured, the engine falls back to `--dwell` (d
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/v1/clock` | Returns `{virtual_now, real_now, offset_ns, frozen, generation, session_id}` |
+| GET | `/v1/health` | Liveness, no auth (used by the container healthcheck) |
+| GET | `/v1/clock` | Returns `{virtual_ns, real_ns, offset_ns, frozen, generation, session_id, layout_version}` |
 | POST | `/v1/clock/advance` | Takes `{by}` or `{to}` (forward only). Performs a single atomic commit. |
 | POST | `/v1/clock/freeze` / `/v1/clock/unfreeze` | Toggle the frozen state |
-| POST | `/v1/probe` | Run the network probes declared at startup |
 | PUT | `/v1/faults/{target}` / DELETE `/v1/faults/{id}` | Outage windows (virtual-time ranges) on proxied targets |
 | GET | `/v1/events?since=` | Event log |
 | GET | `/v1/stream` | Server-sent events stream of clock changes (Node SDK) |

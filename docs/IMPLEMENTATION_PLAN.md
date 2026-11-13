@@ -30,6 +30,13 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 
 ## M1 — Controller, CLI core, compose integration (weeks 3–4)
 
+> **Status (2026-11-13): implemented.** Workspace: `crates/{core,clockd,cli}` and `shim/`. The e2e test (`tests/e2e/run_m1.py`) passes locally on Docker Desktop/WSL2 and runs in CI on Linux x86_64 and arm64. Differences from the original plan:
+> - probes run through `docker compose exec` from the CLI, so clockd has no `/v1/probe` endpoint and needs no database credentials (ADR-016 amendment);
+> - the glibc shim is built with zig against glibc 2.17, so it loads in older images such as Debian bullseye (pulled forward from M5);
+> - the CLI re-resolves the controller port if `clockd` restarts.
+>
+> **Still open for the exit gate:** run on 3 external real-world Compose projects.
+
 **Objective.** `chronostack up && chronostack advance 7d && chronostack now` on any unmodified compose project.
 
 **Tasks.** Cargo workspace (`crates/core`, `crates/clockd`, `crates/cli`); page layout in `core` + layout test vs C header; clockd HTTP API (`/v1/clock`, `/v1/clock/advance`, `/v1/clock/freeze`, `/v1/clock/unfreeze`, `/v1/probe`); `doctor` in the CLI via `docker compose exec`; token auth; compose resolution via `docker compose config --format json`; image arch/libc detection with digest cache; override generator (preserve existing `LD_PRELOAD`); `up/down/now/advance/freeze/doctor/probe` commands; automatic probes.

@@ -39,6 +39,18 @@ No versions have been released. ChronoStack contains no runnable code yet.
 - `LICENSE-MIT` and `LICENSE-APACHE`: the project is dual-licensed `MIT OR Apache-2.0`.
 - ADR-017: virtual time is anchored to `CLOCK_MONOTONIC`, because M0 measured host `CLOCK_REALTIME` stepping backwards.
 
+- **M1 — controller and core CLI** (pre-alpha, from source):
+  - `crates/core`: clock page layout (asserted against the C header), API types, Compose model, override generator, durations.
+  - `crates/clockd`: single writer of the clock page (ADR-017 protocol) and a token-authenticated localhost HTTP API.
+  - `crates/cli` (`chronostack`): `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe`, `doctor`.
+  - `shim/`: the preload library promoted from the spike. The glibc build targets glibc 2.17 via zig.
+  - `docker/clockd.Dockerfile`, and the end-to-end test `tests/e2e/run_m1.py`.
+- CI:
+  - Rust checks on Linux (x86_64 and arm64), Windows and macOS;
+  - an MSRV check;
+  - the e2e test on Linux x86_64 and arm64.
+  - Dependabot now covers cargo and docker.
+
 ### Changed
 
 - Architecture: the step / trigger / barrier engine moves to the host CLI, and no container receives the Docker socket (ADR-016).

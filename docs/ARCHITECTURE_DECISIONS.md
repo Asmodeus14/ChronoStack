@@ -100,6 +100,7 @@ Format: Context → Decision → Consequences. Status of all ADRs: **Proposed** 
 **Context.** The first-pass ARCHITECTURE placed `exec` triggers in clockd (requiring the Docker socket — root-equivalent on the Docker host), while SECURITY preferred running them from the host. Contradiction.
 **Decision.** clockd = clock writer + minimal API + network probes + fault proxy + event log. The host CLI runs the step/trigger/barrier engine, sub-stepping, `exec` triggers/probes via `docker compose exec`, scenarios and reports. MCP calls the same engine in-process.
 **Consequences.** No container ever receives the Docker socket. Advances require the CLI (or MCP server) process to be running for the duration of the step loop — acceptable for a developer/CI tool. SDK consumers that only need the clock still talk to clockd directly.
+**Amendment (M1).** *All* probes, including Postgres and Redis, also run from the CLI via `docker compose exec` (`psql`, `redis-cli`, `date`). clockd therefore needs no database credentials, network access to services or probe endpoint; its API is just clock state plus health. Doctor's "shim in PID 1" check runs as PID 1's own uid, because `/proc/1/maps` of non-root processes (Postgres, Redis) is not readable by root without CAP_SYS_PTRACE.
 
 ## ADR-017 — Virtual time is anchored to CLOCK_MONOTONIC
 

@@ -21,28 +21,39 @@ docs/development/    Release process, licensing decision, repository setup
 .github/             Issue/PR templates, CI workflows, Dependabot config
 ```
 
-Planned once implementation is authorized (see [ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-repository-layout-planned-not-created)):
+Code layout (see [ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-repository-layout-planned-not-created)):
 
 ```
-crates/{cli,clockd,core}   Rust workspace
+crates/core                Shared types: clock page layout, API, Compose model, durations
+crates/clockd              Controller (single writer of the clock page, HTTP API)
+crates/cli                 `chronostack` CLI
 shim/                      C preload library (libchronoclock)
-sdk/node/                  Node SDK (stretch goal)
-examples/saas-trial-demo/  Reference application
-tests/                     Docker-based integration tests
+docker/clockd.Dockerfile   Controller image (clockd + preload libraries)
+tests/e2e/                 End-to-end test against real Docker
+spike/                     M0 feasibility spike (frozen, reference only)
+sdk/node/, examples/       Planned (M2/M4)
 ```
 
-## Development environment (planned)
-
-These requirements apply once code exists:
+## Development environment
 
 | Tool | Purpose |
 |---|---|
 | Rust (stable; minimum supported version to be set at M1) | CLI, controller |
-| Zig | Cross-compiling the C shim for x86_64/aarch64 × glibc/musl |
+| Zig | Not needed locally: the controller image builds the glibc shim with zig inside Docker |
 | Docker Engine or Docker Desktop with Compose v2 | Integration tests |
 | Node.js LTS | Node SDK and demo (later milestones) |
 
-Build and test commands will be documented here when the Cargo workspace is created. They are not listed now, so none of them are invented.
+### Build and test
+
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace            # clockd's tests only run on Linux
+docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .   # also runs clockd tests
+python tests/e2e/run_m1.py        # end-to-end: real Docker, real services
+```
+
+The M0 spike harness (`spike/run_m0.py`) is kept for reference. It is not part of CI.
 
 ## Coding conventions (planned)
 
