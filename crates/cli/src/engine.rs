@@ -373,15 +373,25 @@ fn run_exec(compose: &Compose, spec: &ExecSpec, timeout: Duration) -> (bool, Opt
 
 fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
     let agent = crate::client::agent(timeout);
-    let req = match ureq::http::Request::builder()
+    let builder = ureq::http::Request::builder()
         .method(spec.method.as_str())
-        .uri(&spec.url)
-        .body(())
-    {
+        .uri(&spec.url);
+    // Methods that carry a body get an explicit empty one (`content-length: 0`);
+    // a `()` body would be sent chunked, which some webhook receivers mishandle.
+    let no_body = matches!(
+        spec.method.to_ascii_uppercase().as_str(),
+        "GET" | "HEAD" | "DELETE" | "OPTIONS"
+    );
+    let resp = if no_body {
+        builder.body(()).map(|r| agent.run(r))
+    } else {
+        builder.body(&[][..]).map(|r| agent.run(r))
+    };
+    let resp = match resp {
         Ok(r) => r,
         Err(e) => return (false, Some(format!("bad request: {e}"))),
     };
-    let code = match agent.run(req) {
+    let code = match resp {
         Ok(r) => r.status().as_u16(),
         Err(e) => return (false, Some(e.to_string())),
     };
@@ -826,20 +836,42 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpListener;
 
-    /// One-shot HTTP server: returns the request line and answers with `status`.
+    /// One-shot HTTP server: returns the raw request and answers with `status`.
     fn serve_once(status: u16) -> (String, std::thread::JoinHandle<String>) {
         let l = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/tick", l.local_addr().unwrap());
         let h = std::thread::spawn(move || {
             let (mut s, _) = l.accept().unwrap();
+            // Read the whole request (headers + body) before answering: closing a
+            // socket with unread data resets the connection on Windows.
+            let mut data = Vec::new();
             let mut buf = [0u8; 4096];
-            let n = s.read(&mut buf).unwrap();
-            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            loop {
+                let n = s.read(&mut buf).unwrap();
+                data.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&data).to_string();
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let len = text[..end]
+                        .lines()
+                        .find_map(|l| {
+                            let (k, v) = l.split_once(':')?;
+                            k.eq_ignore_ascii_case("content-length")
+                                .then(|| v.trim().parse::<usize>().ok())?
+                        })
+                        .unwrap_or(0);
+                    if data.len() >= end + 4 + len || n == 0 {
+                        break;
+                    }
+                } else if n == 0 {
+                    break;
+                }
+            }
+            let req = String::from_utf8_lossy(&data).to_string();
             let _ = write!(
                 s,
                 "HTTP/1.1 {status} X\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
             );
-            req.lines().next().unwrap_or_default().to_string()
+            req
         });
         (url, h)
     }
@@ -858,7 +890,12 @@ mod tests {
         let (ok, detail) = run_http(&spec(url, "POST", None), Duration::from_secs(5));
         assert!(ok, "{detail:?}");
         assert_eq!(detail.as_deref(), Some("HTTP 204"));
-        assert!(h.join().unwrap().starts_with("POST /tick "));
+        let req = h.join().unwrap();
+        assert!(req.starts_with("POST /tick "));
+        assert!(
+            req.to_ascii_lowercase().contains("content-length: 0"),
+            "empty body sent with content-length, not chunked: {req:?}"
+        );
     }
 
     #[test]
