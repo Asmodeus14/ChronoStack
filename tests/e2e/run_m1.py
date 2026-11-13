@@ -75,7 +75,7 @@ def main():
     ap.add_argument("--skip-image-build", action="store_true")
     a = ap.parse_args()
 
-    cli = a.cli
+    cli = os.path.abspath(a.cli) if a.cli else None  # the CLI runs with cwd=tests/e2e
     if not cli:
         rc, _, err = sh(["cargo", "build", "-p", "chronostack"], cwd=ROOT)
         if rc != 0:
