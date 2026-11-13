@@ -204,8 +204,25 @@ static struct chrono_page *page(void) {
 /* transitions can never produce a backwards step for a reader).             */
 /* ------------------------------------------------------------------------ */
 
-static int64_t last_off, last_fv;
-static uint32_t last_frozen;
+/* Per-thread last good snapshot: used only if the writer dies mid-update
+ * (seq stuck odd). Per-thread so it can never mix values across threads
+ * (an M0 stress test caught exactly that with a shared snapshot). */
+static __thread int64_t tls_off, tls_fv;
+static __thread uint32_t tls_frozen, tls_valid;
+/* Odd seq value observed to be stuck; reads seeing it skip the spin. */
+static uint64_t g_stuck_seq = 0;
+/* A writer merely descheduled mid-update must NOT trigger the fallback (M0
+ * stress test: a spin-count threshold fired after ~2 ms of preemption and
+ * produced a 2.3 ms backward step). Only a seq stuck for this long counts. */
+#define STUCK_NS (1000LL * 1000 * 1000)
+
+static inline void cpu_relax(void) {
+#if defined(__x86_64__) || defined(__i386__)
+    __builtin_ia32_pause();
+#elif defined(__aarch64__)
+    __asm__ __volatile__("yield");
+#endif
+}
 
 static inline int64_t ts_ns(const struct timespec *t) { return (int64_t)t->tv_sec * NS_PER_SEC + t->tv_nsec; }
 static inline void ns_ts(int64_t ns, struct timespec *t) {
@@ -214,41 +231,85 @@ static inline void ns_ts(int64_t ns, struct timespec *t) {
     t->tv_nsec = (long)(ns % NS_PER_SEC);
 }
 
+/* Layout v2: virtual time is anchored to the monotonic clock (immune to host
+ * clock steps). Coarse wall clock -> coarse monotonic base. */
+static inline clockid_t base_clock(clockid_t clk) {
+    return clk == CLOCK_REALTIME_COARSE ? CLOCK_MONOTONIC_COARSE : CLOCK_MONOTONIC;
+}
+
+/* Fill virt (and real, only if requested: it costs a second clock read on
+ * the hot path, which M0 measured at ~+37 ns). CLOCK_TAI keeps its kernel
+ * offset from UTC. */
+static int finish(clockid_t clk, int64_t v, int64_t *virt_ns, int64_t *real_ns) {
+    if (real_ns || clk == CLOCK_TAI) {
+        struct timespec rt;
+        if (raw_clock_gettime(clk, &rt) != 0) return -1;
+        if (real_ns) *real_ns = ts_ns(&rt);
+        if (clk == CLOCK_TAI) {
+            struct timespec utc;
+            if (raw_clock_gettime(CLOCK_REALTIME, &utc) == 0) v += ts_ns(&rt) - ts_ns(&utc);
+        }
+    }
+    *virt_ns = v;
+    return 1;
+}
+
 /* Read `clk` (a wall clock) and return 1 with virt_ns/real_ns filled if
- * virtualization is active; 0 means "use real time" (real_ns still valid). */
+ * virtualization is active; 0 means "use real time". real_ns may be NULL. */
 static int read_virtual(clockid_t clk, int64_t *virt_ns, int64_t *real_ns) {
     struct chrono_page *p = page();
     struct timespec rt;
     if (!p) {
+        if (!real_ns) return 0;
         if (raw_clock_gettime(clk, &rt) != 0) return -1;
         *real_ns = ts_ns(&rt);
         return 0;
     }
-    for (int i = 0; i < 1000; i++) {
+    /* Retry for as long as the writer is making progress (seq changing);
+     * fall back only if seq stays odd and unchanged (writer died mid-update). */
+    uint64_t odd_seen = 0;
+    long spins = 0;
+    int64_t odd_since = 0;
+    for (;;) {
         uint64_t s1 = __atomic_load_n(&p->seq, __ATOMIC_ACQUIRE);
-        if (s1 & 1) continue;
+        if (s1 & 1) {
+            if (s1 == __atomic_load_n(&g_stuck_seq, __ATOMIC_RELAXED)) break;
+            if (s1 != odd_seen) {
+                struct timespec m;
+                raw_clock_gettime(CLOCK_MONOTONIC, &m);
+                odd_seen = s1; spins = 0; odd_since = ts_ns(&m);
+            } else if ((++spins & 1023) == 0) {
+                struct timespec m;
+                raw_clock_gettime(CLOCK_MONOTONIC, &m);
+                if (ts_ns(&m) - odd_since > STUCK_NS) {
+                    __atomic_store_n(&g_stuck_seq, s1, __ATOMIC_RELAXED);
+                    break;
+                }
+            }
+            cpu_relax();
+            continue;
+        }
         int64_t off = __atomic_load_n(&p->offset_ns, __ATOMIC_RELAXED);
         uint32_t fz = __atomic_load_n(&p->frozen, __ATOMIC_RELAXED);
         int64_t fv = __atomic_load_n(&p->frozen_virtual_ns, __ATOMIC_RELAXED);
-        if (raw_clock_gettime(clk, &rt) != 0) return -1;
+        struct timespec mt;
+        if (raw_clock_gettime(base_clock(clk), &mt) != 0) return -1;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
         uint64_t s2 = __atomic_load_n(&p->seq, __ATOMIC_RELAXED);
         if (s1 != s2) continue;
-        if (off > MAX_ABS_OFFSET_NS || off < -MAX_ABS_OFFSET_NS) off = 0; /* sanity */
-        __atomic_store_n(&last_off, off, __ATOMIC_RELAXED);
-        __atomic_store_n(&last_fv, fv, __ATOMIC_RELAXED);
-        __atomic_store_n(&last_frozen, fz, __ATOMIC_RELAXED);
-        *real_ns = ts_ns(&rt);
-        *virt_ns = fz ? fv : *real_ns + off;
-        return 1;
+        tls_off = off; tls_fv = fv; tls_frozen = fz; tls_valid = 1;
+        return finish(clk, fz ? fv : ts_ns(&mt) + off, virt_ns, real_ns);
     }
-    /* Writer stuck mid-update: fall back to last good snapshot. */
-    if (raw_clock_gettime(clk, &rt) != 0) return -1;
-    *real_ns = ts_ns(&rt);
-    *virt_ns = __atomic_load_n(&last_frozen, __ATOMIC_RELAXED)
-                   ? __atomic_load_n(&last_fv, __ATOMIC_RELAXED)
-                   : *real_ns + __atomic_load_n(&last_off, __ATOMIC_RELAXED);
-    return 1;
+    /* Writer stuck mid-update: this thread's last good snapshot, else real time. */
+    if (!tls_valid) {
+        if (!real_ns) return 0;
+        if (raw_clock_gettime(clk, &rt) != 0) return -1;
+        *real_ns = ts_ns(&rt);
+        return 0;
+    }
+    struct timespec mt;
+    if (raw_clock_gettime(base_clock(clk), &mt) != 0) return -1;
+    return finish(clk, tls_frozen ? tls_fv : ts_ns(&mt) + tls_off, virt_ns, real_ns);
 }
 
 static inline int is_wall(clockid_t c) {
@@ -264,7 +325,7 @@ static int to_real_deadline(const struct timespec *in, struct timespec *out) {
     if (in->tv_sec > 9000000000LL || in->tv_sec < 0) return 0; /* "infinite" deadlines */
     int64_t v, r;
     if (read_virtual(CLOCK_REALTIME, &v, &r) != 1) return 0;
-    if (v == r) return 0; /* no shift */
+    if (v - r < 1000000 && r - v < 1000000) return 0; /* shift < 1 ms: leave as-is */
     int64_t remaining = ts_ns(in) - v;
     ns_ts(r + remaining, out);
     return 1;
@@ -276,10 +337,9 @@ static int to_real_deadline(const struct timespec *in, struct timespec *out) {
 
 EXPORT int clock_gettime(clockid_t clk, struct timespec *ts) {
     if (!is_wall(clk) || !ts) return raw_clock_gettime(clk, ts);
-    int64_t v, r;
-    int rc = read_virtual(clk, &v, &r);
-    if (rc < 0) return raw_clock_gettime(clk, ts);
-    ns_ts(rc == 1 ? v : r, ts);
+    int64_t v;
+    if (read_virtual(clk, &v, NULL) != 1) return raw_clock_gettime(clk, ts);
+    ns_ts(v, ts);
     return 0;
 }
 
@@ -456,7 +516,9 @@ typedef int (*cond_clockwait_fn)(pthread_cond_t *, pthread_mutex_t *, clockid_t,
 static cond_init_fn real_cond_init_p;
 static cond_destroy_fn real_cond_destroy_p;
 static cond_timedwait_fn real_cond_timedwait_p;
+#ifdef __GLIBC__
 static cond_clockwait_fn real_cond_clockwait_p;
+#endif
 
 /* glibc keeps a pre-2.3.2 compat version of the condvar API; always bind the
  * modern one. (On aarch64 the baseline is GLIBC_2.17; dlvsym fails and we fall

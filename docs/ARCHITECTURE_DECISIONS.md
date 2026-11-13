@@ -100,3 +100,19 @@ Format: Context → Decision → Consequences. Status of all ADRs: **Proposed** 
 **Context.** The first-pass ARCHITECTURE placed `exec` triggers in clockd (requiring the Docker socket — root-equivalent on the Docker host), while SECURITY preferred running them from the host. Contradiction.
 **Decision.** clockd = clock writer + minimal API + network probes + fault proxy + event log. The host CLI runs the step/trigger/barrier engine, sub-stepping, `exec` triggers/probes via `docker compose exec`, scenarios and reports. MCP calls the same engine in-process.
 **Consequences.** No container ever receives the Docker socket. Advances require the CLI (or MCP server) process to be running for the duration of the step loop — acceptable for a developer/CI tool. SDK consumers that only need the clock still talk to clockd directly.
+
+## ADR-017 — Virtual time is anchored to CLOCK_MONOTONIC
+
+**Status:** Proposed, with M0 evidence ([M0_RESULTS.md](M0_RESULTS.md)).
+**Context.** Under Docker Desktop (WSL2), M0 measured the VM's raw `CLOCK_REALTIME` stepping **backwards by about 2 ms** in 4 of 6 twenty-second windows, with no ChronoStack code involved. With `virtual = CLOCK_REALTIME + offset` (ADR-004 as first written), every such host correction leaked into virtual time, and readers observed time going backwards.
+**Decision.**
+- Clock page layout v2 defines `virtual = CLOCK_MONOTONIC + offset_ns`, or `frozen_virtual_ns` when frozen. All containers on one kernel share `CLOCK_MONOTONIC`.
+- The real clock is read only when needed: for absolute-deadline translation (`real_deadline = real_now + (virtual_deadline − virtual_now)`) and for `CLOCK_TAI`.
+- **Writer requirement:** a `SEQ_CST` fence after the odd `seq` store, before reading any clock inside the write window.
+- **Reader requirements:**
+  - retry while `seq` is changing;
+  - fall back to a per-thread snapshot only if `seq` stays odd for more than 1 s.
+**Consequences.**
+- Virtual time no longer follows NTP corrections of the host. Over a long session it may drift from the host wall clock by the host's corrections. That is irrelevant for tests and preferable to non-monotonic virtual time.
+- `chronostack now` reports `virtual − real` as the human-meaningful offset.
+- The Rust `clockd` (M1) must implement the writer rules above, verified by the cross-container stress test (CC-2).

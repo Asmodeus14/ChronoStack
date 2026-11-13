@@ -1,0 +1,1138 @@
+{
+  "environment": {
+    "docker": "29.6.2 Docker Desktop x86_64 kernel=6.6.87.2-microsoft-standard-WSL2",
+    "compose": "5.3.1",
+    "host": "win32",
+    "started": "2026-11-13T15:59:58+0530"
+  },
+  "results": [
+    {
+      "id": "BASE-C",
+      "area": "c/glibc",
+      "description": "offset 0: clock_gettime == real",
+      "expected": "REAL time \u00b12.0s",
+      "observed": "skew +0.01s (offset -0.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "BASE-PG",
+      "area": "postgres16",
+      "description": "offset 0: clock_timestamp == real",
+      "expected": "REAL time \u00b12.0s",
+      "observed": "skew +0.03s (offset -0.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-clock_gettime_realtime",
+      "area": "c/glibc",
+      "description": "clock_gettime_realtime at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -0.31s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-clock_gettime_coarse",
+      "area": "c/glibc",
+      "description": "clock_gettime_coarse at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -0.32s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-gettimeofday",
+      "area": "c/glibc",
+      "description": "gettimeofday at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -0.31s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-time",
+      "area": "c/glibc",
+      "description": "time at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -1.05s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-timespec_get",
+      "area": "c/glibc",
+      "description": "timespec_get at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -1.05s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-tai",
+      "area": "c/glibc",
+      "description": "CLOCK_TAI at +7d (TAI = UTC + leap offset)",
+      "expected": "virtual +0..40s",
+      "observed": "skew +36.69s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-GNU-rawsyscall",
+      "area": "c/glibc",
+      "description": "NEG-8 raw syscall(SYS_clock_gettime)",
+      "expected": "REAL time (not intercepted)",
+      "observed": "skew vs real -0.63s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-clock_gettime_realtime",
+      "area": "c/musl",
+      "description": "clock_gettime_realtime at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -0.32s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-clock_gettime_coarse",
+      "area": "c/musl",
+      "description": "clock_gettime_coarse at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -0.32s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-gettimeofday",
+      "area": "c/musl",
+      "description": "gettimeofday at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -0.32s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-time",
+      "area": "c/musl",
+      "description": "time at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -1.00s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-timespec_get",
+      "area": "c/musl",
+      "description": "timespec_get at +7d",
+      "expected": "virtual \u00b12s",
+      "observed": "skew -1.00s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-tai",
+      "area": "c/musl",
+      "description": "CLOCK_TAI at +7d (TAI = UTC + leap offset)",
+      "expected": "virtual +0..40s",
+      "observed": "skew +36.68s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-C-MUSL-rawsyscall",
+      "area": "c/musl",
+      "description": "NEG-8 raw syscall(SYS_clock_gettime)",
+      "expected": "REAL time (not intercepted)",
+      "observed": "skew vs real -0.63s",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-DATE-GNU",
+      "area": "coreutils",
+      "description": "date +%s at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.00s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-DATE-BUSYBOX",
+      "area": "busybox",
+      "description": "date +%s at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew -0.98s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-NODE",
+      "area": "node22-slim",
+      "description": "now at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.00s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-NODE-NEWDATE",
+      "area": "node22-slim",
+      "description": "new_date at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.03s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-NODE-ALPINE",
+      "area": "node22-alpine",
+      "description": "now at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.01s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PY310",
+      "area": "python3.10",
+      "description": "time at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.20s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PY312",
+      "area": "python3.12",
+      "description": "time at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.24s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PY312-DT",
+      "area": "python3.12",
+      "description": "datetime_now at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.04s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PY312-ALPINE",
+      "area": "python3.12-alp",
+      "description": "time at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.48s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-JAVA",
+      "area": "jvm21",
+      "description": "currentTimeMillis at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.45s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-JAVA-INSTANT",
+      "area": "jvm21",
+      "description": "instant_now at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.42s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PG-CLOCK",
+      "area": "postgres16",
+      "description": "clock_timestamp() at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.01s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PG-NOW",
+      "area": "postgres16",
+      "description": "now() (new txn) at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.03s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PG-TIMEOFDAY",
+      "area": "postgres16",
+      "description": "timeofday() at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.02s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-PGA-CLOCK",
+      "area": "postgres16-alp",
+      "description": "clock_timestamp() at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.01s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-REDIS-TIME",
+      "area": "redis7",
+      "description": "TIME at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew -0.66s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-REDISA-TIME",
+      "area": "redis7-alp",
+      "description": "TIME at +7d",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew -0.60s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "NEG-1-GO",
+      "area": "go (static)",
+      "description": "Go time.Now() at +7d",
+      "expected": "REAL time \u00b12.0s",
+      "observed": "skew -0.56s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "NEG-2-STATIC",
+      "area": "c static musl",
+      "description": "static binary time() at +7d",
+      "expected": "REAL time \u00b12.0s",
+      "observed": "skew -0.53s (offset 7.00d)",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "sem_timedwait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "sem_clockwait_realtime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "pthread_mutex_timedlock",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1102 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "pthread_rwlock_timedwrlock",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1102 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "pthread_cond_timedwait_default",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "pthread_cond_timedwait_static_init",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "pthread_cond_timedwait_monotonic_attr",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "pthread_cond_clockwait_realtime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "clock_nanosleep_realtime_abstime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "timerfd_realtime_abstime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "nanosleep_relative",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/glibc",
+      "description": "poll_relative",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "sem_timedwait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "sem_clockwait_realtime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "SKIP 1 ms",
+      "status": "SKIP"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "pthread_mutex_timedlock",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1101 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "pthread_rwlock_timedwrlock",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1101 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "pthread_cond_timedwait_default",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "pthread_cond_timedwait_static_init",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "pthread_cond_timedwait_monotonic_attr",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "pthread_cond_clockwait_realtime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "SKIP 1 ms",
+      "status": "SKIP"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "clock_nanosleep_realtime_abstime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "timerfd_realtime_abstime",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "nanosleep_relative",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "c/musl",
+      "description": "poll_relative",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "Event.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "Lock.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "RLock.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1101 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "Condition.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "Semaphore.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "queue.get_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "threading.Timer",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "time.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "select.select",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.10",
+      "description": "asyncio.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1003 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "Event.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "Lock.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "RLock.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1101 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "Condition.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "Semaphore.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "queue.get_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "threading.Timer",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "time.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "select.select",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12",
+      "description": "asyncio.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1003 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "Event.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "Lock.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "RLock.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1101 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "Condition.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "Semaphore.acquire_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "queue.get_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "threading.Timer",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "time.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "select.select",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "python3.12-alp",
+      "description": "asyncio.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1003 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-slim",
+      "description": "setTimeout_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-slim",
+      "description": "setInterval_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-slim",
+      "description": "atomics_wait_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1059 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-slim",
+      "description": "worker_setTimeout_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1055 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-alpine",
+      "description": "setTimeout_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-alpine",
+      "description": "setInterval_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-alpine",
+      "description": "atomics_wait_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1067 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "node22-alpine",
+      "description": "worker_setTimeout_1s",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1073 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "Thread.sleep",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "Object.wait",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "LockSupport.parkNanos",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1000 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "LockSupport.parkUntil_wallclock",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1000 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "ReentrantLock.tryLock",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1102 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "CountDownLatch.await",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1001 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "ScheduledExecutor.schedule",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1004 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-30d-recheck",
+      "area": "jvm21",
+      "description": "CompletableFuture.get_timeout",
+      "expected": "OK (0.9\u20132.5 s)",
+      "observed": "OK 1002 ms",
+      "status": "PASS"
+    },
+    {
+      "id": "NEG-3",
+      "area": "node22-slim",
+      "description": "setTimeout(5s) armed, then +1d advance",
+      "expected": "fires after ~5 s real (NOT early)",
+      "observed": "fired after 5005 ms; virtual jump during wait 24.0 h",
+      "status": "PASS"
+    },
+    {
+      "id": "NEG-6",
+      "area": "c/glibc",
+      "description": "missing page, default mode",
+      "expected": "real time + one stderr warning",
+      "observed": "rc=0 stderr='chronostack: cannot open CHRONOSTACK_CLOCK_PATH\\nchronostack: clock unavailable, using real time'",
+      "status": "PASS"
+    },
+    {
+      "id": "NEG-7",
+      "area": "c/glibc",
+      "description": "missing page, CHRONOSTACK_STRICT=1",
+      "expected": "process aborts",
+      "observed": "rc=134 stderr='chronostack: cannot open CHRONOSTACK_CLOCK_PATH\\nchronostack: CHRONOSTACK_STRICT=1: aborting'",
+      "status": "PASS"
+    },
+    {
+      "id": "NEG-6b",
+      "area": "c/glibc",
+      "description": "corrupt page (bad magic)",
+      "expected": "real time + warning",
+      "observed": "rc=0 stderr='chronostack: invalid clock page (magic/version)\\nchronostack: clock unavailable, using real time'",
+      "status": "PASS"
+    },
+    {
+      "id": "CC-2",
+      "area": "c/glibc",
+      "description": "4 readers vs writer churning freeze/advance/unfreeze across containers",
+      "expected": "0 backward steps",
+      "observed": "95885536 reads, 0 backward (worst 0 ns), 7591214 churn iterations",
+      "status": "PASS"
+    },
+    {
+      "id": "CC-3",
+      "area": "c/glibc",
+      "description": "freeze: two reads 1.5 s apart; unfreeze resumes",
+      "expected": "identical while frozen; no jump back",
+      "observed": "frozen delta 0.000000s; after unfreeze +0.288s",
+      "status": "PASS"
+    },
+    {
+      "id": "PERF-1",
+      "area": "c/glibc",
+      "description": "clock_gettime(REALTIME) cost, shim vs none",
+      "expected": "< +50 ns/call",
+      "observed": "baseline 37.9 ns, shim 49.5 ns, overhead +11.7 ns",
+      "status": "PASS"
+    },
+    {
+      "id": "PERF-1-MUSL",
+      "area": "c/musl",
+      "description": "clock_gettime(REALTIME) cost, shim vs none",
+      "expected": "< +50 ns/call",
+      "observed": "baseline 37.7 ns, shim 51.5 ns, overhead +13.8 ns",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-1-redis",
+      "area": "redis7",
+      "description": "SET EX 86400 \u2192 advance 25h \u2192 GET",
+      "expected": "value before, nil after",
+      "observed": "before='v' after=''",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-2-redis",
+      "area": "redis7",
+      "description": "EX 7200 \u2192 advance 1h \u2192 TTL",
+      "expected": "3600 \u00b1 3",
+      "observed": "TTL=3599",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-3-redis",
+      "area": "redis7",
+      "description": "EXPIREAT virtual_now+100 \u2192 TTL",
+      "expected": "100 \u00b1 3",
+      "observed": "TTL=98",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-5-redis",
+      "area": "redis7",
+      "description": "10k keys EX 60 \u2192 advance 2m \u2192 DBSIZE without access (active expiry)",
+      "expected": "\u22480 within 15 s",
+      "observed": "10002 \u2192 1 after 0.3s",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-RD-redis",
+      "area": "redis7",
+      "description": "BLPOP 1s under offset",
+      "expected": "returns after ~1 s (+exec overhead)",
+      "observed": "1.42s wall incl. docker exec",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-1-redisa",
+      "area": "redis7-alp",
+      "description": "SET EX 86400 \u2192 advance 25h \u2192 GET",
+      "expected": "value before, nil after",
+      "observed": "before='v' after=''",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-2-redisa",
+      "area": "redis7-alp",
+      "description": "EX 7200 \u2192 advance 1h \u2192 TTL",
+      "expected": "3600 \u00b1 3",
+      "observed": "TTL=3599",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-3-redisa",
+      "area": "redis7-alp",
+      "description": "EXPIREAT virtual_now+100 \u2192 TTL",
+      "expected": "100 \u00b1 3",
+      "observed": "TTL=98",
+      "status": "PASS"
+    },
+    {
+      "id": "RD-5-redisa",
+      "area": "redis7-alp",
+      "description": "10k keys EX 60 \u2192 advance 2m \u2192 DBSIZE without access (active expiry)",
+      "expected": "\u22480 within 15 s",
+      "observed": "10002 \u2192 1 after 1.2s",
+      "status": "PASS"
+    },
+    {
+      "id": "NH-RD-redisa",
+      "area": "redis7-alp",
+      "description": "BLPOP 1s under offset",
+      "expected": "returns after ~1 s (+exec overhead)",
+      "observed": "1.36s wall incl. docker exec",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-4-pg",
+      "area": "postgres16",
+      "description": "insert \u2192 advance 15d \u2192 created_at < now()-14d",
+      "expected": "1 row",
+      "observed": "1",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-5-pg",
+      "area": "postgres16",
+      "description": "statement_timeout=5s; pg_sleep(1) under offset",
+      "expected": "succeeds in ~1 s",
+      "observed": "rc=0 1.36s",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-5b-pg",
+      "area": "postgres16",
+      "description": "statement_timeout=1s; pg_sleep(3) under offset",
+      "expected": "cancelled after ~1 s",
+      "observed": "rc=1 1.38s ERROR:  canceling statement due to statement timeout",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-2-pg",
+      "area": "postgres16",
+      "description": "now() inside txn spanning an advance",
+      "expected": "unchanged (txn-start cached)",
+      "observed": "delta 0.000s",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-3-pg",
+      "area": "postgres16",
+      "description": "clock_timestamp() inside same txn after +1d",
+      "expected": "\u2248 +1d",
+      "observed": "clock - now = 24.00 h",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-6-pg",
+      "area": "postgres16",
+      "description": "pg_sleep(4) with +1d advance after 2 s",
+      "expected": "OBSERVATION (pg_sleep end time is wall-clock based?)",
+      "observed": "statement wall time 4.38s (\u22482 s \u21d2 ended early at advance; \u22484 s \u21d2 unaffected)",
+      "status": "INFO"
+    },
+    {
+      "id": "PG-4-pga",
+      "area": "postgres16-alp",
+      "description": "insert \u2192 advance 15d \u2192 created_at < now()-14d",
+      "expected": "1 row",
+      "observed": "1",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-5-pga",
+      "area": "postgres16-alp",
+      "description": "statement_timeout=5s; pg_sleep(1) under offset",
+      "expected": "succeeds in ~1 s",
+      "observed": "rc=0 1.33s",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-5b-pga",
+      "area": "postgres16-alp",
+      "description": "statement_timeout=1s; pg_sleep(3) under offset",
+      "expected": "cancelled after ~1 s",
+      "observed": "rc=1 1.36s ERROR:  canceling statement due to statement timeout",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-2-pga",
+      "area": "postgres16-alp",
+      "description": "now() inside txn spanning an advance",
+      "expected": "unchanged (txn-start cached)",
+      "observed": "delta 0.000s",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-3-pga",
+      "area": "postgres16-alp",
+      "description": "clock_timestamp() inside same txn after +1d",
+      "expected": "\u2248 +1d",
+      "observed": "clock - now = 24.00 h",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-6-pga",
+      "area": "postgres16-alp",
+      "description": "pg_sleep(4) with +1d advance after 2 s",
+      "expected": "OBSERVATION (pg_sleep end time is wall-clock based?)",
+      "observed": "statement wall time 4.33s (\u22482 s \u21d2 ended early at advance; \u22484 s \u21d2 unaffected)",
+      "status": "INFO"
+    },
+    {
+      "id": "PG-11",
+      "area": "postgres16",
+      "description": "restart container under shim, clock_timestamp()",
+      "expected": "virtual time \u00b12.0s",
+      "observed": "skew +0.02s (offset 35.35d)",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-7",
+      "area": "pg_cron",
+      "description": "`* * * * *` job, 20 \u00d7 1-min steps, barrier = new run",
+      "expected": "20/20 steps produce a run",
+      "observed": "20/20; barrier wait avg 0.68s max 1.02s",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-8",
+      "area": "pg_cron",
+      "description": "daily 03:00 job; 14d in 336h steps (single raw jump > 3h \u2192 CLOCK_CHANGE)",
+      "expected": "0 runs",
+      "observed": "0 runs (0 steps without heartbeat)",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-9",
+      "area": "pg_cron",
+      "description": "daily 03:00 job; 3d in 1h steps (1h sub-steps \u2192 CLOCK_JUMP_FORWARD catch-up)",
+      "expected": "3 runs",
+      "observed": "3 runs (0 steps without heartbeat)",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-9b",
+      "area": "pg_cron",
+      "description": "daily 03:00 job; 3d in 4h steps (4h steps > 3h \u2192 CLOCK_CHANGE skips)",
+      "expected": "0 runs",
+      "observed": "0 runs (0 steps without heartbeat)",
+      "status": "PASS"
+    },
+    {
+      "id": "PG-9c",
+      "area": "pg_cron",
+      "description": "daily 03:00 job; 3d in 3h steps (3h steps = boundary, not > 180 min)",
+      "expected": "3 runs",
+      "observed": "3 runs (0 steps without heartbeat)",
+      "status": "PASS"
+    }
+  ]
+}

@@ -47,7 +47,8 @@ Acceptance script (manual and automated):
 | BullMQ | Supported with trigger; dwell-only behaviour unresolved | SCH-BULL |
 | Celery beat | Supported with `beat_max_loop_interval ≤ 1` (default scheduler otherwise waits up to 300 s) | SCH-CEL |
 | node-cron, APScheduler, Spring cron | Trigger required | NEG-4 |
-| Python < 3.11, JVM 17/21, Ruby 3.x | Experimental | no-hang suite passes |
+| Python 3.10 (wall clock) | Supported target (M0: no hangs even without deadline translation) | RT-PY |
+| JVM 17/21, Ruby 3.x | Experimental (M0: JVM 21 reads + no-hang pass with translation; `parkUntil` hangs without it) | no-hang suite passes |
 | Go, static binaries, setuid binaries | Unsupported | NEG-1/2 |
 | MySQL, MongoDB | Untested (likely work: dynamic glibc) | — |
 

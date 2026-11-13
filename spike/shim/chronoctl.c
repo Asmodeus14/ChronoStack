@@ -32,6 +32,13 @@ static int64_t real_ns(void) {
     return (int64_t)ts.tv_sec * NS + ts.tv_nsec;
 }
 
+/* Layout v2: offsets are relative to CLOCK_MONOTONIC (see chronoclock.h). */
+static int64_t mono_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * NS + ts.tv_nsec;
+}
+
 static struct chrono_page *map_page(const char *path, int create) {
     int fd = open(path, O_RDWR | (create ? O_CREAT : 0), 0644);
     if (fd < 0) { perror("open"); exit(2); }
@@ -42,11 +49,16 @@ static struct chrono_page *map_page(const char *path, int create) {
     return (struct chrono_page *)m;
 }
 
-/* Seqlock writer (single writer). */
+/* Seqlock writer (single writer).
+ * The fence must be SEQ_CST, not just RELEASE: freeze/unfreeze read the real
+ * clock *inside* the write window, and that clock read must not happen before
+ * the odd seq is globally visible. Otherwise a reader on another CPU can pair
+ * the old state with a newer real time and observe virtual time stepping back
+ * by a few hundred ns (caught by M0 stress test CC-2). */
 static void wbegin(struct chrono_page *p) {
     uint64_t s = __atomic_load_n(&p->seq, __ATOMIC_RELAXED);
     __atomic_store_n(&p->seq, s + 1, __ATOMIC_RELAXED);
-    __atomic_thread_fence(__ATOMIC_RELEASE);
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
 }
 static void wend(struct chrono_page *p) {
     uint64_t s = __atomic_load_n(&p->seq, __ATOMIC_RELAXED);
@@ -63,24 +75,25 @@ static void op_advance(struct chrono_page *p, int64_t d) {
 static void op_freeze(struct chrono_page *p) {
     if (p->frozen) return;
     wbegin(p);
-    __atomic_store_n(&p->frozen_virtual_ns, real_ns() + p->offset_ns, __ATOMIC_RELAXED);
+    __atomic_store_n(&p->frozen_virtual_ns, mono_ns() + p->offset_ns, __ATOMIC_RELAXED);
     __atomic_store_n(&p->frozen, 1u, __ATOMIC_RELAXED);
     wend(p);
 }
 static void op_unfreeze(struct chrono_page *p) {
     if (!p->frozen) return;
     wbegin(p);
-    __atomic_store_n(&p->offset_ns, p->frozen_virtual_ns - real_ns(), __ATOMIC_RELAXED);
+    __atomic_store_n(&p->offset_ns, p->frozen_virtual_ns - mono_ns(), __ATOMIC_RELAXED);
     __atomic_store_n(&p->frozen, 0u, __ATOMIC_RELAXED);
     wend(p);
 }
 
 static void print_get(struct chrono_page *p) {
     int64_t r = real_ns();
-    int64_t v = p->frozen ? p->frozen_virtual_ns : r + p->offset_ns;
+    int64_t v = p->frozen ? p->frozen_virtual_ns : mono_ns() + p->offset_ns;
+    /* printed offset_ns = virtual - real (human meaning), not the stored mono offset */
     printf("{\"real_ns\":%lld,\"virtual_ns\":%lld,\"offset_ns\":%lld,\"frozen\":%u,"
            "\"generation\":%llu,\"seq\":%llu}\n",
-           (long long)r, (long long)v, (long long)p->offset_ns, p->frozen,
+           (long long)r, (long long)v, (long long)(v - r), p->frozen,
            (unsigned long long)p->generation, (unsigned long long)p->seq);
 }
 
@@ -97,6 +110,7 @@ int main(int argc, char **argv) {
         p->layout_version = CHRONO_LAYOUT_VERSION;
         p->page_size = sizeof(struct chrono_page);
         p->session_id = sid;
+        p->offset_ns = real_ns() - mono_ns(); /* virtual starts equal to real */
         __atomic_store_n(&p->magic, CHRONO_MAGIC, __ATOMIC_RELEASE);
         print_get(p);
         return 0;
@@ -111,12 +125,12 @@ int main(int argc, char **argv) {
     } else if (!strcmp(cmd, "set-offset")) {
         if (p->frozen) op_unfreeze(p);
         wbegin(p);
-        __atomic_store_n(&p->offset_ns, (int64_t)(arg * NS), __ATOMIC_RELAXED);
+        __atomic_store_n(&p->offset_ns, real_ns() + (int64_t)(arg * NS) - mono_ns(), __ATOMIC_RELAXED);
         wend(p);
     } else if (!strcmp(cmd, "set-time")) {
         if (p->frozen) op_unfreeze(p);
         wbegin(p);
-        __atomic_store_n(&p->offset_ns, (int64_t)(arg * NS) - real_ns(), __ATOMIC_RELAXED);
+        __atomic_store_n(&p->offset_ns, (int64_t)(arg * NS) - mono_ns(), __ATOMIC_RELAXED);
         wend(p);
     } else if (!strcmp(cmd, "freeze")) {
         op_freeze(p);

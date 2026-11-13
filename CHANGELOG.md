@@ -31,6 +31,13 @@ No versions have been released. ChronoStack contains no runnable code yet.
   - documentation link check;
   - a Rust CI skeleton that only runs once a Cargo workspace exists.
 - Dependabot for GitHub Actions.
+- **M0 feasibility spike** (`spike/`, throwaway):
+  - C preload shim (glibc and musl) with seqlock clock page v2 and absolute-deadline translation;
+  - `chronoctl` writer;
+  - Docker-based test matrix and harness.
+  - Results in `docs/M0_RESULTS.md`: 137/137 pass on Docker Desktop/WSL2 x86_64.
+- `LICENSE-MIT` and `LICENSE-APACHE`: the project is dual-licensed `MIT OR Apache-2.0`.
+- ADR-017: virtual time is anchored to `CLOCK_MONOTONIC`, because M0 measured host `CLOCK_REALTIME` stepping backwards.
 
 ### Changed
 

@@ -6,6 +6,8 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 
 ## M0 — Feasibility spike (weeks 1–2)
 
+> **Status (2026-11-13): exit gate passed on Docker Desktop/WSL2 x86_64.** See [M0_RESULTS.md](M0_RESULTS.md). Carried into M1: the macOS arm64 manual check, the arm64 rerun, and the clockd writer rules from ADR-017.
+
 **Objective.** Prove or disprove the hardest assumptions before building product surface.
 
 **Tasks.**

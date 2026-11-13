@@ -25,7 +25,8 @@ ChronoStack is in its **design phase**. These documents are the research and pla
 - [TECHNICAL_FEASIBILITY.md](TECHNICAL_FEASIBILITY.md): Linux time interception, shared clock, Postgres, Redis, runtimes, Docker
 - [SOURCE_VERIFICATION.md](SOURCE_VERIFICATION.md): which claims were checked against primary sources, and what was found
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, time domains, control and data flow, failure modes, API
-- [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md): ADR-001 to ADR-016
+- [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md): ADR-001 to ADR-017
+- [M0_RESULTS.md](M0_RESULTS.md): feasibility spike results and exit-gate verdict
 
 ## Planning
 

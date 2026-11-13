@@ -5,7 +5,8 @@ Move the whole stack — Postgres, Redis, and your services — forward in time 
 
 > [!IMPORTANT]
 > **Status: design phase (pre-alpha). There is no runnable code yet.**
-> This repository contains the research, architecture and implementation plan for ChronoStack. Every command in this README is **proposed**, not implemented. The next step is a two-week feasibility spike ([M0](docs/IMPLEMENTATION_PLAN.md#m0--feasibility-spike-weeks-12)).
+> This repository contains the research, architecture and implementation plan for ChronoStack, plus a throwaway feasibility spike. Every `chronostack` command in this README is **proposed**, not implemented.
+> **M0 feasibility spike: gate passed on Docker Desktop/WSL2 x86_64** ([results](docs/M0_RESULTS.md)). Shared virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read. macOS and arm64 have not been tested yet.
 
 ---
 
@@ -87,8 +88,8 @@ Nothing is supported until automated tests prove it ([testing strategy](docs/TES
 |---|---|
 | PostgreSQL 16 (Debian, Alpine), including pg_cron | Planned |
 | Redis 7 (Debian, Alpine) | Planned |
-| Node.js 20/22, Python 3.11+ (wall-clock time) | Planned |
-| JVM 17/21, Ruby 3.x, Python < 3.11 | Experimental |
+| Node.js 20/22, Python 3.10+ (wall-clock time) | Planned |
+| JVM 17/21, Ruby 3.x | Experimental |
 | Go, statically linked binaries, setuid binaries | **Not supported** (`LD_PRELOAD` cannot reach them) |
 | Hosts: Linux x86_64/arm64 (Docker Engine), macOS arm64 (Docker Desktop, OrbStack), Windows x64 (Docker Desktop) | Planned |
 
@@ -110,7 +111,7 @@ ChronoStack never changes your host's clock, needs no privileged containers, and
 
 | Version | Focus |
 |---|---|
-| **M0 (next)** | Feasibility spike:<br>• correct time in Postgres, Redis, Node and Python<br>• no hangs<br>• on Linux and Docker Desktop for Mac, with glibc and musl |
+| **M0 (done, see [results](docs/M0_RESULTS.md))** | Feasibility spike:<br>• correct time in Postgres, Redis, Node and Python<br>• no hangs<br>• on Linux and Docker Desktop for Mac, with glibc and musl |
 | v0.1 | Preload library, controller, CLI, step / trigger / barrier engine, reference SaaS demo, outage windows, scenarios, reports, MCP |
 | v0.2 | Virtual user cohorts, seeded network faults, npm package and JS SDK, scheduler inspection, GitHub Action |
 | v1.0 | Snapshot and restore (which would allow moving backward in time), timeline viewer, investigation of Go support |

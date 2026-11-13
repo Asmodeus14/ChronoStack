@@ -17,6 +17,13 @@ import subprocess
 import sys
 import time
 
+# Windows consoles/redirects default to a legacy code page; results contain non-ASCII.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = "cs-m0"
 DC = ["docker", "compose", "-f", os.path.join(HERE, "compose.yml"), "-p", PROJECT]
@@ -205,6 +212,13 @@ def run_nohang_suite(label, area, svc, cmd, env=None, expect_hang=False):
             ok = st == "OK"
         exp = "HANG/SLOW (unfixed)" if expect_hang else "OK (0.9–2.5 s)"
         record(f"NH-{label}", area, r["test"], exp, f"{st} {r['elapsed_ms']} ms", ok)
+
+
+def sec_nohang_quick():
+    """Regression check: all runtimes, deadline fix on, +30d only."""
+    ctl("set-offset", 30 * DAY)
+    for area, svc, cmd in NOHANG_SUITES:
+        run_nohang_suite("30d-recheck", area, svc, cmd)
 
 
 def sec_nohang():
@@ -466,7 +480,7 @@ def sec_arm64():
 
 
 SECTIONS = {
-    "baseline": sec_baseline, "reads": sec_reads, "nohang": sec_nohang, "timers": sec_timers,
+    "baseline": sec_baseline, "reads": sec_reads, "nohang": sec_nohang, "nohang_quick": sec_nohang_quick, "timers": sec_timers,
     "failopen": sec_failopen, "stress": sec_stress, "bench": sec_bench, "redis": sec_redis,
     "postgres": sec_postgres, "pgcron": sec_pgcron, "arm64": sec_arm64,
 }

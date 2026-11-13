@@ -4,7 +4,8 @@
 
 | # | Risk | Likelihood | Impact | Mitigation | Proven by |
 |---|---|---|---|---|---|
-| R1 | **Absolute REALTIME deadline hangs** (sem/mutex/cond/clock_nanosleep/timerfd) in some runtime | Medium | Critical (hung DB/app) | ADR-002 translation; no-hang suite; drop runtimes that can't pass | M0 |
+| R1 | **Absolute REALTIME deadline hangs** (sem/mutex/cond/clock_nanosleep/timerfd) in some runtime | **Confirmed real in M0** (all such APIs hang without translation) | Critical (hung DB/app) | ADR-002 translation: **0 hangs in 272 checks with the fix**; keep the no-hang suite in CI | M0 ✅ (Mac/arm64 pending) |
+| R12 | Host `CLOCK_REALTIME` steps backwards (measured about 2 ms on WSL2) | Certain on some hosts | Medium (non-monotonic virtual time) | ADR-017: anchor virtual time to `CLOCK_MONOTONIC` | M0 ✅ |
 | R2 | **Schedulers don't run after advance** → users think ChronoStack is broken | High | High | Step/trigger/barrier model (ADR-005); per-library table; CLI warnings | M2 |
 | R3 | Docker Desktop volume/mmap behaviour differs from Linux | Low–Medium | Critical | Controller + named volume (ADR-004); test on Docker Desktop, OrbStack | M0 |
 | R4 | glibc symbol versioning / musl differences break interposition | Medium | High | `dlvsym`, per-libc builds, matrix tests | M0 |
