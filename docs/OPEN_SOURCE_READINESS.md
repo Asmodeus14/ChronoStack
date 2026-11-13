@@ -1,7 +1,7 @@
 # Open-Source Readiness
 
-**Date:** 2026-11-13
-**Repository state:** documentation only; not yet a git repository; not published.
+**Date:** 2026-11-13 (updated after M2)
+**Repository state:** public on GitHub; M0–M2 implemented and tested in CI; usable from source; **no release**.
 
 **Classification:**
 
@@ -15,22 +15,22 @@
 
 | Item | Status | Notes |
 |---|---|---|
-| README: value proposition in the first two lines | ✅ | Tagline, plus a design-phase status banner |
-| README: accurate status (no implemented-feature claims) | ✅ | All commands labelled *proposed* |
-| README: install / quick start | ⛔ Implementation | Deliberately absent; nothing is runnable |
-| README: screenshots / GIF | ⛔ Implementation | None exist; none fabricated. A mermaid diagram is included. |
+| README: value proposition in the first two lines | ✅ | Tagline, plus a pre-alpha status banner |
+| README: accurate status | ✅ | Implemented commands are described as such; M3–M4 features are marked *(planned)*; the compatibility table lists only what tests cover |
+| README: install / quick start | ✅ | "Try it from source" (build the controller image, `cargo install`). Binary install waits for M5. |
+| README: screenshots / GIF | ⚠️ | None yet; none fabricated. A mermaid diagram is included. A GIF of the demo is an M5 task. |
 | Documentation index (`docs/README.md`) | ✅ | |
-| Internal Markdown links and anchors | ✅ | Checked locally with a script (0 problems across 22 files) at the time of writing. The CI link-check workflow has **not** been run yet. |
+| Internal Markdown links and anchors | ✅ | Checked by the `docs` workflow on every push (passing) |
 | External URLs | ⚠️ | Key technical URLs were opened in the second pass ([SOURCE_VERIFICATION.md](SOURCE_VERIFICATION.md)); the §8 list there is still unopened |
 | Consistency across the 12 planning docs | ✅ | Resolved: engine location (ADR-016), pg_cron sub-stepping, Node SDK as a stretch goal, demo runtime (Node), API endpoints, MCP tool list, CI-mode strictness, persona naming |
 | Acronyms explained | ✅ | Glossary in [docs/README.md](README.md#glossary) |
-| CHANGELOG (Keep a Changelog) | ✅ | Only `[Unreleased]` documentation changes |
+| CHANGELOG (Keep a Changelog) | ✅ | `[Unreleased]` lists M0–M2 work |
 
 ### Community and governance
 
 | Item | Status | Notes |
 |---|---|---|
-| CONTRIBUTING.md | ✅ | Design-phase contribution paths; build/test commands deferred honestly |
+| CONTRIBUTING.md | ✅ | Build, test and e2e commands; contribution paths for a pre-alpha project |
 | CODE_OF_CONDUCT.md | ⛔ Owner | Adopts Contributor Covenant 3.0 by reference. **The owner must paste the full official text and provide a reporting contact.** |
 | SECURITY.md | ✅ | GitHub private vulnerability reporting enabled (2026-11-13) |
 | LICENSE | ✅ | `MIT OR Apache-2.0`, decided by the owner on 2026-11-13 ([LICENSING.md](development/LICENSING.md)). MIT copyright line is "The ChronoStack Contributors"; the owner may change it. |
@@ -43,12 +43,13 @@
 
 | Item | Status | Notes |
 |---|---|---|
-| `documentation.yml` (offline link check) | ⚠️ | Written but **not executed**. It will run on the first push. |
-| `ci.yml` skeleton | ✅ | Runs Rust jobs only once `Cargo.toml` exists; no fake tests |
-| Dependabot | ✅ | `github-actions` only; cargo/npm/docker commented out until their manifests exist |
+| `documentation.yml` (offline link check) | ✅ | Runs on every push; passing |
+| `ci.yml` | ✅ | fmt, clippy (`-D warnings`), unit tests on Linux x86_64/arm64, Windows and macOS, MSRV 1.85, and e2e on native Linux x86_64 and arm64 |
+| `nightly.yml` | ✅ | Demo ×10 (determinism), scheduler matrix and no-hang suite on x86_64 and arm64 |
+| Dependabot | ✅ | `github-actions`, `cargo` and `docker`. An open cargo PR (major `getrandom`/`ureq` bumps) fails CI and needs a code change. |
 | `.gitignore`, `.gitattributes`, `.editorconfig` | ✅ | |
-| rustfmt / clippy configuration | ⛔ Implementation | Deferred to M1 (proposal in [REPOSITORY_SETUP.md](development/REPOSITORY_SETUP.md)) |
-| Cargo workspace metadata | ⛔ Implementation and owner | Proposal written. Needs the license and repository URL. |
+| rustfmt / clippy | ✅ | Default rustfmt style; clippy with `-D warnings` in CI; workspace lint `unsafe_code = "deny"` |
+| Cargo workspace metadata | ✅ | Version `0.1.0-alpha.0`, edition 2024, MSRV 1.85, license and repository URL set |
 | npm package metadata | ⛔ Implementation | Plan only; package name not reserved |
 | Release automation | ⛔ Implementation | Intentionally not configured ([RELEASE_PROCESS.md](development/RELEASE_PROCESS.md)) |
 
@@ -59,7 +60,7 @@
 | Repository description and topics | ✅ | Applied 2026-11-13: description plus 14 topics; Wiki off |
 | Visibility | ✅ | **Public** since 2026-11-13: https://github.com/Asmodeus14/ChronoStack |
 | Social preview image | ⛔ Owner | Concept only |
-| Branch protection | ⚠️ Owner | Not enabled yet; recommended settings are in REPOSITORY_SETUP.md |
+| Branch protection | ⚠️ Owner | Not enabled (checked 2026-11-13); recommended settings are in REPOSITORY_SETUP.md |
 | Git repository | ✅ | Initialized; `main` pushed |
 
 ## 2. Positioning review
@@ -90,6 +91,6 @@ Changes applied:
 
 ## 4. Verdicts
 
-- **Ready for external contributors?** **Not yet.** There is no license (contributions can't be accepted), no CoC reporting contact, and no git repository. Design review through Discussions becomes possible as soon as those three owner actions are done.
-- **Ready for a public alpha?** **No.** No code exists. The alpha criteria are in [RELEASE_PROCESS.md](development/RELEASE_PROCESS.md).
-- **Ready to publish the repository as a design-phase project?** Yes, once the owner completes the ⛔ Owner items above.
+- **Ready for external contributors?** **Mostly.** The license, git repository, CI and contributor docs are in place. The remaining blocker is the Code of Conduct reporting contact (owner decision).
+- **Ready for a public alpha?** **No.** M3–M5 are not done, there are no release binaries, and macOS is untested. The alpha criteria are in [RELEASE_PROCESS.md](development/RELEASE_PROCESS.md).
+- **Ready to be public as a pre-alpha project?** Yes; it has been public since 2026-11-13.

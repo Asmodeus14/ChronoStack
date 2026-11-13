@@ -123,6 +123,7 @@ If no triggers or barriers are configured, the engine falls back to `--dwell` (d
 | Writer killed mid-update (odd `seq`) | Readers retry a bounded number of times, then use their last good snapshot. clockd repairs `seq` on restart. |
 | Barrier never becomes true | The step fails after `timeout` (default 30 s real time) and writes a failure report. The clock stays at the failed step. |
 | Trigger command fails | The step fails. Output is captured, truncated and redacted. |
+| Trigger command times out | The step fails (exit 4). The CLI kills its `docker` process tree and stops the trigger's process tree inside the container (TERM, then KILL after 3 s). Images without `sh` cannot be cleaned up this way; the report says so. |
 | Fault proxy dies | Fails closed (connection refused), is logged as an event, and clockd restarts the proxy task. |
 | Backward advance requested | Rejected in v0.1 (ADR-009). |
 
@@ -134,26 +135,30 @@ If no triggers or barriers are configured, the engine falls back to `--dwell` (d
 |---|---|---|
 | GET | `/v1/health` | Liveness, no auth (used by the container healthcheck) |
 | GET | `/v1/clock` | Returns `{virtual_ns, real_ns, offset_ns, frozen, generation, session_id, layout_version}` |
-| POST | `/v1/clock/advance` | Takes `{by}` or `{to}` (forward only). Performs a single atomic commit. |
+| POST | `/v1/clock/advance` | Takes `{by_ns}` or `{to_unix_ns}` (forward only). Performs a single atomic commit. |
 | POST | `/v1/clock/freeze` / `/v1/clock/unfreeze` | Toggle the frozen state |
-| PUT | `/v1/faults/{target}` / DELETE `/v1/faults/{id}` | Outage windows (virtual-time ranges) on proxied targets |
-| GET | `/v1/events?since=` | Event log |
-| GET | `/v1/stream` | Server-sent events stream of clock changes (Node SDK) |
+| PUT | `/v1/faults/{target}` / DELETE `/v1/faults/{id}` | *(planned, M3)* Outage windows (virtual-time ranges) on proxied targets |
+| GET | `/v1/events?since=` | *(planned, M3)* Event log |
+| GET | `/v1/stream` | *(planned, M4)* Server-sent events stream of clock changes (Node SDK) |
 
 Stepping, triggers, barriers, scenarios and reports are **not** controller endpoints; the CLI engine owns them.
 
 **Auth.** A random 256-bit token is written to `.chronostack/session.json` (mode 0600 on Unix; user-only ACL on Windows) and is required on every request. The API binds to `127.0.0.1` only.
 
-## 9. Repository layout (planned, not created)
+## 9. Repository layout
 
 ```
 crates/
-  cli/            # chronostack binary: CLI, engine, scenarios, reports, MCP
-  clockd/         # controller service (clock writer, API, probes, proxy, events)
-  core/           # shared: clock page layout, API types, config schema, compose model
-shim/             # C sources + zig-based build for 4 targets
-sdk/node/         # chronostack/register (stretch)
+  cli/            # chronostack binary: CLI, step/trigger/barrier engine, probes, doctor
+                  # (scenarios, reports and MCP land here in M3–M4)
+  clockd/         # controller: single clock writer, HTTP API
+  core/           # shared: clock page layout, API types, compose model, planner, cron
+shim/             # C preload library (built for glibc and musl inside docker/clockd.Dockerfile)
+docker/           # controller image
 examples/saas-trial-demo/
-tests/            # Docker-based integration + runtime matrix
+tests/e2e/        # Docker-based end-to-end tests, scheduler matrix, no-hang suite
+spike/            # M0 feasibility spike (frozen, reference only)
 docs/
 ```
+
+Planned: `sdk/node/` (Node register, M4 stretch).

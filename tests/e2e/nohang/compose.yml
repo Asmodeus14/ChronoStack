@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# No-hang suite through the product (M0 "NH" tests, run with `chronostack up`
+# instead of the spike's hand-written stack). Every runtime waits on absolute
+# CLOCK_REALTIME deadlines while virtual time is far ahead of real time; each
+# 1 s wait must take about 1 s of real time. Runs nightly on x86_64 and arm64.
+name: e2e-nohang
+x-c: &c
+  context: ../../../spike/tests/c
+services:
+  c-glibc:
+    build:
+      <<: *c
+      dockerfile_inline: |
+        FROM debian:bookworm-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+        COPY cstest.c /src/
+        RUN gcc -O2 -Wall -o /usr/local/bin/cstest /src/cstest.c -pthread -ldl
+    command: ["sleep", "infinity"]
+  c-musl:
+    build:
+      <<: *c
+      dockerfile_inline: |
+        FROM alpine:3.20
+        RUN apk add --no-cache gcc musl-dev
+        COPY cstest.c /src/
+        RUN gcc -O2 -Wall -o /usr/local/bin/cstest /src/cstest.c -pthread
+    command: ["sleep", "infinity"]
+  py310:
+    image: python:3.10-slim
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/python:/t:ro]
+  py312:
+    image: python:3.12-slim
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/python:/t:ro]
+  py312-alpine:
+    image: python:3.12-alpine
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/python:/t:ro]
+  node22:
+    image: node:22-slim
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/node:/t:ro]
+  node22-alpine:
+    image: node:22-alpine
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/node:/t:ro]
+  jvm21:
+    image: eclipse-temurin:21-jdk
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/java:/t:ro]

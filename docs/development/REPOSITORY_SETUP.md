@@ -39,7 +39,7 @@ all = { level = "warn", priority = -1 }
 ```
 
 - **`rustfmt.toml`:** not needed. The default rustfmt style is enough; add one only if a specific option is agreed on.
-- **`clippy.toml`:** not needed at first. Workspace lints (above) cover the policy. Add `msrv` there once `rust-version` is set.
+- **`clippy.toml`:** not needed. Workspace lints cover the policy, and clippy reads the MSRV from `rust-version` (1.85).
 
 **npm package (v0.2, not published):**
 
@@ -59,7 +59,7 @@ all = { level = "warn", priority = -1 }
 
 ## GitHub repository metadata (owner applies in repository settings)
 
-- **Description** (≤ 350 chars): `Stripe Test Clocks for your Docker Compose stack: advance time across Postgres, Redis and your services, run the jobs that depend on it, and verify the results. (Design phase — not yet usable.)`
+- **Description** (≤ 350 chars): `Stripe Test Clocks for your Docker Compose stack: advance time across Postgres, Redis and your services, run the jobs that depend on it, and verify the results. (Pre-alpha: works from source; not released.)` Applied 2026-11-13.
 - **Topics:**
   - `testing`, `integration-testing`, `time-travel`, `faketime`, `ld-preload`
   - `docker-compose`, `postgresql`, `redis`
@@ -82,9 +82,9 @@ all = { level = "warn", priority = -1 }
 - Wordmark "ChronoStack" with the tagline "Stripe Test Clocks for your Docker Compose stack".
 - No logos of third-party products unless their trademark guidelines allow it.
 
-## Repository initialisation (owner)
+## Repository initialisation (done 2026-11-13)
 
-The directory is not yet a git repository. Suggested sequence:
+The repository was initialised, pushed and made public by the owner on 2026-11-13. The original sequence is kept for reference:
 
 1. `git init -b main`
 2. Review the files.

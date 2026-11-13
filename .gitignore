@@ -32,3 +32,4 @@ spike/results/*.log
 # Intermediate harness outputs (final-*.json/md are the kept evidence)
 spike/results/m0-results.*
 spike/results/run*
+__pycache__/

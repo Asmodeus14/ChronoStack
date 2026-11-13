@@ -36,6 +36,7 @@ WAIT_S = 20  # real seconds a scheduler gets to react after each advance
 EXPECT = {
     "celery beat (beat_max_loop_interval=1)": "fires",
     "node-cron": "trigger",
+    "APScheduler 3 (BlockingScheduler, cron)": "trigger",  # measured 2026-11-13: no run within 20 s
     "BullMQ job scheduler (cron)": "fires",  # measured 2026-11-13: ~1 s after advance
     "BullMQ delayed job (2h)": "fires",  # measured 2026-11-13: immediately
 }
@@ -91,7 +92,7 @@ def main():
         rc, _ = js("advance", "--to", start.strftime("%Y-%m-%dT%H:%M:%SZ"), "--no-probe")
         assert rc == 0, "positioning failed"
         time.sleep(WAIT_S)  # catch-up runs from the positioning jump happen here
-        ex("redis", "redis-cli", "DEL", "celery:runs", "nodecron:runs", "done:daily", "done:delayed")
+        ex("redis", "redis-cli", "DEL", "celery:runs", "nodecron:runs", "apscheduler:runs", "done:daily", "done:delayed")
         assert ex("bullmq", "node", "bullmq-add.js", "scheduler")[0] == 0
         assert ex("bullmq", "node", "bullmq-add.js", "delayed")[0] == 0
         time.sleep(3)
@@ -101,6 +102,7 @@ def main():
         t0 = time.monotonic()
         seen = {}
         keys = {"celery beat (beat_max_loop_interval=1)": "celery:runs", "node-cron": "nodecron:runs",
+                "APScheduler 3 (BlockingScheduler, cron)": "apscheduler:runs",
                 "BullMQ job scheduler (cron)": "done:daily"}
         while time.monotonic() - t0 < WAIT_S and len(seen) < len(keys):
             for name, key in keys.items():

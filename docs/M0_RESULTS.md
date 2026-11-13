@@ -113,7 +113,7 @@ This empirically confirms that `MINUTE_COUNT = 60` and that the sub-stepping des
 ## Open items
 
 1. **Docker Desktop for Mac (arm64).** Not tested; no Mac was available. It is required by the gate, so it is carried into M1 as a blocking manual check before alpha.
-2. **arm64 run.** The QEMU build was stopped when the host ran low on memory. **Partly closed by M1 CI (2026-11-13):** the M1 e2e test passes on a native `ubuntu-24.04-arm` runner. Postgres (musl), Redis (glibc), Node (musl) and Debian bullseye (glibc) were all virtualized on aarch64, with probes and restart checks passing. The full M0 no-hang suite has not yet been run on arm64.
+2. **arm64 run.** The QEMU build was stopped when the host ran low on memory. **Partly closed by M1 CI (2026-11-13):** the M1 e2e test passes on a native `ubuntu-24.04-arm` runner. Postgres (musl), Redis (glibc), Node (musl) and Debian bullseye (glibc) were all virtualized on aarch64, with probes and restart checks passing. The full M0 no-hang suite has not yet been run on arm64. **Update (after M2):** the no-hang suite now runs through the product (`tests/e2e/run_nohang.py`, product shim + `clockd` + CLI). Locally on x86_64 (Docker Desktop/WSL2): 272/272 OK (8 musl skips) across C glibc/musl, Python 3.10/3.12/3.12-alpine, Node 22 slim/alpine and JVM 21 at +1 d, +30 d, +365 d and frozen. It runs nightly on native x86_64 and arm64.
 3. **Native Linux host (Docker Engine).** **Closed by M1 CI:** the e2e test passes on `ubuntu-latest` (x86_64) and `ubuntu-24.04-arm`.
 4. **Not covered by M0:**
    - `timer_settime(TIMER_ABSTIME)` on POSIX timers

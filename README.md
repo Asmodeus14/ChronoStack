@@ -31,17 +31,20 @@ Teams usually test this by:
 
 None of these exercise the real interaction between database time (`now()`), cache expiry (Redis TTLs), schedulers and multiple services.
 
-## What ChronoStack will do (planned for v0.1)
+## What ChronoStack does
+
+Items marked *(planned)* are not built yet.
 
 - **Shared virtual wall-clock time across your Compose services, with no code changes.** A small preload library makes `NOW()` in Postgres, Redis expiry, `Date.now()` in Node and `time.time()` in Python all report the same virtual time.
 - **Advancing time actually runs scheduled work.** Changing the clock alone does *not* fire your timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So each step works like this:
   1. advance the clock;
   2. run the triggers you declare (a command or HTTP call);
   3. wait on barriers (conditions such as "the jobs table is idle") before the next step.
+- **Scheduler-aware stepping.** Scheduled triggers run at their exact virtual times. pg_cron is detected, and the clock stops on each of its job minutes so jobs aren't skipped.
 - **Verification after every step.** Probes check that each service sees the new time. `doctor` reports which services cannot be virtualized, and why.
-- **Outages scheduled in virtual time.** For example, "the webhook receiver is down on day 3 from 09:00 to 11:00", so you can test retries.
-- **Scenarios and failure reports.** Declarative YAML steps with SQL, Redis and HTTP assertions. Each run writes a JSON report.
-- **MCP server.** AI coding agents can control the timeline through a small, safe set of tools.
+- *(planned, M3)* **Outages scheduled in virtual time.** For example, "the webhook receiver is down on day 3 from 09:00 to 11:00", so you can test retries.
+- *(planned, M3)* **Scenarios and failure reports.** Declarative YAML steps with SQL, Redis and HTTP assertions. Each run writes a JSON report.
+- *(planned, M4)* **MCP server.** AI coding agents can control the timeline through a small, safe set of tools.
 
 ### Workflow
 
@@ -73,7 +76,7 @@ docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .   # control
 cargo install --path crates/cli                                         # installs `chronostack`
 
 cd /path/to/your/compose/project
-chronostack up            # same compose file, no changes needed
+chronostack up --wait     # same compose file, no changes needed; waits until every service sees virtual time
 chronostack doctor        # what is virtualized, and why not
 chronostack advance 7d    # moves time and verifies every service sees it
 chronostack down -v
@@ -110,18 +113,24 @@ Details: [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/ARCHITECTURE_D
 
 The time-faking mechanism itself is not new. The value is in the orchestration, safety and lifecycle workflow. Full analysis: [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md).
 
-## Target compatibility for v0.1
+## Compatibility (pre-alpha)
 
-Nothing is supported until automated tests prove it ([testing strategy](docs/TESTING_STRATEGY.md)).
+Nothing is listed as tested unless an automated test covers it ([testing strategy](docs/TESTING_STRATEGY.md)). "CI" means the GitHub Actions end-to-end tests on native Linux x86_64 and arm64.
 
-| Component | v0.1 target |
+| Component | Status |
 |---|---|
-| PostgreSQL 16 (Debian, Alpine), including pg_cron | Planned |
-| Redis 7 (Debian, Alpine) | Planned |
-| Node.js 20/22, Python 3.10+ (wall-clock time) | Planned |
-| JVM 17/21, Ruby 3.x | Experimental |
-| Go, statically linked binaries, setuid binaries | **Not supported** (`LD_PRELOAD` cannot reach them) |
-| Hosts: Linux x86_64/arm64 (Docker Engine), macOS arm64 (Docker Desktop, OrbStack), Windows x64 (Docker Desktop) | Planned |
+| PostgreSQL 16 (Debian, Alpine), including pg_cron | **Tested** in CI |
+| Redis 7 (Debian, Alpine) | **Tested** in CI |
+| Node.js 22 (Debian, Alpine), Python 3.10 / 3.12 (Debian, Alpine): wall-clock time and no hangs | **Tested** (CI, plus a nightly no-hang suite) |
+| Node.js 20, Python 3.13+ | Untested (expected to work) |
+| JVM 21 | Tested for no hangs (nightly); otherwise **experimental** |
+| JVM 17, Ruby 3.x | Experimental (untested) |
+| Schedulers: BullMQ, Celery beat (`beat_max_loop_interval ≤ 1`) | **Tested**: fire on their own ([matrix](docs/MVP_SCOPE.md)) |
+| Schedulers: node-cron, APScheduler 3 | Need a `chronostack.yml` trigger (measured) |
+| Go, statically linked binaries, setuid binaries | **Not supported** (`LD_PRELOAD` cannot reach them); flagged by `doctor` |
+| Hosts: Linux x86_64 / arm64 (Docker Engine) | **Tested** in CI |
+| Host: Windows x64 (Docker Desktop, WSL2) | Tested by hand |
+| Host: macOS (Docker Desktop, OrbStack) | **Untested** |
 
 ## Known limitations (by design)
 
@@ -130,6 +139,7 @@ Nothing is supported until automated tests prove it ([testing strategy](docs/TES
 - Postgres `now()` is fixed for the length of a transaction.
 - Go and statically linked programs are not virtualized (`chronostack doctor` flags them, including Go servers behind a C supervisor).
 - The ChronoStack copy doesn't publish your project's host ports (so it can run alongside your normal stack); use `chronostack up --keep-ports` to reach it from the host.
+- pg_cron jobs whose minute or hour field starts with `*` (e.g. `*/5 * * * *`) run at most once per clock stop. `advance` says how many will run; `--pg-cron-all` runs every occurrence.
 - Data written with virtual timestamps stays in ChronoStack's volumes.
 
 Full list: [docs/RISKS_AND_LIMITATIONS.md](docs/RISKS_AND_LIMITATIONS.md)
@@ -142,8 +152,10 @@ ChronoStack never changes your host's clock, needs no privileged containers, and
 
 | Version | Focus |
 |---|---|
-| **M0 (done, see [results](docs/M0_RESULTS.md))** | Feasibility spike:<br>• correct time in Postgres, Redis, Node and Python<br>• no hangs<br>• on Linux and Docker Desktop for Mac, with glibc and musl |
-| v0.1 | Preload library, controller, CLI, step / trigger / barrier engine, reference SaaS demo, outage windows, scenarios, reports, MCP |
+| **M0 (done, see [results](docs/M0_RESULTS.md))** | Feasibility spike:<br>• correct time in Postgres, Redis, Node, Python and the JVM<br>• no hangs<br>• glibc and musl, on Docker Desktop (WSL2); arm64 later covered by CI |
+| **M1 (done, see [results](docs/M1_RESULTS.md))** | Controller, CLI, Compose integration, `doctor` |
+| **M2 (done on Linux, see [results](docs/M2_RESULTS.md))** | Step / trigger / barrier engine, pg_cron stepping, reference demo, scheduler matrix |
+| v0.1 (remaining) | M3: outage windows, scenarios, reports · M4: MCP, Node register · M5: release |
 | v0.2 | Virtual user cohorts, seeded network faults, npm package and JS SDK, scheduler inspection, GitHub Action |
 | v1.0 | Snapshot and restore (which would allow moving backward in time), timeline viewer, investigation of Go support |
 
@@ -151,10 +163,11 @@ Details: [docs/FEATURE_ROADMAP.md](docs/FEATURE_ROADMAP.md) · [docs/IMPLEMENTAT
 
 ## Contributing
 
-The project is in the design phase. The most useful contributions right now:
+The project is pre-alpha: it works from source, and nothing is released yet. The most useful contributions right now:
 
-- reviewing the [architecture decisions](docs/ARCHITECTURE_DECISIONS.md);
-- pointing out wrong technical claims in the [feasibility research](docs/TECHNICAL_FEASIBILITY.md);
+- trying `chronostack up` / `doctor` / `advance` on your own Compose project and reporting what breaks;
+- running it on macOS (Docker Desktop or OrbStack), which is untested;
+- reviewing the [architecture decisions](docs/ARCHITECTURE_DECISIONS.md) and the [feasibility research](docs/TECHNICAL_FEASIBILITY.md);
 - sharing how you test time-dependent behaviour today.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).

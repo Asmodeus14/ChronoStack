@@ -116,6 +116,44 @@ impl Cron {
         }
     }
 
+    /// Does the minute containing `at_ns` match?
+    pub fn matches(&self, at_ns: i64) -> bool {
+        self.matches_minute(at_ns.div_euclid(MIN_NS))
+    }
+
+    /// Number of matching minutes in `(from_ns, to_ns]` (no limit).
+    pub fn count(&self, from_ns: i64, to_ns: i64) -> usize {
+        let last = to_ns.div_euclid(MIN_NS);
+        (from_ns.div_euclid(MIN_NS) + 1..=last)
+            .filter(|m| self.matches_minute(*m))
+            .count()
+    }
+
+    /// Estimate how many times pg_cron (Vixie cron logic) runs a **wildcard**
+    /// job when the clock visits `stops` in order, starting at `from_ns`:
+    /// - a jump of at most 5 minutes runs every occurrence in between;
+    /// - a longer jump runs a wildcard job only if it matches the minute the
+    ///   clock lands on (fixed-time jobs are pinned separately).
+    ///
+    /// Real time spent at each stop is ignored, so this is an estimate.
+    pub fn estimate_runs(&self, from_ns: i64, stops: &[i64]) -> usize {
+        const CATCH_UP_NS: i64 = 5 * MIN_NS;
+        let mut prev = from_ns;
+        let mut n = 0;
+        for &at in stops {
+            if at <= prev {
+                continue;
+            }
+            if at - prev <= CATCH_UP_NS {
+                n += self.count(prev, at);
+            } else if self.matches(at) {
+                n += 1;
+            }
+            prev = at;
+        }
+        n
+    }
+
     /// Minute starts in `(from_ns, to_ns]`, at most `limit` (error beyond).
     pub fn occurrences(&self, from_ns: i64, to_ns: i64, limit: usize) -> Result<Vec<i64>, String> {
         let mut out = Vec::new();
@@ -219,6 +257,26 @@ mod tests {
             ["2026-11-15T00:00:00Z"],
             "7 = Sunday"
         );
+    }
+
+    #[test]
+    fn wildcard_run_estimate() {
+        let t = |s: &str| parse_utc(s).unwrap();
+        let every5 = Cron::parse("*/5 * * * *").unwrap();
+        let from = t("2026-11-15T00:00:30Z");
+        let to = t("2026-11-18T00:00:30Z");
+        assert_eq!(every5.count(from, to), 864, "3 days of */5");
+        // One raw jump: lands on 00:00 -> runs once.
+        assert_eq!(every5.estimate_runs(from, &[to]), 1);
+        // Hourly stops at hh:00:30 all match `*/5`: one run per stop.
+        let hourly: Vec<i64> = (1..=72).map(|h| from + h * 3_600_000_000_000).collect();
+        assert_eq!(every5.estimate_runs(from, &hourly), 72);
+        // Stops at hh:02:30 never match.
+        let off: Vec<i64> = hourly.iter().map(|s| s + 120_000_000_000).collect();
+        assert_eq!(every5.estimate_runs(from, &off), 0);
+        // Jumps of <= 5 minutes catch up every occurrence.
+        let fine: Vec<i64> = (1..=12).map(|i| from + i * 300_000_000_000).collect();
+        assert_eq!(every5.estimate_runs(from, &fine), 12);
     }
 
     #[test]

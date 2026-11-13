@@ -49,6 +49,19 @@ pub struct Options {
     pub dry_run: bool,
     pub json: bool,
     pub no_probe: bool,
+    /// Also stop at every occurrence of wildcard pg_cron jobs (`*/5 * * * *`).
+    pub pg_cron_all: bool,
+}
+
+/// Upper bound on pg_cron stops with `--pg-cron-all` (each costs about 1.2 s).
+const PG_CRON_ALL_MAX_STOPS: usize = 2_000;
+
+/// A wildcard pg_cron job: how often it is due versus how often it will run.
+#[derive(Debug, Clone, Serialize)]
+pub struct WildcardJob {
+    pub schedule: String,
+    pub due: usize,
+    pub will_run: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -110,6 +123,9 @@ struct PgCronPlan {
     reason: Option<String>,
     /// Stops at each fixed-time job's minute (+1 s).
     pinned: Vec<i64>,
+    /// Wildcard jobs (`*/5 * * * *`, `0 * * * *`), which pg_cron runs at most
+    /// once per clock stop unless `--pg-cron-all` pins every occurrence.
+    wildcards: Vec<(String, Cron)>,
 }
 
 /// pg_cron evaluates schedules in `cron.timezone`; only UTC is planned exactly.
@@ -133,15 +149,25 @@ fn psql_one(compose: &Compose, service: &str, user: &str, db: &str, sql: &str) -
 /// Read pg_cron's active schedules and decide how to step (see M2 results):
 /// after a jump of more than 3 h pg_cron still runs jobs matching the *current*
 /// minute, so stopping exactly on each fixed-time job's minute is enough.
-/// Wildcard jobs (`*/5 * * * *`) run once per stop either way.
-fn pg_cron_plan(session: &Session, services: &[String], from: i64, to: i64) -> PgCronPlan {
-    let hourly = |reason: String| PgCronPlan {
-        mode: "hourly",
-        reason: Some(reason),
-        pinned: vec![],
+/// Wildcard jobs (`*/5 * * * *`) run once per stop, unless `all` pins each occurrence.
+fn pg_cron_plan(
+    session: &Session,
+    services: &[String],
+    from: i64,
+    to: i64,
+    all: bool,
+) -> Result<PgCronPlan> {
+    let hourly = |reason: String| {
+        Ok(PgCronPlan {
+            mode: "hourly",
+            reason: Some(reason),
+            pinned: vec![],
+            wildcards: vec![],
+        })
     };
     let compose = session.compose();
     let mut pinned = Vec::new();
+    let mut wildcards = Vec::new();
     for svc in services {
         let Some(ProbeSpec::Postgres { user, db }) = session
             .services
@@ -177,10 +203,14 @@ fn pg_cron_plan(session: &Session, services: &[String], from: i64, to: i64) -> P
                     return hourly(format!("{svc}: schedule `{schedule}` not supported ({e})"));
                 }
             };
-            if cron.wildcard {
+            if cron.wildcard && !all {
+                wildcards.push((schedule.to_string(), cron));
                 continue;
             }
-            match cron.occurrences(from, to, 5_000) {
+            if cron.wildcard {
+                wildcards.push((schedule.to_string(), cron.clone()));
+            }
+            match cron.occurrences(from, to, PG_CRON_ALL_MAX_STOPS.max(5_000)) {
                 Ok(occ) => pinned.extend(occ.into_iter().map(|t| t + 1_000_000_000)),
                 Err(e) => return hourly(format!("{svc}: schedule `{schedule}`: {e}")),
             }
@@ -188,10 +218,38 @@ fn pg_cron_plan(session: &Session, services: &[String], from: i64, to: i64) -> P
     }
     pinned.sort_unstable();
     pinned.dedup();
-    PgCronPlan {
+    if all && pinned.len() > PG_CRON_ALL_MAX_STOPS {
+        anyhow::bail!(
+            "--pg-cron-all needs {} pg_cron stops (limit {PG_CRON_ALL_MAX_STOPS}, about 1.2 s each); advance a shorter span at a time",
+            pinned.len()
+        );
+    }
+    Ok(PgCronPlan {
         mode: "schedule-aware",
         reason: None,
         pinned,
+        wildcards,
+    })
+}
+
+fn wildcard_report(pg: &PgCronPlan, from: i64, to: i64, stops: &[Boundary]) -> Vec<WildcardJob> {
+    let at: Vec<i64> = stops.iter().map(|b| b.at_ns).collect();
+    pg.wildcards
+        .iter()
+        .map(|(schedule, cron)| WildcardJob {
+            schedule: schedule.clone(),
+            due: cron.count(from, to),
+            will_run: cron.estimate_runs(from, &at),
+        })
+        .collect()
+}
+
+fn print_wildcards(w: &[WildcardJob]) {
+    for j in w.iter().filter(|j| j.will_run < j.due) {
+        println!(
+            "pg_cron: job `{}` is due {} time(s) but will run about {} (pg_cron runs wildcard jobs once per clock stop; use --pg-cron-all or --step to run more)",
+            j.schedule, j.due, j.will_run
+        );
     }
 }
 
@@ -206,11 +264,93 @@ fn tail(s: &str, n: usize) -> String {
     t[start..].to_string()
 }
 
+/// Wraps an exec trigger in `sh` so it records its PID inside the container
+/// (`$1` is a unique id, the command follows). A timed-out trigger can then be
+/// stopped with [`KILL_TREE`]; killing the local `docker` CLI alone leaves the
+/// process running in the container.
+const WRAP: &str = r#"f="${TMPDIR:-/tmp}/.chronostack-trigger-$1.pid"; shift; echo $$ > "$f" 2>/dev/null; "$@"; rc=$?; rm -f "$f" 2>/dev/null; exit $rc"#;
+
+/// Stops the process tree recorded by [`WRAP`]: TERM, then KILL after 3 s.
+/// Descendants are found through `/proc/*/status` (`PPid:`), so it needs only
+/// `sh`, `sed` and `kill`.
+const KILL_TREE: &str = r#"f="${TMPDIR:-/tmp}/.chronostack-trigger-$1.pid"
+[ -r "$f" ] || exit 0
+root=$(cat "$f"); rm -f "$f"
+[ -n "$root" ] || exit 0
+all=" $root "; changed=1
+while [ "$changed" = 1 ]; do
+  changed=0
+  for d in /proc/[0-9]*; do
+    c=${d#/proc/}
+    case "$all" in *" $c "*) continue ;; esac
+    pp=$(sed -n 's/^PPid:[[:space:]]*//p' "$d/status" 2>/dev/null)
+    case "$all" in *" $pp "*) all="$all$c "; changed=1 ;; esac
+  done
+done
+kill -TERM $all 2>/dev/null
+for _ in 1 2 3; do
+  alive=
+  for p in $all; do [ -d "/proc/$p" ] && alive=1; done
+  [ -z "$alive" ] && exit 0
+  sleep 1
+done
+kill -KILL $all 2>/dev/null
+exit 0"#;
+
+fn trigger_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!(
+        "{}-{}-{}",
+        std::process::id(),
+        nanos % 1_000_000_000_000,
+        N.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+/// Stop a timed-out exec trigger inside its container. Returns a note for the report.
+fn stop_in_container(compose: &Compose, service: &str, id: &str) -> &'static str {
+    let args = compose.args(&["exec", "-T", service, "sh", "-c", KILL_TREE, "sh", id]);
+    match docker::output_timeout(&args, Duration::from_secs(20)) {
+        Ok(t) if t.code == Some(0) => "; process stopped in the container",
+        _ => "; could not stop the process in the container",
+    }
+}
+
 fn run_exec(compose: &Compose, spec: &ExecSpec, timeout: Duration) -> (bool, Option<String>) {
-    let mut args = compose.args(&["exec", "-T", &spec.service]);
+    let id = trigger_id();
+    let mut args = compose.args(&["exec", "-T", &spec.service, "sh", "-c", WRAP, "sh", &id]);
     args.extend(spec.command.iter().cloned());
-    match docker::output_timeout(&args, timeout) {
-        Ok(t) if t.timed_out => (false, Some(format!("timed out after {timeout:?}"))),
+    let mut wrapped = true;
+    let mut res = docker::output_timeout(&args, timeout);
+    if let Ok(t) = &res {
+        // Images without `sh`: run the command directly (it cannot be stopped on timeout).
+        if !t.timed_out
+            && t.code != Some(0)
+            && t.stderr.contains("\"sh\": executable file not found")
+        {
+            wrapped = false;
+            let mut direct = compose.args(&["exec", "-T", &spec.service]);
+            direct.extend(spec.command.iter().cloned());
+            res = docker::output_timeout(&direct, timeout);
+        }
+    }
+    match res {
+        Ok(t) if t.timed_out => (
+            false,
+            Some(format!(
+                "timed out after {timeout:?}{}",
+                if wrapped {
+                    stop_in_container(compose, &spec.service, &id)
+                } else {
+                    "; the image has no `sh`, so the process may still be running in the container"
+                }
+            )),
+        ),
         Ok(t) if t.code == Some(0) => (true, Some(tail(&t.stdout, 300)).filter(|s| !s.is_empty())),
         Ok(t) => (
             false,
@@ -411,9 +551,10 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
             mode: "off",
             reason: None,
             pinned: vec![],
+            wildcards: vec![],
         }
     } else {
-        pg_cron_plan(session, &pg_cron, from, to)
+        pg_cron_plan(session, &pg_cron, from, to, opts.pg_cron_all)?
     };
     let max_jump = match opts.max_jump {
         MaxJump::Disabled => None,
@@ -424,6 +565,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
     };
     let stops = schedule::plan(from, to, opts.step, max_jump, &cfg.schedules, &pg.pinned)
         .map_err(anyhow::Error::msg)?;
+    let wildcards = wildcard_report(&pg, from, to, &stops);
 
     let barriers = &cfg.config.barriers;
     let dwell_ns = opts
@@ -452,7 +594,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
                 .collect();
             println!(
                 "{}",
-                json!({ "from_ns": from, "to_ns": to, "max_jump_ns": max_jump, "dwell_ns": dwell_ns, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_reason": pg.reason, "stops": list })
+                json!({ "from_ns": from, "to_ns": to, "max_jump_ns": max_jump, "dwell_ns": dwell_ns, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_reason": pg.reason, "pg_cron_wildcards": wildcards, "stops": list })
             );
         } else {
             print_plan(&stops, cfg, from, max_jump, &pg_cron);
@@ -465,6 +607,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
                         .map(|r| format!(" ({r})"))
                         .unwrap_or_default()
                 );
+                print_wildcards(&wildcards);
             }
         }
         return Ok(0);
@@ -482,6 +625,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
                     .map(|r| format!(" ({r})"))
                     .unwrap_or_default()
             );
+            print_wildcards(&wildcards);
         }
     }
     let compose = session.compose();
@@ -563,7 +707,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
             "{}",
             json!({
                 "ok": code == 0, "exit_code": code, "from_ns": from, "to_ns": to,
-                "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron, "pg_cron_mode": pg.mode,
+                "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_wildcards": wildcards,
                 "trigger_runs": trigger_runs, "stops": results, "clock": end_state, "probes": probes,
             })
         );

@@ -51,5 +51,5 @@ These are unmodified projects from [docker/awesome-compose](https://github.com/d
 ## New known limitations (also in [RISKS_AND_LIMITATIONS](RISKS_AND_LIMITATIONS.md))
 
 - ~~Your normal stack and the ChronoStack copy cannot run at the same time~~ **Resolved after M2:** host ports and `container_name` are reset by default (`up --keep-ports` to opt out).
-- **Probes right after `up` can report `unavailable`** while services such as a database initialize. `doctor` is accurate; consider an `up --wait` option.
+- ~~Probes right after `up` can report `unavailable`~~ **Resolved after M2:** `chronostack up --wait` waits until every virtualized service answers its time probe.
 - **First `up` is dominated by image pulls:** 73–194 s for the three projects, mostly downloads.

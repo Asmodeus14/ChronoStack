@@ -73,47 +73,74 @@ pub struct Timed {
 }
 
 /// Run `docker <args>` with a timeout. On timeout the docker CLI is killed;
-/// note that a process started by `docker exec` inside the container may keep
-/// running.
+/// a process started by `docker exec` inside the container keeps running
+/// unless the caller stops it (see `engine::run_exec`).
 pub fn output_timeout(args: &[String], timeout: std::time::Duration) -> Result<Timed> {
     use std::io::Read;
+    use std::sync::mpsc;
+    use std::time::Duration;
     let start = std::time::Instant::now();
-    let mut child = Command::new("docker")
-        .args(args)
+    let mut cmd = Command::new("docker");
+    cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("failed to run `docker`")?;
-    let mut so = child.stdout.take().expect("piped");
-    let mut se = child.stderr.take().expect("piped");
-    let t_out = std::thread::spawn(move || {
-        let mut s = String::new();
-        let _ = so.read_to_string(&mut s);
-        s
-    });
-    let t_err = std::thread::spawn(move || {
-        let mut s = String::new();
-        let _ = se.read_to_string(&mut s);
-        s
-    });
+        .stderr(Stdio::piped());
+    // Own process group, so a timeout also kills `docker compose`'s plugin
+    // process (which otherwise keeps the output pipes open).
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let mut child = cmd.spawn().context("failed to run `docker`")?;
+    let reader = |mut r: Box<dyn Read + Send>| {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut b = Vec::new();
+            let _ = r.read_to_end(&mut b);
+            let _ = tx.send(String::from_utf8_lossy(&b).into_owned());
+        });
+        rx
+    };
+    let r_out = reader(Box::new(child.stdout.take().expect("piped")));
+    let r_err = reader(Box::new(child.stderr.take().expect("piped")));
     let mut timed_out = false;
     let status = loop {
         if let Some(st) = child.try_wait()? {
             break Some(st);
         }
         if start.elapsed() > timeout {
+            kill_tree(child.id());
             let _ = child.kill();
             let _ = child.wait();
             timed_out = true;
             break None;
         }
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    // After a timeout a surviving grandchild may still hold the pipes: don't wait forever.
+    let grace = if timed_out {
+        Duration::from_secs(2)
+    } else {
+        Duration::from_secs(30)
     };
     Ok(Timed {
         code: status.and_then(|s| s.code()),
-        stdout: t_out.join().unwrap_or_default(),
-        stderr: t_err.join().unwrap_or_default(),
+        stdout: r_out.recv_timeout(grace).unwrap_or_default(),
+        stderr: r_err.recv_timeout(grace).unwrap_or_default(),
         timed_out,
     })
+}
+
+/// Kill a process and its descendants (the `docker` CLI and its compose plugin).
+fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    let _ = Command::new("taskkill")
+        .args(["/T", "/F", "/PID", &pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    #[cfg(unix)]
+    let _ = Command::new("kill")
+        .args(["-KILL", "--", &format!("-{pid}")])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 }

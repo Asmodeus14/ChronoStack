@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once the first release is tagged.
 
-No versions have been released. ChronoStack contains no runnable code yet.
+No versions have been released. ChronoStack is pre-alpha and usable from source.
 
 ## [Unreleased]
 
@@ -29,7 +29,7 @@ No versions have been released. ChronoStack contains no runnable code yet.
 - Community files: README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, issue and pull request templates, a discussion form.
 - CI workflows:
   - documentation link check;
-  - a Rust CI skeleton that only runs once a Cargo workspace exists.
+  - Rust CI (see M1 below).
 - Dependabot for GitHub Actions.
 - **M0 feasibility spike** (`spike/`, throwaway):
   - C preload shim (glibc and musl) with seqlock clock page v2 and absolute-deadline translation;
@@ -66,6 +66,16 @@ No versions have been released. ChronoStack contains no runnable code yet.
 - Scheduler compatibility matrix (`tests/e2e/run_schedulers.py`): BullMQ and Celery beat fire on their own; node-cron needs a trigger.
 - Nightly CI: the demo 10× on Linux x86_64 and arm64, plus the scheduler matrix.
 - Dependency: `serde_norway` 0.9 (maintained fork of `serde_yaml`).
+- `up --wait [--wait-timeout 120s]`: waits until every virtualized service answers its time probe (exit 3 on skew or timeout).
+- `advance` reports wildcard pg_cron jobs (`*/5 * * * *`) that will run fewer times than they are due, in text, `--json` and `--dry-run`. New `advance --pg-cron-all` stops at every occurrence (limit 2,000 stops). Includes `Cron::estimate_runs`.
+- No-hang suite through the product (`tests/e2e/run_nohang.py`): C glibc/musl, Python 3.10/3.12, Node 22, JVM 21 at +1 d, +30 d, +365 d and frozen. Runs nightly on x86_64 and arm64.
+- Scheduler matrix: APScheduler 3 (BlockingScheduler).
+- e2e: Postgres after a single 14-day jump (responsive, no checkpoint storm, autovacuum runs once).
+
+### Fixed
+
+- A timed-out `exec` trigger is now stopped inside its container (TERM, then KILL), including child processes. Previously only the local `docker` CLI was killed.
+- A timed-out `docker compose exec` could hang the CLI: killing `docker` left the compose plugin process holding the output pipes. The CLI now kills the whole process tree and stops waiting for output after 2 s.
 
 ### Changed
 

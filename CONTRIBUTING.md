@@ -21,7 +21,7 @@ docs/development/    Release process, licensing decision, repository setup
 .github/             Issue/PR templates, CI workflows, Dependabot config
 ```
 
-Code layout (see [ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-repository-layout-planned-not-created)):
+Code layout (see [ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-repository-layout)):
 
 ```
 crates/core                Shared types: clock page layout, API, Compose model, durations
@@ -29,19 +29,20 @@ crates/clockd              Controller (single writer of the clock page, HTTP API
 crates/cli                 `chronostack` CLI
 shim/                      C preload library (libchronoclock)
 docker/clockd.Dockerfile   Controller image (clockd + preload libraries)
-tests/e2e/                 End-to-end test against real Docker
+tests/e2e/                 End-to-end tests against real Docker
+examples/saas-trial-demo/  Reference demo (Node, Postgres, Redis)
 spike/                     M0 feasibility spike (frozen, reference only)
-sdk/node/, examples/       Planned (M2/M4)
+sdk/node/                  Planned (M4 stretch)
 ```
 
 ## Development environment
 
 | Tool | Purpose |
 |---|---|
-| Rust (stable; minimum supported version to be set at M1) | CLI, controller |
+| Rust (stable; minimum supported version 1.85) | CLI, controller |
 | Zig | Not needed locally: the controller image builds the glibc shim with zig inside Docker |
 | Docker Engine or Docker Desktop with Compose v2 | Integration tests |
-| Node.js LTS | Node SDK and demo (later milestones) |
+| Python 3.8+ | End-to-end test scripts |
 
 ### Build and test
 
@@ -50,14 +51,17 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace            # clockd's tests only run on Linux
 docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .   # also runs clockd tests
-python tests/e2e/run_m1.py        # end-to-end: real Docker, real services
+python tests/e2e/run_m1.py        # end-to-end: controller, CLI, doctor (real Docker, real services)
+python tests/e2e/run_m2.py        # engine, demo lifecycle, trigger timeouts, pg_cron
+python tests/e2e/run_schedulers.py  # scheduler matrix (nightly in CI)
+python tests/e2e/run_nohang.py    # no-hang suite across runtimes (nightly in CI)
 ```
 
 The M0 spike harness (`spike/run_m0.py`) is kept for reference. It is not part of CI.
 
-## Coding conventions (planned)
+## Coding conventions
 
-- **Rust:** `cargo fmt` and `cargo clippy -- -D warnings` must pass. Use `unsafe` only in clearly marked, documented modules.
+- **Rust:** `cargo fmt` and `cargo clippy -- -D warnings` must pass. The workspace denies `unsafe` code.
 - **C shim:**
   - C99, no dependencies beyond libc and `dlfcn`;
   - no allocation, locks or logging on the hot path;
@@ -82,7 +86,7 @@ Use the **Bug report** issue template. Include:
 
 - your OS and Docker version;
 - the relevant Compose snippet;
-- the output of `chronostack doctor`, once that command exists.
+- the output of `chronostack doctor`.
 
 **Do not report security problems in public issues.** See [SECURITY.md](SECURITY.md).
 

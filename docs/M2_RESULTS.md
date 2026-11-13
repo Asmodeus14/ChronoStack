@@ -67,8 +67,11 @@
 Follow-ups after the M2 review (2026-11-13):
 
 1. ~~pg_cron is slow to fast-forward~~ **Fixed.** ChronoStack reads `cron.job` and stops at each fixed-time job's minute (UTC). 3 virtual days: **92 s → 6.4 s**, still 3 runs. This also confirms empirically that pg_cron runs the current minute's jobs after a large jump. It falls back to hourly sub-steps for unsupported schedules (e.g. `30 seconds`) or a non-UTC `cron.timezone`.
-2. ~~Scheduler matrix not automated~~ **Done:** `tests/e2e/run_schedulers.py`, run nightly. BullMQ job schedulers and delayed jobs fire on their own (about 1 s). Celery beat with `beat_max_loop_interval=1` fires (about 2 s). node-cron needs a trigger.
+2. ~~Scheduler matrix not automated~~ **Done:** `tests/e2e/run_schedulers.py`, run nightly. BullMQ job schedulers and delayed jobs fire on their own (about 1 s). Celery beat with `beat_max_loop_interval=1` fires (about 2 s). node-cron and APScheduler 3 (added after M2) need a trigger.
 3. ~~R13~~ **Fixed:** published host ports and `container_name` are reset with `!reset` by default (`up --keep-ports` to opt out).
 4. ~~YAML parser~~ **Replaced** with `serde_norway` 0.9.42, a maintained fork with the same API.
 5. **Determinism: Linux part of the gate met.** The first nightly run (2026-11-13, [run 43431715026](https://github.com/Asmodeus14/ChronoStack/actions/runs/43431715026)) produced 10/10 identical outcomes on both Linux x86_64 and arm64. The scheduler matrix matched every expectation on both. macOS remains a manual pre-alpha check.
-6. Still open: a timed-out `exec` trigger's process may keep running inside the container.
+6. ~~Timed-out `exec` triggers keep running inside the container~~ **Fixed.** Each exec trigger runs under a small `sh` wrapper that records its PID. On timeout ChronoStack stops the whole process tree inside the container (TERM, then KILL after 3 s). Verified in e2e on Alpine (busybox) and Debian: no process is left. Images without `sh` fall back to the old behaviour, and the report says so. This also fixed a CLI hang: killing `docker` left the compose plugin holding the output pipes.
+7. **Wildcard pg_cron jobs** (`*/5 * * * *`, `0 * * * *`) run at most once per clock stop. `advance` now says so, e.g. "due 4320 time(s) but will run about 4". `--pg-cron-all` stops at every occurrence (limit 2,000 stops). e2e: one 30-minute jump ran a `* * * * *` job once; `advance 30m --pg-cron-all` ran it 30 times.
+8. **`up --wait`** added (M1 follow-up).
+9. **Postgres after a 14-day jump** (TECHNICAL_FEASIBILITY §3.2, previously unresolved), measured locally: the server stayed responsive (`select 1` in 0.4 s); no checkpoints ran in the following 75 s; autovacuum ran once on a table with 20,000 dead rows, 24 s after the jump.

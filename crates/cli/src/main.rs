@@ -60,6 +60,12 @@ enum Cmd {
         /// By default they are removed so the copy can run next to your own stack.
         #[arg(long)]
         keep_ports: bool,
+        /// Wait until every virtualized service answers its time probe.
+        #[arg(long)]
+        wait: bool,
+        /// How long `--wait` waits (e.g. 120s, 5m).
+        #[arg(long, default_value = "120s", requires = "wait")]
+        wait_timeout: String,
     },
     /// Stop the ChronoStack stack (your own stack and files are untouched).
     Down {
@@ -100,6 +106,10 @@ enum Cmd {
         /// Skip verifying that services see the new time.
         #[arg(long)]
         no_probe: bool,
+        /// Stop at every occurrence of wildcard pg_cron jobs such as `*/5 * * * *`
+        /// (by default pg_cron runs them at most once per clock stop).
+        #[arg(long)]
+        pg_cron_all: bool,
     },
     /// Validate chronostack.yml and show its triggers and barriers.
     Config,
@@ -141,7 +151,16 @@ fn run(cli: Cli) -> Result<i32> {
         Cmd::Up {
             ref clockd_image,
             keep_ports,
-        } => up(&cli, clockd_image, keep_ports).map(|_| 0),
+            wait,
+            ref wait_timeout,
+        } => {
+            let wait = if wait {
+                Some(parse_duration(wait_timeout).map_err(anyhow::Error::msg)?)
+            } else {
+                None
+            };
+            up(&cli, clockd_image, keep_ports, wait)
+        }
         Cmd::Down { volumes } => down(volumes).map(|_| 0),
         Cmd::Now { json } => {
             let mut s = Session::load()?;
@@ -157,6 +176,7 @@ fn run(cli: Cli) -> Result<i32> {
             dry_run,
             json,
             no_probe,
+            pg_cron_all,
         } => {
             let msg = anyhow::Error::msg;
             let target = match (duration, to) {
@@ -185,6 +205,7 @@ fn run(cli: Cli) -> Result<i32> {
                 dry_run,
                 json,
                 no_probe,
+                pg_cron_all,
             };
             let mut s = Session::load()?;
             let cfg = load_config(&s)?;
@@ -365,7 +386,7 @@ fn compose_supports_reset() -> bool {
     matches!(nums.as_slice(), [major, minor] if (*major, *minor) >= (2, 24))
 }
 
-fn up(cli: &Cli, clockd_image: &str, keep_ports: bool) -> Result<()> {
+fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> Result<i32> {
     if Session::path().exists() {
         bail!(
             "a ChronoStack session already exists in this directory; run `chronostack down` first"
@@ -502,11 +523,58 @@ isolated from your own stack (use `up --keep-ports` to keep these):"
     }
     println!();
     print_clock(&st, false);
+    if let Some(ns) = wait_ns {
+        let c = Client::new(session.base_url(), session.token.clone());
+        let code = wait_for_probes(&session, &c, Duration::from_nanos(ns.max(0) as u64));
+        if code != 0 {
+            return Ok(code);
+        }
+    }
     println!(
         "\nChronoStack project `{}` is up. Try `chronostack advance 1d`.",
         session.project
     );
-    Ok(())
+    Ok(0)
+}
+
+/// `up --wait`: poll the time probes until no service is `unavailable`.
+/// Returns 0 when all are `ok`, 3 on skew or timeout.
+fn wait_for_probes(session: &Session, c: &Client, timeout: Duration) -> i32 {
+    let start = std::time::Instant::now();
+    let mut last_pending = String::new();
+    loop {
+        let probes = probe::probe_all(session, c);
+        let pending: Vec<&str> = probes
+            .iter()
+            .filter(|p| p.status == "unavailable")
+            .map(|p| p.service.as_str())
+            .collect();
+        if pending.is_empty() {
+            println!();
+            probe::print_probes(&probes);
+            return if probes.iter().all(|p| p.status == "ok") {
+                0
+            } else {
+                3
+            };
+        }
+        if start.elapsed() >= timeout {
+            println!();
+            probe::print_probes(&probes);
+            eprintln!(
+                "\nservices still not answering after {:.0}s: {}",
+                timeout.as_secs_f64(),
+                pending.join(", ")
+            );
+            return 3;
+        }
+        let now = pending.join(", ");
+        if now != last_pending {
+            println!("waiting for {now} ...");
+            last_pending = now;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
 }
 
 fn print_plan_table(s: &Session) {

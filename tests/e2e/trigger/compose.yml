@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Trigger-timeout fixture: a timed-out exec trigger must be stopped inside the
+# container (busybox and Debian userlands), and `up --wait` must wait for probes.
+name: e2e-trigger
+services:
+  alp:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
+  deb:
+    image: debian:bookworm-slim
+    command: ["sleep", "infinity"]

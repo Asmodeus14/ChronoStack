@@ -2,7 +2,7 @@
 """M2 end-to-end: step → trigger → barrier on the SaaS trial demo, and pg_cron sub-stepping.
 
 Usage (from the repository root):
-    python tests/e2e/run_m2.py [--cli PATH] [--repeat N] [--skip-demo] [--skip-pgcron]
+    python tests/e2e/run_m2.py [--cli PATH] [--repeat N] [--skip-demo] [--skip-pgcron] [--skip-triggers]
 
 Requires Docker with Compose v2 and the `chronostack/clockd:dev` image
 (build it with `docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .`).
@@ -25,6 +25,7 @@ for _s in (sys.stdout, sys.stderr):
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEMO = os.path.join(ROOT, "examples", "saas-trial-demo")
 PGCRON = os.path.join(ROOT, "tests", "e2e", "pgcron")
+TRIGGER = os.path.join(ROOT, "tests", "e2e", "trigger")
 H = 3600
 D = 86400
 FAILS = []
@@ -170,7 +171,77 @@ def demo_once(cli, run_no):
         check("demo compose file unchanged", same)
 
 
+# ------------------------------------------------------- trigger timeout, --wait
+
+PROC_SLEEPS = "for p in /proc/[0-9]*; do tr '\\0' ' ' < $p/cmdline 2>/dev/null; echo; done | grep -c '^sleep 30[01]'"
+
+
+def triggers(cli):
+    st = Stack(cli, TRIGGER)
+    if os.path.exists(os.path.join(TRIGGER, ".chronostack", "session.json")):
+        st.cs("down", "-v")
+    rc, out, err = st.cs("up", "--wait", "--wait-timeout", "90s", timeout=1800)
+    check("up --wait: returns 0 once every probe is ok", rc == 0 and "ok" in out, (err or out)[-400:])
+    if rc != 0:
+        st.down()
+        return
+    try:
+        # Triggers fire at 01:00 (alp) and 02:00 (deb). Step to whichever comes
+        # next + 30 min, so exactly one trigger fires per advance.
+        for _ in range(2):
+            now = dt.datetime.fromtimestamp(st.virtual_s(), dt.timezone.utc)
+            due = []
+            for svc, hour in (("alp", 1), ("deb", 2)):
+                t = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+                if t <= now:
+                    t += dt.timedelta(days=1)
+                due.append((t, svc))
+            at, svc = min(due)
+            rc, r = st.js("advance", "--to", iso(at + dt.timedelta(minutes=30)), "--no-probe")
+            t = [x for s in r.get("stops", []) for x in s["triggers"]]
+            detail = (t[0].get("detail") or "") if t else ""
+            check(f"trigger timeout ({svc}): exit 4, reported as stopped",
+                  rc == 4 and len(t) == 1 and "timed out" in detail and "stopped in the container" in detail, f"rc={rc} {detail}")
+            time.sleep(1)
+            left = st.exec(svc, "sh", "-c", PROC_SLEEPS)[1].strip()
+            check(f"trigger timeout ({svc}): no trigger process left in the container", left == "0", f"{left} left")
+    finally:
+        st.down()
+
+
 # ---------------------------------------------------------------------- pg_cron
+
+def pg_jump(st, psql):
+    """Postgres background processes after a 14-day jump (TECHNICAL_FEASIBILITY 3.2,
+    previously unresolved). The autovacuum launcher and the checkpointer compare
+    wall-clock timestamps; a forward jump should make work due once, not cause a
+    storm or stall the server."""
+    def one(q):
+        out = psql(q)[1].strip()
+        return int(out) if out.lstrip("-").isdigit() else -1
+
+    psql("create table if not exists av(i int); insert into av select generate_series(1, 20000); delete from av")
+    ckpt0 = one("select checkpoints_timed + checkpoints_req from pg_stat_bgwriter")
+    rc, _ = st.js("advance", "14d", "--max-jump", "none", "--no-probe")
+    check("pg jump: advance 14d in one jump", rc == 0)
+    t0 = time.monotonic()
+    av_after = None
+    while time.monotonic() - t0 < 75:
+        if one("select count(*) from pg_stat_user_tables where relname = 'av' and last_autovacuum is not null") == 1:
+            av_after = time.monotonic() - t0
+            break
+        time.sleep(3)
+    q0 = time.monotonic()
+    rc, out, _ = psql("select 1")
+    latency = time.monotonic() - q0
+    ckpt = one("select checkpoints_timed + checkpoints_req from pg_stat_bgwriter") - ckpt0
+    check("pg jump: server responsive after a 14-day jump", rc == 0 and out.strip() == "1" and latency < 5, f"{latency:.2f}s")
+    check("pg jump: no checkpoint storm (at most 3 checkpoints)", 0 <= ckpt <= 3, f"{ckpt} checkpoint(s)")
+    print(f"  measured: autovacuum of a table with 20000 dead rows "
+          f"{'ran %.0fs after the jump' % av_after if av_after is not None else 'did not run within 75 s'}; "
+          f"{ckpt} checkpoint(s) in that time", flush=True)
+    psql("drop table av")
+
 
 def pgcron(cli):
     st = Stack(cli, PGCRON)
@@ -179,6 +250,7 @@ def pgcron(cli):
     try:
         check("pg_cron: db healthy", st.wait_healthy(["db"]))
         psql = lambda q: st.exec("db", "psql", "-U", "postgres", "-Atc", q)  # noqa: E731
+        pg_jump(st, psql)
         psql("create extension if not exists pg_cron")
         psql("create table if not exists hb(t timestamptz default now()); create table if not exists daily(t timestamptz default now())")
         psql("select cron.schedule('hb', '* * * * *', 'insert into hb default values')")
@@ -219,6 +291,26 @@ def pgcron(cli):
               plan.get("pg_cron_mode") == "hourly" and len(plan.get("stops", [])) == 72 and "30 seconds" in (plan.get("pg_cron_reason") or ""),
               f"mode={plan.get('pg_cron_mode')} reason={plan.get('pg_cron_reason')}")
         psql("select cron.unschedule('every30s')")
+
+        # Wildcard jobs: `hb` (* * * * *) runs once per stop unless --pg-cron-all.
+        rc, plan = st.js("advance", "3d", "--dry-run")
+        hb = [w for w in plan.get("pg_cron_wildcards", []) if w["schedule"] == "* * * * *"]
+        check("pg_cron wildcard: dry-run reports due vs. will-run for `* * * * *`",
+              len(hb) == 1 and hb[0]["due"] == 4320 and hb[0]["will_run"] < 10, json.dumps(hb))
+        rc, _, err = st.cs("advance", "3d", "--pg-cron-all", "--dry-run")
+        check("pg_cron wildcard: --pg-cron-all refuses more than 2000 stops", rc != 0 and "2000" in err, err.strip()[-200:])
+        cnt = lambda: int(psql("select count(*) from hb")[1].strip() or -1)  # noqa: E731
+        before = cnt()
+        rc, _ = st.js("advance", "30m", "--no-probe")
+        time.sleep(3)
+        plain = cnt() - before
+        before = cnt()
+        rc2, r = st.js("advance", "30m", "--pg-cron-all", "--no-probe")
+        time.sleep(3)
+        every = cnt() - before
+        check("pg_cron wildcard: one 30m jump runs `* * * * *` at most twice", rc == 0 and plain <= 2, f"{plain} runs")
+        check("pg_cron wildcard: advance 30m --pg-cron-all runs it about 30 times",
+              rc2 == 0 and 29 <= every <= 33, f"{every} runs, {len(r.get('stops', []))} stops")
     finally:
         st.down()
 
@@ -229,6 +321,7 @@ def main():
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--skip-demo", action="store_true")
     ap.add_argument("--skip-pgcron", action="store_true")
+    ap.add_argument("--skip-triggers", action="store_true")
     a = ap.parse_args()
     cli = os.path.abspath(a.cli) if a.cli else None
     if not cli:
@@ -246,6 +339,9 @@ def main():
         if a.repeat > 1:
             check(f"demo: {a.repeat} runs produced identical outcomes", len(set(outcomes)) == 1 and None not in outcomes,
                   str(outcomes))
+    if not a.skip_triggers:
+        print("\n=== trigger timeout, up --wait", flush=True)
+        triggers(cli)
     if not a.skip_pgcron:
         print("\n=== pg_cron", flush=True)
         pgcron(cli)

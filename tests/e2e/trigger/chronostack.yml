@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=../../../docs/schema/chronostack.schema.json
+# Each trigger starts a process tree (a background and a foreground sleep) that
+# outlives its 2 s timeout. ChronoStack must stop the whole tree.
+version: 1
+triggers:
+  - name: slow-alpine
+    schedule: { every: 1d, at: "01:00" }
+    exec: { service: alp, command: [sh, -c, "sleep 300 & sleep 301"] }
+    timeout: 2s
+  - name: slow-debian
+    schedule: { every: 1d, at: "02:00" }
+    exec: { service: deb, command: [sh, -c, "sleep 300 & sleep 301"] }
+    timeout: 2s

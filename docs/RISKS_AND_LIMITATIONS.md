@@ -34,7 +34,8 @@
 3. Postgres `now()` is fixed per transaction; long-lived transactions see the old time.
 4. Go, static binaries, setuid binaries, processes outside Compose: not virtualized. `doctor` flags Go processes even when they run under a C supervisor.
 11. By default, the ChronoStack copy does not publish your project's host ports or use its `container_name`, so it can run alongside your normal stack. Use `up --keep-ports` to reach the copy from your browser; it then conflicts with a running normal stack.
-12. pg_cron jobs whose minute or hour field starts with `*` (e.g. `*/5 * * * *`) run at most once per clock stop, not at every occurrence. Use `--step` to control how often.
+12. pg_cron jobs whose minute or hour field starts with `*` (e.g. `*/5 * * * *`) run at most once per clock stop, not at every occurrence. `advance` reports how many will run; use `--pg-cron-all` (up to 2,000 stops) or `--step` to run more.
+13. A trigger that times out is stopped inside its container only if the image has `sh`.
 5. Native host processes: Node only, via `chronostack/register`.
 6. External services (Stripe, SendGrid) are not virtualized; use their test-clock features or mocks.
 7. Data written with virtual timestamps persists in ChronoStack volumes.
