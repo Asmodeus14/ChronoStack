@@ -3,6 +3,11 @@
 # Build from the repository root:
 #   docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
 
+# The musl preload library is built against an OLD musl on purpose (like the
+# glibc build targets glibc 2.17), so it loads in older Alpine-based images.
+# Kept as a build argument so Dependabot does not bump it with the other bases.
+ARG MUSL_BUILD_BASE=alpine:3.20
+
 # --- clockd (static musl binary); its Linux-only unit tests run here ----------
 FROM rust:1-alpine AS clockd
 RUN apk add --no-cache musl-dev
@@ -17,7 +22,7 @@ RUN cargo test --release -p chronostack-clockd \
 # --- glibc preload library, linked against glibc 2.17 symbols via zig -------
 # (a gcc build on a new distro would require GLIBC_2.34 and fail to load in
 #  older images such as Debian bullseye or Ubuntu 20.04)
-FROM alpine:3.20 AS shim-gnu
+FROM alpine:3.24 AS shim-gnu
 RUN apk add --no-cache zig
 WORKDIR /src
 COPY shim shim
@@ -26,7 +31,7 @@ RUN arch="$(uname -m)" \
       -o "/libchronoclock-${arch}-gnu.so" shim/chronoclock.c -ldl -lpthread
 
 # --- musl preload library ------------------------------------------------------
-FROM alpine:3.20 AS shim-musl
+FROM ${MUSL_BUILD_BASE} AS shim-musl
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /src
 COPY shim shim
@@ -35,7 +40,7 @@ RUN arch="$(uname -m)" \
       -o "/libchronoclock-${arch}-musl.so" shim/chronoclock.c
 
 # --- runtime -------------------------------------------------------------------
-FROM alpine:3.20
+FROM alpine:3.24
 COPY --from=clockd /clockd /usr/local/bin/clockd
 COPY --from=shim-gnu /libchronoclock-*-gnu.so /opt/chronostack/lib/
 COPY --from=shim-musl /libchronoclock-*-musl.so /opt/chronostack/lib/

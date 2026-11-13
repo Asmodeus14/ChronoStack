@@ -7,6 +7,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # `dtolnay/rust-toolchain@1.85` is the MSRV check, not an outdated version.
+      - dependency-name: "dtolnay/rust-toolchain"
 
   - package-ecosystem: "cargo"
     directory: "/"
