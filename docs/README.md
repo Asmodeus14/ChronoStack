@@ -28,6 +28,8 @@ ChronoStack is in its **design phase**. These documents are the research and pla
 - [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md): ADR-001 to ADR-017
 - [M0_RESULTS.md](M0_RESULTS.md): feasibility spike results and exit-gate verdict
 - [M1_RESULTS.md](M1_RESULTS.md): controller and CLI results, including 3 external projects
+- [M2_RESULTS.md](M2_RESULTS.md): step/trigger/barrier engine, demo and pg_cron results
+- [schema/chronostack.schema.json](schema/chronostack.schema.json): JSON Schema for `chronostack.yml`
 
 ## Planning
 

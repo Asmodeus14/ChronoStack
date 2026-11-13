@@ -54,6 +54,15 @@ No versions have been released. ChronoStack contains no runnable code yet.
 - `doctor` checks every process in each container and flags Go binaries (they bypass the shim), e.g. Gitea's server behind its C supervisor. Covered by a new e2e case (`caddy:2-alpine`).
 - `docs/M1_RESULTS.md`: M1 exit gate passed on 3 unmodified docker/awesome-compose projects.
 
+- **M2 — step → trigger → barrier engine:**
+  - `chronostack.yml` (triggers scheduled in virtual time or per step; SQL/Redis/exec/HTTP barriers), JSON Schema in `docs/schema/`;
+  - advance planner (`core::schedule`) and engine;
+  - automatic pg_cron detection with 1 h sub-steps;
+  - `advance --to/--step/--max-jump/--dwell/--dry-run`, and `chronostack config`.
+- `examples/saas-trial-demo`: 14-day trial, 24 h sessions, daily 03:00 job (Node, Postgres, Redis).
+- `tests/e2e/run_m2.py`: demo lifecycle, determinism repeats, and pg_cron (negative and positive). Runs in CI.
+- Dependency: `serde_yaml` 0.9 (upstream archived; to be replaced by a maintained parser).
+
 ### Changed
 
 - Architecture: the step / trigger / barrier engine moves to the host CLI, and no container receives the Docker socket (ADR-016).

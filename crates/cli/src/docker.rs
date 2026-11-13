@@ -62,3 +62,58 @@ impl Compose {
         a
     }
 }
+
+/// Result of a command run with a deadline.
+#[derive(Debug, Clone)]
+pub struct Timed {
+    pub code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+    pub timed_out: bool,
+}
+
+/// Run `docker <args>` with a timeout. On timeout the docker CLI is killed;
+/// note that a process started by `docker exec` inside the container may keep
+/// running.
+pub fn output_timeout(args: &[String], timeout: std::time::Duration) -> Result<Timed> {
+    use std::io::Read;
+    let start = std::time::Instant::now();
+    let mut child = Command::new("docker")
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to run `docker`")?;
+    let mut so = child.stdout.take().expect("piped");
+    let mut se = child.stderr.take().expect("piped");
+    let t_out = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = so.read_to_string(&mut s);
+        s
+    });
+    let t_err = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = se.read_to_string(&mut s);
+        s
+    });
+    let mut timed_out = false;
+    let status = loop {
+        if let Some(st) = child.try_wait()? {
+            break Some(st);
+        }
+        if start.elapsed() > timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            timed_out = true;
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    Ok(Timed {
+        code: status.and_then(|s| s.code()),
+        stdout: t_out.join().unwrap_or_default(),
+        stderr: t_err.join().unwrap_or_default(),
+        timed_out,
+    })
+}

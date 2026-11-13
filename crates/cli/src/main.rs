@@ -1,8 +1,10 @@
 //! `chronostack` — Stripe Test Clocks for your Docker Compose stack.
 
 mod client;
+mod config;
 mod detect;
 mod docker;
+mod engine;
 mod probe;
 mod session;
 
@@ -13,7 +15,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use chronostack_core::api::ClockState;
 use chronostack_core::compose::{self, ClockdSpec, ServicePlan};
-use chronostack_core::duration::{format_span, format_utc, parse_duration};
+use chronostack_core::duration::{format_span, format_utc, parse_duration, parse_utc};
 use chronostack_core::paths;
 use clap::{Parser, Subcommand};
 use serde_json::json;
@@ -66,15 +68,36 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// Move virtual time forward, e.g. `25h`, `14d`, `1h30m`.
+    /// Move virtual time forward, running scheduled triggers and waiting on barriers.
+    ///
+    /// Examples: `advance 25h`, `advance 14d --step 1d`, `advance --to 2026-12-01T03:00:00Z`.
     Advance {
-        duration: String,
+        /// How far to move, e.g. `25h`, `14d`, `1h30m`.
+        #[arg(required_unless_present = "to", conflicts_with = "to")]
+        duration: Option<String>,
+        /// Move to an absolute UTC time instead (RFC 3339, e.g. 2026-12-01T03:00:00Z).
+        #[arg(long)]
+        to: Option<String>,
+        /// Stop every STEP (e.g. `1d`): runs step triggers and barriers each time.
+        #[arg(long)]
+        step: Option<String>,
+        /// Largest single jump: a duration, `none`, or `auto` (1h when pg_cron is detected).
+        #[arg(long, default_value = "auto")]
+        max_jump: String,
+        /// Wait after each step/sub-step when no barrier is configured (e.g. `500ms`).
+        #[arg(long)]
+        dwell: Option<String>,
+        /// Print the plan without moving the clock.
+        #[arg(long)]
+        dry_run: bool,
         #[arg(long)]
         json: bool,
         /// Skip verifying that services see the new time.
         #[arg(long)]
         no_probe: bool,
     },
+    /// Validate chronostack.yml and show its triggers and barriers.
+    Config,
     /// Stop virtual time.
     Freeze {
         #[arg(long)]
@@ -119,28 +142,72 @@ fn run(cli: Cli) -> Result<i32> {
         }
         Cmd::Advance {
             duration,
+            to,
+            step,
+            max_jump,
+            dwell,
+            dry_run,
             json,
             no_probe,
         } => {
-            let by = parse_duration(&duration).map_err(anyhow::Error::msg)?;
+            let msg = anyhow::Error::msg;
+            let target = match (duration, to) {
+                (Some(d), None) => engine::Target::By(parse_duration(&d).map_err(msg)?),
+                (None, Some(t)) => engine::Target::To(parse_utc(&t).map_err(msg)?),
+                _ => bail!("give either a duration or --to"),
+            };
+            let max_jump = match max_jump.as_str() {
+                "auto" => engine::MaxJump::Auto,
+                "none" => engine::MaxJump::Disabled,
+                v => engine::MaxJump::Fixed(parse_duration(v).map_err(msg)?),
+            };
+            let opts = engine::Options {
+                target,
+                step: step
+                    .as_deref()
+                    .map(parse_duration)
+                    .transpose()
+                    .map_err(msg)?,
+                max_jump,
+                dwell: dwell
+                    .as_deref()
+                    .map(parse_duration)
+                    .transpose()
+                    .map_err(msg)?,
+                dry_run,
+                json,
+                no_probe,
+            };
             let mut s = Session::load()?;
+            let cfg = load_config(&s)?;
             let c = client(&mut s);
-            let st = c.advance(by)?;
-            if no_probe {
-                print_clock(&st, json);
+            engine::advance(&s, &c, &cfg, &opts)
+        }
+        Cmd::Config => {
+            let services: Vec<String> = Session::load()
+                .map(|s| s.services.iter().map(|e| e.plan.service.clone()).collect())
+                .unwrap_or_default();
+            let Some(path) = config::find(Path::new(".")) else {
+                println!("no chronostack.yml here — advances run without triggers or barriers");
                 return Ok(0);
+            };
+            let r = config::load(&path, &services)?;
+            println!("{} is valid", path.display());
+            for (i, t) in r.config.triggers.iter().enumerate() {
+                let when = match r.schedules.iter().find(|(j, _)| *j == i) {
+                    Some((_, e)) => format!(
+                        "every {} at +{} (UTC)",
+                        format_span(e.every_ns).trim_start_matches('+'),
+                        format_span(e.at_ns).trim_start_matches('+')
+                    ),
+                    None => "after every --step".into(),
+                };
+                println!("  trigger {}: {when}", t.name);
             }
-            let probes = probe::probe_all(&s, &c);
-            let bad = probes.iter().any(|p| p.status != "ok");
-            if json {
-                println!("{}", json!({ "clock": st, "probes": probes }));
-            } else {
-                println!("advanced {}", format_span(by));
-                print_clock(&st, false);
-                println!();
-                probe::print_probes(&probes);
+            for b in &r.config.barriers {
+                println!("  barrier {}", b.name);
             }
-            Ok(if bad { 3 } else { 0 })
+            Ok(0)
         }
         Cmd::Freeze { json } => {
             let mut s = Session::load()?;
@@ -174,6 +241,15 @@ fn run(cli: Cli) -> Result<i32> {
 /// Connect to clockd. Docker may assign a new random host port when the
 /// controller container restarts (found by the M1 e2e test), so if the stored
 /// port does not answer, re-resolve it once and persist the new one.
+/// Load `chronostack.yml` from the current directory, if present.
+fn load_config(s: &Session) -> Result<config::Resolved> {
+    let services: Vec<String> = s.services.iter().map(|e| e.plan.service.clone()).collect();
+    match config::find(Path::new(".")) {
+        Some(p) => config::load(&p, &services),
+        None => Ok(config::Resolved::empty()),
+    }
+}
+
 fn client(s: &mut Session) -> Client {
     let c = Client::new(s.base_url(), s.token.clone());
     if c.clock().is_ok() {

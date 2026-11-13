@@ -1,0 +1,11 @@
+{
+  "name": "saas-trial-demo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "ChronoStack reference demo: 14-day trial, 24h sessions, daily expiry job",
+  "license": "(MIT OR Apache-2.0)",
+  "dependencies": {
+    "pg": "8.13.1",
+    "redis": "4.7.0"
+  }
+}

@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# A small SaaS app with a 14-day trial, 24-hour sessions and a daily job.
+# Nothing in here knows about ChronoStack; see chronostack.yml for the time setup.
+name: saas-trial-demo
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app"]
+      interval: 1s
+      retries: 30
+
+  cache:
+    image: redis:7-alpine
+
+  api:
+    build: ./app
+    command: ["node", "src/api.js"]
+    environment: &env
+      PGHOST: db
+      PGUSER: app
+      PGPASSWORD: app
+      PGDATABASE: app
+      REDIS_URL: redis://cache:6379
+    depends_on:
+      db: { condition: service_healthy }
+      cache: { condition: service_started }
+
+  worker:
+    build: ./app
+    command: ["node", "src/worker.js"]
+    environment: *env
+    depends_on:
+      db: { condition: service_healthy }

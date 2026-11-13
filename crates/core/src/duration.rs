@@ -118,6 +118,68 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
+/// Parse an RFC 3339 UTC timestamp: `2026-11-14T03:00:00Z` (seconds optional,
+/// `Z` or `+00:00` required) into Unix nanoseconds.
+pub fn parse_utc(input: &str) -> Result<i64, String> {
+    let bad = || format!("invalid timestamp `{input}`: expected e.g. 2026-11-14T03:00:00Z (UTC)");
+    let s = input.trim();
+    let s = s
+        .strip_suffix('Z')
+        .or_else(|| s.strip_suffix("+00:00"))
+        .ok_or_else(bad)?;
+    let (date, time) = s.split_once('T').ok_or_else(bad)?;
+    let d: Vec<&str> = date.split('-').collect();
+    if d.len() != 3 {
+        return Err(bad());
+    }
+    let (y, m, day): (i64, u32, u32) = (
+        d[0].parse().map_err(|_| bad())?,
+        d[1].parse().map_err(|_| bad())?,
+        d[2].parse().map_err(|_| bad())?,
+    );
+    if !(1..=12).contains(&m) || day == 0 || day > days_in_month(y, m) {
+        return Err(bad());
+    }
+    let tod = parse_time_of_day(time).map_err(|_| bad())?;
+    Ok(days_from_civil(y, m, day) * 86_400 * NS + tod)
+}
+
+/// Parse `HH:MM` or `HH:MM:SS` (UTC time of day) into nanoseconds after midnight.
+pub fn parse_time_of_day(input: &str) -> Result<i64, String> {
+    let bad = || format!("invalid time of day `{input}`: expected HH:MM or HH:MM:SS (UTC)");
+    let parts: Vec<&str> = input.trim().split(':').collect();
+    if !(2..=3).contains(&parts.len()) || parts.iter().any(|p| p.len() != 2) {
+        return Err(bad());
+    }
+    let nums: Result<Vec<i64>, _> = parts.iter().map(|p| p.parse::<i64>()).collect();
+    let nums = nums.map_err(|_| bad())?;
+    let (h, m, sec) = (nums[0], nums[1], *nums.get(2).unwrap_or(&0));
+    if h > 23 || m > 59 || sec > 59 || h < 0 || m < 0 || sec < 0 {
+        return Err(bad());
+    }
+    Ok((h * 3600 + m * 60 + sec) * NS)
+}
+
+fn days_in_month(y: i64, m: u32) -> u32 {
+    match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 => 29,
+        _ => 28,
+    }
+}
+
+/// Howard Hinnant's `days_from_civil`.
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let m = m as i64;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d as i64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +226,43 @@ mod tests {
         assert_eq!(format_utc(951_782_400 * NS), "2000-02-29T00:00:00Z");
         assert_eq!(format_utc(1_794_563_696 * NS), "2026-11-13T09:54:56Z");
         assert_eq!(format_utc(-1), "1969-12-31T23:59:59Z");
+    }
+
+    #[test]
+    fn parses_utc_round_trip() {
+        for ts in [
+            "1970-01-01T00:00:00Z",
+            "2000-02-29T12:34:56Z",
+            "2026-11-14T03:00:00Z",
+            "2099-12-31T23:59:59Z",
+        ] {
+            assert_eq!(format_utc(parse_utc(ts).unwrap()), ts);
+        }
+        assert_eq!(
+            parse_utc("2026-11-14T03:00Z").unwrap(),
+            parse_utc("2026-11-14T03:00:00+00:00").unwrap()
+        );
+        for bad in [
+            "2026-11-14",
+            "2026-11-14T03:00:00",
+            "2026-02-30T00:00:00Z",
+            "2026-13-01T00:00:00Z",
+            "2026-11-14T24:00:00Z",
+            "x",
+        ] {
+            assert!(parse_utc(bad).is_err(), "accepted {bad}");
+        }
+    }
+
+    #[test]
+    fn parses_time_of_day() {
+        assert_eq!(parse_time_of_day("03:00").unwrap(), 3 * 3600 * NS);
+        assert_eq!(
+            parse_time_of_day("23:59:30").unwrap(),
+            (23 * 3600 + 59 * 60 + 30) * NS
+        );
+        for bad in ["3:00", "24:00", "03:60", "03", "03:00:00:00"] {
+            assert!(parse_time_of_day(bad).is_err(), "accepted {bad}");
+        }
     }
 }

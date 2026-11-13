@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Asmodeus14/ChronoStack/blob/main/docs/schema/chronostack.schema.json",
+  "title": "chronostack.yml",
+  "description": "ChronoStack configuration: triggers and barriers for `chronostack advance`.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^([0-9]+(w|d|h|m|s|ms))+$|^[0-9]+$",
+      "description": "e.g. 90s, 25h, 14d, 1h30m, 500ms"
+    },
+    "exec": {
+      "type": "object",
+      "required": ["service", "command"],
+      "additionalProperties": false,
+      "properties": {
+        "service": { "type": "string" },
+        "command": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "http": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "description": "Must be reachable from the host running the CLI." },
+        "method": { "type": "string", "default": "POST" },
+        "status": { "type": "integer", "description": "Expected status; default any 2xx." }
+      }
+    }
+  },
+  "properties": {
+    "version": { "const": 1 },
+    "advance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_jump": { "$ref": "#/$defs/duration", "description": "Largest single clock jump. Default: 1h if pg_cron is detected, otherwise unlimited." },
+        "dwell": { "$ref": "#/$defs/duration", "description": "Wait after each step/sub-step when no barrier is configured." },
+        "barrier_timeout": { "$ref": "#/$defs/duration", "default": "30s" }
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "oneOf": [{ "required": ["exec"] }, { "required": ["http"] }],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "schedule": {
+            "type": "object",
+            "required": ["every"],
+            "additionalProperties": false,
+            "description": "Run at each virtual occurrence (UTC). Omit to run after every --step.",
+            "properties": {
+              "every": { "$ref": "#/$defs/duration" },
+              "at": { "type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9](:[0-5][0-9])?$", "description": "UTC time of day, must fall inside one period." }
+            }
+          },
+          "exec": { "$ref": "#/$defs/exec" },
+          "http": { "$ref": "#/$defs/http" },
+          "timeout": { "$ref": "#/$defs/duration", "default": "60s" }
+        }
+      }
+    },
+    "barriers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "oneOf": [{ "required": ["sql"] }, { "required": ["redis"] }, { "required": ["exec"] }, { "required": ["http"] }],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "sql": {
+            "type": "object",
+            "required": ["service", "query"],
+            "additionalProperties": false,
+            "properties": {
+              "service": { "type": "string" },
+              "query": { "type": "string", "description": "Must return t/true/1 when satisfied." },
+              "user": { "type": "string" },
+              "database": { "type": "string" }
+            }
+          },
+          "redis": {
+            "type": "object",
+            "required": ["service", "command", "equals"],
+            "additionalProperties": false,
+            "properties": {
+              "service": { "type": "string" },
+              "command": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "equals": { "type": "string" }
+            }
+          },
+          "exec": { "$ref": "#/$defs/exec" },
+          "http": { "$ref": "#/$defs/http" },
+          "timeout": { "$ref": "#/$defs/duration" }
+        }
+      }
+    }
+  }
+}

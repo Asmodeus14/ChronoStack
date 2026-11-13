@@ -49,13 +49,13 @@ impl Client {
         self.call("GET", "/v1/clock", None)
     }
 
-    pub fn advance(&self, by_ns: i64) -> Result<ClockState> {
+    pub fn advance_to(&self, to_unix_ns: i64) -> Result<ClockState> {
         self.call(
             "POST",
             "/v1/clock/advance",
             Some(&AdvanceRequest {
-                by_ns: Some(by_ns),
-                to_unix_ns: None,
+                by_ns: None,
+                to_unix_ns: Some(to_unix_ns),
             }),
         )
     }

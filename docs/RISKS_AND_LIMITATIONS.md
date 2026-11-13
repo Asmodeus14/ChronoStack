@@ -12,7 +12,7 @@
 | R5 | pg_cron skips jobs on jumps > 3 h (**source-verified**, not hypothetical) | Certain without mitigation | Medium | Automatic sub-stepping ≤ 1 h (ADR-005 amendment); negative test SCH-PGCRON-2 | M0 (confirm), M2 |
 | R13 | ChronoStack copy collides with the user's running stack on fixed host ports / `container_name` (found in M1 on awesome-compose) | High for such projects | Medium | Strip host ports and container names in the override (M2 candidate) | M2 |
 | R14 | Go processes started by a C supervisor or wrapper look healthy if only PID 1 is checked (found in M1, Gitea) | Was certain | High (silent wrong time) | `doctor` scans every process's real executable for Go (`.gopclntab`) | M1 ✅ |
-| R11 | Many sub-steps make long advances slow | Medium | Medium | Fast commit+probe path (< 100 ms); sub-stepping only when pg_cron detected | M2 |
+| R11 | Many sub-steps make long advances slow | **Measured in M2:** about 30 s real per virtual day with pg_cron (1 h sub-steps × 1.2 s dwell) | Medium | Sub-stepping only when pg_cron is detected; planned: jump straight to pg_cron job minutes | M2 ✅ measured |
 | R6 | Compose edge cases (`network_mode`, `build`, profiles, `include`) | Medium | Medium | `compose config` JSON; test on real projects | M1 |
 | R7 | Postgres timeouts firing early when advancing during long statements | Medium | Low | Document; advance only between steps; barriers ensure idle | M2 |
 | R8 | Persistent virtual timestamps after `down` (Redis RDB, PG data) confuse later real-time runs | High | Medium | Separate project/volumes; `down -v` default in `run` | M1 |

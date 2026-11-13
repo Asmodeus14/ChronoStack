@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# pg_cron fixture: ChronoStack must detect pg_cron and sub-step large advances.
+name: e2e-pgcron
+services:
+  db:
+    build: .
+    environment:
+      POSTGRES_PASSWORD: pw
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=postgres
+      - -c
+      - cron.use_background_workers=on
+      - -c
+      - max_worker_processes=20

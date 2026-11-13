@@ -7,7 +7,8 @@ Move the whole stack — Postgres, Redis, and your services — forward in time 
 > **Status: pre-alpha. Usable from source on Linux and Windows hosts; not released.**
 > - **M0 feasibility spike: passed** ([results](docs/M0_RESULTS.md)). Virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read.
 > - **M1 (controller + core CLI): implemented.** `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe` and `doctor` work. They are tested end to end in CI on Linux x86_64 and arm64, and locally on Docker Desktop (Windows).
-> - Stepping with triggers and barriers, outage windows, scenarios and MCP are **planned** (M2–M4). macOS is untested.
+> - **M2 (step → trigger → barrier engine): implemented.** `chronostack.yml` triggers and barriers, scheduled triggers in virtual time, automatic pg_cron sub-stepping, `--dry-run`, and a [reference demo](examples/saas-trial-demo/README.md). In the demo, `advance 14d` runs the daily job 14 times in about 17 s ([results](docs/M2_RESULTS.md)).
+> - Outage windows, scenarios and MCP are **planned** (M3–M4). macOS is untested.
 
 ---
 
@@ -44,13 +45,21 @@ None of these exercise the real interaction between database time (`now()`), cac
 
 ### Workflow
 
-Commands marked *(planned)* are not implemented yet.
+Commands marked *(planned)* are not implemented yet. Scheduled work is declared once in `chronostack.yml`:
+
+```yaml
+version: 1
+triggers:
+  - name: expire-trials
+    schedule: { every: 1d, at: "03:00" }        # virtual time, UTC
+    exec: { service: worker, command: [node, src/jobs/expire-trials.js] }
+```
 
 ```console
 $ chronostack up                      # wraps your existing docker-compose.yml
 $ chronostack doctor                  # shows which services are virtualized
 $ chronostack advance 25h             # Redis session expires; trial still active
-$ chronostack advance 14d --step 1d   # (planned, M2) daily job runs 14 times; trial expires
+$ chronostack advance 14d             # daily 03:00 trigger runs 14 times; trial expires on day 14
 $ chronostack run scenarios/trial.yml # (planned, M3) pass/fail + .chronostack/report-<run>.json
 ```
 

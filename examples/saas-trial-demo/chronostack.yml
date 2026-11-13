@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../docs/schema/chronostack.schema.json
+# ChronoStack settings for the demo.
+version: 1
+
+triggers:
+  # The worker's own setTimeout-based scheduler cannot fire when the clock is
+  # moved, so ChronoStack runs the same job at every virtual 03:00 UTC.
+  - name: expire-trials
+    schedule: { every: 1d, at: "03:00" }
+    exec: { service: worker, command: [node, src/jobs/expire-trials.js] }
+
+barriers:
+  # Before moving on, make sure the API is still serving (a cheap health gate).
+  - name: api-up
+    exec: { service: api, command: [wget, -q, -O, /dev/null, "http://127.0.0.1:3000/users"] }

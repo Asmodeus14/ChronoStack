@@ -4,11 +4,13 @@
 //! - [`api`]: controller (`clockd`) HTTP API types.
 //! - [`duration`]: human durations (`14d`, `1h30m`) and timestamp formatting.
 //! - [`compose`]: resolved Compose model and override generation.
+//! - [`schedule`]: advance planning (steps, scheduled triggers, max-jump sub-steps).
 
 pub mod api;
 pub mod compose;
 pub mod duration;
 pub mod page;
+pub mod schedule;
 
 /// Fixed paths inside containers.
 pub mod paths {

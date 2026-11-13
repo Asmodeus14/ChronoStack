@@ -23,6 +23,7 @@ serde_json.workspace = true
 clap = { version = "4", features = ["derive", "env"] }
 getrandom = "0.2"
 ureq = { version = "2", default-features = false, features = ["json"] }
+serde_yaml = "0.9"
 
 [lints]
 workspace = true

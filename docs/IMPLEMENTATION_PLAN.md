@@ -51,6 +51,12 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 
 ## M2 — Step / trigger / barrier + reference app (weeks 5–7)
 
+> **Status (2026-11-13): implemented.** See [M2_RESULTS.md](M2_RESULTS.md).
+> - `chronostack.yml` with scheduled triggers and barriers; planner; engine; pg_cron auto sub-stepping; demo app.
+> - e2e in CI. Locally: 3/3 identical demo runs, and `advance 14d` takes 17.5 s.
+>
+> Gaps: 10-run and macOS determinism, scheduler matrix (BullMQ/Celery/node-cron), R13.
+
 **Objective.** The 14-day trial lifecycle runs end-to-end, reproducibly.
 
 **Tasks.** `chronostack.yml` schema + validation (JSON Schema published); engine in the host CLI (ADR-016): triggers (`exec` via `docker compose exec`, `http`); barriers (`sql`, `redis`, `http`, `exec`) with timeouts; stepped advance with automatic sub-stepping (`max_jump`, pg_cron detection); per-step results streamed; `examples/saas-trial-demo`; scheduler matrix tests (BullMQ, Celery beat, pg_cron, node-cron negative).
