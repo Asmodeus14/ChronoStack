@@ -68,12 +68,15 @@ all = { level = "warn", priority = -1 }
   - enable Issues and Discussions (categories: Announcements, Q&A, **Ideas**);
   - enable private vulnerability reporting;
   - Wiki off.
-- **Branch protection on `main`:**
-  - require pull requests;
-  - require the `docs` check, and the `rust` check once it runs;
-  - no force pushes.
+- **Branch protection on `main`** (applied 2026-11-13):
+  - required status checks: `Rust (ubuntu-latest)`, `Rust (ubuntu-24.04-arm)`, `Rust (windows-latest)`, `Rust (macos-latest)`, `MSRV (1.85)`, `End-to-end (ubuntu-latest)`, `End-to-end (ubuntu-24.04-arm)`;
+  - the `docs` link check is **not** required: it only runs when Markdown changes, so requiring it would block other pull requests;
+  - no force pushes, no branch deletion;
+  - pull requests are not mandatory and admins are not restricted (owner's choice), so maintainers can still push directly.
 
-## Social preview image concept (not created)
+## Social preview image
+
+Created: [`docs/assets/social-preview.png`](../assets/social-preview.png), drawn in Cascadia Mono (SIL Open Font License). Upload it in **Settings → General → Social preview** (GitHub has no API for this). Concept:
 
 - Size: 1280×640.
 - Dark background with a horizontal timeline.

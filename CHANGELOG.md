@@ -26,7 +26,7 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
   - go-to-market
 - `docs/SOURCE_VERIFICATION.md`: second-pass check of the technical claims against primary sources.
 - `docs/OPEN_SOURCE_READINESS.md`, `docs/README.md` (documentation index), and `docs/development/` covering release process, licensing decision and repository setup.
-- Community files: README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, issue and pull request templates, a discussion form.
+- Community files: README, CONTRIBUTING, CODE_OF_CONDUCT (Contributor Covenant 3.0 with a reporting contact), SECURITY, issue and pull request templates, a discussion form.
 - CI workflows:
   - documentation link check;
   - Rust CI (see M1 below).

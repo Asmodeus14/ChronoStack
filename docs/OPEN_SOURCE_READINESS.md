@@ -31,13 +31,13 @@
 | Item | Status | Notes |
 |---|---|---|
 | CONTRIBUTING.md | ✅ | Build, test and e2e commands; contribution paths for a pre-alpha project |
-| CODE_OF_CONDUCT.md | ⛔ Owner | Adopts Contributor Covenant 3.0 by reference. **The owner must paste the full official text and provide a reporting contact.** |
+| CODE_OF_CONDUCT.md | ✅ | Full Contributor Covenant 3.0 text (copied verbatim from the official source, CC BY-SA 4.0 attribution kept). Reporting contact: the maintainer's email, chosen by the owner on 2026-11-13. |
 | SECURITY.md | ✅ | GitHub private vulnerability reporting enabled (2026-11-13) |
 | LICENSE | ✅ | `MIT OR Apache-2.0`, decided by the owner on 2026-11-13 ([LICENSING.md](development/LICENSING.md)). MIT copyright line is "The ChronoStack Contributors"; the owner may change it. |
 | Issue templates (bug, feature) | ✅ | |
 | PR template (testing + docs checklists) | ✅ | |
 | Discussions form (`ideas.yml`) | ✅ | Discussions enabled; the **Ideas** category (slug `ideas`) exists |
-| Maintainers / governance | ⛔ Owner | No maintainers are listed. Add a `MAINTAINERS` section or `CODEOWNERS` once known. |
+| Maintainers / governance | ⚠️ Owner | Single maintainer (the repository owner). Add `CODEOWNERS` when a second maintainer joins. |
 
 ### CI and tooling
 
@@ -59,8 +59,8 @@
 |---|---|---|
 | Repository description and topics | ✅ | Applied 2026-11-13: description plus 14 topics; Wiki off |
 | Visibility | ✅ | **Public** since 2026-11-13: https://github.com/Asmodeus14/ChronoStack |
-| Social preview image | ⛔ Owner | Concept only |
-| Branch protection | ⚠️ Owner | Not enabled (checked 2026-11-13); recommended settings are in REPOSITORY_SETUP.md |
+| Social preview image | ⚠️ Owner | Created: [`docs/assets/social-preview.png`](assets/social-preview.png) (1280×640). GitHub has no API for it, so the owner uploads it in Settings → General → Social preview. |
+| Branch protection | ✅ | Enabled 2026-11-13: the 7 `ci` checks are required on pull requests; no force pushes or deletion. Admins may push directly (owner's choice). |
 | Git repository | ✅ | Initialized; `main` pushed |
 
 ## 2. Positioning review
@@ -91,6 +91,6 @@ Changes applied:
 
 ## 4. Verdicts
 
-- **Ready for external contributors?** **Mostly.** The license, git repository, CI and contributor docs are in place. The remaining blocker is the Code of Conduct reporting contact (owner decision).
+- **Ready for external contributors?** **Yes.** License, Code of Conduct with a reporting contact, CI, branch protection and contributor docs are in place.
 - **Ready for a public alpha?** **No.** M3–M5 are not done, there are no release binaries, and macOS is untested. The alpha criteria are in [RELEASE_PROCESS.md](development/RELEASE_PROCESS.md).
 - **Ready to be public as a pre-alpha project?** Yes; it has been public since 2026-11-13.
