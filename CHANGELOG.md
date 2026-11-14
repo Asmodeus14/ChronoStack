@@ -9,6 +9,8 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-11-14
+
 ### Added
 
 - Research and planning documentation in `docs/`:

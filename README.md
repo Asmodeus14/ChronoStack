@@ -74,15 +74,15 @@ You need Docker with Compose v2 (Docker Desktop, or Docker Engine on Linux).
 
 ```sh
 # Linux / macOS: installs to ~/.local/bin after checking SHA256SUMS
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.1/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.1 sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.ps1 | iex
+$env:CHRONOSTACK_VERSION = "0.1.0-alpha.1"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.1/install.ps1 | iex
 ```
 
-Binaries are built for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), with checksums and an SBOM on each [release](https://github.com/Asmodeus14/ChronoStack/releases). Releases are pre-releases until macOS has been tested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). On first `chronostack up`, the CLI pulls the matching controller image from `ghcr.io/asmodeus14/chronostack-clockd`, pinned by digest.
+Binaries are built for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), with checksums and an SBOM on each [release](https://github.com/Asmodeus14/ChronoStack/releases). Releases are pre-releases (so the commands name the version) until macOS has been tested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). On first `chronostack up`, the CLI pulls the matching controller image from `ghcr.io/asmodeus14/chronostack-clockd`, pinned by digest.
 
 ### See it in 60 seconds
 
