@@ -45,7 +45,9 @@ use crate::session::{ProbeSpec, ServiceEntry, Session};
     about = "Stripe Test Clocks for your Docker Compose stack",
     long_about = "Move the virtual wall-clock time of your whole Docker Compose stack.\n\n\
                   ChronoStack changes what time it IS. It does not make time PASS inside your \
-                  application's timers: use triggers/barriers (planned, M2) for scheduled work."
+                  application's timers: declare triggers and barriers in chronostack.yml for \
+                  scheduled work.\n\n\
+                  Guide: https://github.com/Asmodeus14/ChronoStack/blob/main/docs/GUIDE.md"
 )]
 struct Cli {
     /// Compose file(s), as with `docker compose -f` (only used by `up`).
