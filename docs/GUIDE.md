@@ -172,7 +172,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Asmodeus14/ChronoStack@v0.1.0-alpha.1    # installs the CLI, checksum-verified
+      - uses: Asmodeus14/ChronoStack@main    # installs the CLI (checksum-verified); pin a release tag from v0.1.0-alpha.2 on
       - run: chronostack up --wait
       - run: chronostack run scenarios/trial.yml
       - if: always()
