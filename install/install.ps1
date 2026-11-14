@@ -7,10 +7,11 @@
 #   CHRONOSTACK_VERSION        version to install (default: the newest release, including pre-releases)
 #   CHRONOSTACK_INSTALL_DIR    where to put chronostack.exe (default: %LOCALAPPDATA%\chronostack\bin)
 #   CHRONOSTACK_DOWNLOAD_BASE  download from here instead of GitHub Releases (testing)
-#   CHRONOSTACK_NO_MODIFY_PATH set to 1 to leave the user PATH alone
+#   CHRONOSTACK_NO_MODIFY_PATH set to 1 to leave PATH alone
 #
 # The archive is verified against the release's SHA256SUMS before anything is installed.
-# Only the user PATH is changed (and only if the folder is not on it yet).
+# No admin rights. The install folder is added to your user PATH (for new terminals)
+# and to this session's PATH, so `chronostack` works right away.
 $ErrorActionPreference = 'Stop'
 $repo = 'Asmodeus14/ChronoStack'
 $dest = if ($env:CHRONOSTACK_INSTALL_DIR) { $env:CHRONOSTACK_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'chronostack\bin' }
@@ -48,10 +49,22 @@ try {
 }
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($env:CHRONOSTACK_NO_MODIFY_PATH -ne '1' -and -not (($userPath -split ';') -contains $dest)) {
-  [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $dest).TrimStart(';'), 'User')
-  Write-Host "chronostack-install: added $dest to your user PATH (open a new terminal)"
+if ($env:CHRONOSTACK_NO_MODIFY_PATH -ne '1') {
+  # New terminals: the user PATH (no admin needed).
+  if (-not (($userPath -split ';') -contains $dest)) {
+    [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $dest).TrimStart(';'), 'User')
+    Write-Host "chronostack-install: added $dest to your user PATH"
+  }
+  # This terminal: `irm ... | iex` runs in your own session, so update it too.
+  if (-not (($env:Path -split ';') -contains $dest)) {
+    $env:Path = "$dest;$env:Path"
+  }
 }
 $ver = & (Join-Path $dest 'chronostack.exe') --version
 Write-Host "chronostack-install: installed $ver to $dest"
+if ((Get-Command chronostack -ErrorAction SilentlyContinue)) {
+  Write-Host "chronostack-install: ready: type 'chronostack' in this terminal (new terminals find it too)"
+} else {
+  Write-Host "chronostack-install: open a new terminal, or run:  `$env:Path = `"$dest;`$env:Path`""
+}
 Write-Host "chronostack-install: next: cd into a Docker Compose project and run 'chronostack up --wait'"

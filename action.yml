@@ -34,6 +34,7 @@ runs:
       env:
         CHRONOSTACK_VERSION: ${{ inputs.version }}
         CHRONOSTACK_INSTALL_DIR: ${{ runner.temp }}/chronostack/bin
+        CHRONOSTACK_NO_MODIFY_PATH: "1"   # PATH is set through GITHUB_PATH below
       run: |
         sh "${GITHUB_ACTION_PATH}/install/install.sh"
         echo "${CHRONOSTACK_INSTALL_DIR}" >> "${GITHUB_PATH}"

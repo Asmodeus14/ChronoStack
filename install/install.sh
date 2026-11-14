@@ -9,9 +9,12 @@
 #                              including pre-releases)
 #   CHRONOSTACK_INSTALL_DIR    where to put the binary (default: $HOME/.local/bin)
 #   CHRONOSTACK_DOWNLOAD_BASE  download from here instead of GitHub Releases (testing)
+#   CHRONOSTACK_NO_MODIFY_PATH set to 1 to leave your shell startup file alone
 #
 # The archive is verified against the release's SHA256SUMS before anything is installed.
-# Nothing else on the machine is changed: no sudo, no shell profile edits.
+# No sudo. If the install folder isn't on your PATH, one marked line is added to
+# your shell's startup file (~/.zshrc, ~/.bashrc, ~/.bash_profile, fish conf.d or
+# ~/.profile) so new terminals find `chronostack`.
 set -eu
 
 REPO="Asmodeus14/ChronoStack"
@@ -77,8 +80,33 @@ install -m 0755 "$tmp/chronostack" "$DEST/chronostack" 2>/dev/null || {
 }
 say "installed $("$DEST/chronostack" --version) to $DEST/chronostack"
 
+# Make `chronostack` findable. `curl | sh` runs in a child process, so it can't
+# change the PATH of the shell you typed it in: add the folder to your shell's
+# startup file (once, marked) and say how to use it in this terminal right now.
 case ":$PATH:" in
-  *":$DEST:"*) ;;
-  *) say "note: $DEST is not on your PATH; add it, e.g. export PATH=\"$DEST:\$PATH\"" ;;
+  *":$DEST:"*) on_path=1 ;;
+  *) on_path=0 ;;
 esac
+if [ "$on_path" = 0 ]; then
+  marker="# Added by the ChronoStack installer"
+  shell_name=$(basename "${SHELL:-sh}")
+  case "$shell_name" in
+    zsh) rc="${ZDOTDIR:-$HOME}/.zshrc"; line="export PATH=\"$DEST:\$PATH\"" ;;
+    bash)
+      if [ "$os" = darwin ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi
+      line="export PATH=\"$DEST:\$PATH\"" ;;
+    fish) rc="$HOME/.config/fish/conf.d/chronostack.fish"; line="fish_add_path \"$DEST\"" ;;
+    *) rc="$HOME/.profile"; line="export PATH=\"$DEST:\$PATH\"" ;;
+  esac
+  if [ "${CHRONOSTACK_NO_MODIFY_PATH:-0}" = 1 ]; then
+    say "note: $DEST is not on your PATH; add it with: $line"
+  elif [ -f "$rc" ] && grep -qF "$marker" "$rc" 2>/dev/null; then
+    say "$rc already adds $DEST to PATH"
+  else
+    mkdir -p "$(dirname "$rc")"
+    printf '\n%s\n%s\n' "$marker" "$line" >> "$rc"
+    say "added $DEST to PATH in $rc (new terminals pick it up)"
+  fi
+  say "to use it in THIS terminal now, run:  $line"
+fi
 say "next: cd into a Docker Compose project and run 'chronostack up --wait'"
