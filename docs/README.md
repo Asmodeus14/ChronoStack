@@ -6,6 +6,7 @@ ChronoStack is **pre-alpha** (first pre-release `v0.1.0-alpha.2`). The guide and
 
 | If you want to… | Read |
 |---|---|
+| Get started in 10 minutes | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Use it on your own project | [GUIDE.md](GUIDE.md) |
 | Understand the product in 5 minutes | [PRODUCT_VISION.md](PRODUCT_VISION.md) → [MVP_SCOPE.md](MVP_SCOPE.md) |
 | See how it will work | [ARCHITECTURE.md](ARCHITECTURE.md) |
@@ -33,6 +34,7 @@ ChronoStack is **pre-alpha** (first pre-release `v0.1.0-alpha.2`). The guide and
 - [M3_RESULTS.md](M3_RESULTS.md): fault proxy, outage windows, scenarios and reports
 - [M4_RESULTS.md](M4_RESULTS.md): MCP server and Node register
 - [M5_RESULTS.md](M5_RESULTS.md): release pipeline and install scripts
+- [GETTING_STARTED.md](GETTING_STARTED.md): install, demo, first project, cheat sheet, FAQ
 - [GUIDE.md](GUIDE.md): using ChronoStack on your own project
 - [schema/chronostack.schema.json](schema/chronostack.schema.json): JSON Schema for `chronostack.yml`
 - [schema/scenario.schema.json](schema/scenario.schema.json): JSON Schema for scenario files

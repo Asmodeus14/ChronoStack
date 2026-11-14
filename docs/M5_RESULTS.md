@@ -65,5 +65,5 @@ The first tag will be **`v0.1.0-alpha.1`**, not `v0.1.0`. [RELEASE_PROCESS](deve
 ## Not done
 
 - **macOS smoke test.** GitHub's macOS runners can't run Docker. The macOS binaries are built and run `--version` in CI, but have not been used against a real Docker. Needed for `v0.1.0` stable (issue #5).
-- ~~20-second terminal recording~~ **Done:** `docs/assets/demo.gif`, rendered with vhs by the `demo-gif` workflow.
+- ~~20-second terminal recording~~ **Done:** three GIFs in `docs/assets/` (quickstart, scenario, failure report), rendered with vhs by the `demo-gif` workflow.
 - **README compatibility table generated from CI.** Still maintained by hand; it lists only what the tests cover.

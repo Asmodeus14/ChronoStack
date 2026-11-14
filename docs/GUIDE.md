@@ -14,7 +14,7 @@ This guide takes you from "installed" to "my time-dependent flow is tested", and
 
 ## 1. Start the copy
 
-(Installing: see the [README](../README.md#install). Updating later: `chronostack update`.)
+(Installing: see the [README](GETTING_STARTED.md#1-install). Updating later: `chronostack update`.)
 
 ```sh
 cd your-project            # where your compose.yml / docker-compose.yml lives

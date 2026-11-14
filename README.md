@@ -1,81 +1,44 @@
+<div align="center">
+
 # ChronoStack
 
 **Stripe Test Clocks for your Docker Compose stack.**
-Move the whole stack — Postgres, Redis, and your services — forward in time together, run the scheduled jobs that depend on it, and check the results.
 
-> [!IMPORTANT]
-> **Status: pre-alpha. Works on Linux and Windows hosts; first pre-release `v0.1.0-alpha.2`.**
-> - **M0 feasibility spike: passed** ([results](docs/M0_RESULTS.md)). Virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read.
-> - **M1 (controller + core CLI): implemented.** `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe` and `doctor` work. They are tested end to end in CI on Linux x86_64 and arm64, and locally on Docker Desktop (Windows).
-> - **M2 (step → trigger → barrier engine): implemented.** `chronostack.yml` triggers and barriers, scheduled triggers in virtual time, automatic pg_cron sub-stepping, `--dry-run`, and a [reference demo](examples/saas-trial-demo/README.md). In the demo, `advance 14d` runs the daily job 14 times in about 20 s ([results](docs/M2_RESULTS.md)).
-> - **M3 (outage windows, scenarios, reports): implemented.** A fault proxy for outages in virtual time, `chronostack run <scenario.yml>`, and readable failure reports ([results](docs/M3_RESULTS.md)).
-> - **M4 (MCP server, Node register): implemented.** AI agents can drive the clock through `chronostack mcp`, and host-native Node apps follow it with `-r register` ([results](docs/M4_RESULTS.md)).
-> - **M5 (release): done** ([results](docs/M5_RESULTS.md)). Binaries for Linux, macOS and Windows, a controller image on GHCR, install scripts, `chronostack update` and a GitHub Action. First pre-release: [`v0.1.0-alpha.2`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.2). macOS is untested.
+Move Postgres, Redis and your services forward in time together, run the jobs that depend on it, and verify what happened. No code changes.
 
-![ChronoStack running 15 virtual days of a SaaS demo, including a webhook outage, in about 20 seconds](docs/assets/demo.gif)
+[![Release](https://img.shields.io/github/v/release/Asmodeus14/ChronoStack?include_prereleases&label=release)](https://github.com/Asmodeus14/ChronoStack/releases)
+[![CI](https://github.com/Asmodeus14/ChronoStack/actions/workflows/ci.yml/badge.svg)](https://github.com/Asmodeus14/ChronoStack/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20(untested)-lightgrey)
 
----
+[Getting started](docs/GETTING_STARTED.md) · [Guide](docs/GUIDE.md) · [Demo](examples/saas-trial-demo/README.md) · [Docs](docs/README.md)
 
-## The problem
+<img src="docs/assets/quickstart.gif" alt="A user signs up for a 14-day trial; chronostack advance 15d runs the nightly job at each virtual 03:00, and the user ends up on the free plan" width="860">
 
-Time-dependent behaviour is some of the least-tested code in SaaS products. Examples:
+</div>
 
-- trials that expire
-- sessions and tokens that time out
-- subscription renewals and dunning
-- data-retention purges
-- webhook retries with backoff
+> [!NOTE]
+> **Pre-alpha.** The first pre-release, [`v0.1.0-alpha.2`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.2), is tested in CI on Linux (x86_64 and arm64) and by hand on Windows. **macOS is untested:** if you have a Mac, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
-Teams usually test this by:
+## Why
 
-- editing timestamps in the database by hand;
-- adding test-only endpoints;
-- shortening durations with environment flags;
-- or waiting real days in staging.
+Trials that expire, sessions that time out, renewals, dunning, retention purges, webhook retries: time-dependent code is some of the least-tested code in any SaaS product. It's usually tested by editing timestamps in the database, shortening durations with a flag, or not at all. None of these exercises the real interaction between the database's `now()`, Redis expiry, your schedulers and your services.
 
-None of these exercise the real interaction between database time (`now()`), cache expiry (Redis TTLs), schedulers and multiple services.
-
-## What ChronoStack does
-
-- **Shared virtual wall-clock time across your Compose services, with no code changes.** A small preload library makes `NOW()` in Postgres, Redis expiry, `Date.now()` in Node and `time.time()` in Python all report the same virtual time.
-- **Advancing time actually runs scheduled work.** Changing the clock alone does *not* fire your timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So each step works like this:
-  1. advance the clock;
-  2. run the triggers you declare (a command or HTTP call);
-  3. wait on barriers (conditions such as "the jobs table is idle") before the next step.
-- **Scheduler-aware stepping.** Scheduled triggers run at their exact virtual times. pg_cron is detected, and the clock stops on each of its job minutes so jobs aren't skipped.
-- **Verification after every step.** Probes check that each service sees the new time. `doctor` reports which services cannot be virtualized, and why.
-- **Outages scheduled in virtual time.** For example, "the webhook receiver is down on day 3 from 09:00 to 11:00", so you can test retries. Declared HTTP targets go through a small proxy in the controller; your app's URL variable is pointed at it, with no code changes.
-- **Scenarios and failure reports.** Declarative YAML steps with SQL, Redis and HTTP assertions. Each run writes a JSON report and a Markdown summary that explains what failed, with secrets redacted.
-- **MCP server.** AI coding agents control the timeline through a small, fixed set of tools (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`). Advances are capped, and there is no shell access.
-- **Node register.** `node -r sdk/node/register.js app.js` makes a Node process on your machine (outside Docker) follow the virtual clock ([details](sdk/node/README.md)).
-
-### Workflow
-
-Scheduled work is declared once in `chronostack.yml`:
-
-```yaml
-version: 1
-triggers:
-  - name: expire-trials
-    schedule: { every: 1d, at: "03:00" }        # virtual time, UTC
-    exec: { service: worker, command: [node, src/jobs/expire-trials.js] }
-```
+ChronoStack gives your whole stack one virtual clock that you control:
 
 ```console
-$ chronostack up                      # wraps your existing docker-compose.yml
-$ chronostack doctor                  # shows which services are virtualized
-$ chronostack advance 25h             # Redis session expires; trial still active
-$ chronostack advance 14d             # daily 03:00 trigger runs 14 times; trial expires on day 14
-$ chronostack fault set webhooks --from +2d --for 2h   # partner endpoint down on day 2, in virtual time
-$ chronostack run scenarios/trial.yml # pass/fail + .chronostack/reports/<time>-<name>.{json,md}
+$ chronostack up --wait          # a copy of your compose stack, on a virtual clock
+$ chronostack advance 14d        # 14 days later in Postgres, Redis, Node, Python, …
+                                 # and your nightly job ran at each virtual 03:00
+$ chronostack run scenarios/trial.yml   # a scripted, repeatable test with a report
 ```
 
-### Install
+## Quickstart
 
-You need Docker with Compose v2 (Docker Desktop, or Docker Engine on Linux).
+**1. Install.** You need Docker with Compose v2. No admin rights needed.
 
 ```sh
-# Linux / macOS: installs to ~/.local/bin after checking SHA256SUMS
+# Linux / macOS
 curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.2 sh
 ```
 
@@ -84,185 +47,119 @@ curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-al
 $env:CHRONOSTACK_VERSION = "0.1.0-alpha.2"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.ps1 | iex
 ```
 
-**No admin rights needed.** The CLI goes into your user directory (`~/.local/bin`, or `%LOCALAPPDATA%\chronostack\bin` on Windows) and is put on your PATH. On Windows it works in the same terminal right away. On Linux and macOS the installer adds one marked line to your shell's startup file and prints the command for the current terminal. `CHRONOSTACK_NO_MODIFY_PATH=1` skips both. **Update** any time with `chronostack update` (`--check` only checks); it verifies the release checksum and replaces itself.
-
-Binaries are built for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), with checksums and an SBOM on each [release](https://github.com/Asmodeus14/ChronoStack/releases). They are not code-signed yet. The install scripts don't trigger macOS Gatekeeper or Windows SmartScreen, but downloading an archive in a browser and opening it may show an "unidentified developer" or SmartScreen warning. Releases are pre-releases (so the commands name the version) until macOS has been tested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). On first `chronostack up`, the CLI pulls the matching controller image from `ghcr.io/asmodeus14/chronostack-clockd`, pinned by digest.
-
-**Next:** [use it on your own project](docs/GUIDE.md): reading `doctor`, making your scheduled jobs run, outages, scenarios, CI.
-
-### See it in 60 seconds
+**2. Run the demo:** a small SaaS app with a 14-day trial, a nightly job and webhooks.
 
 ```sh
 git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack/examples/saas-trial-demo
 chronostack up --wait
+chronostack advance 15d        # the trial expires at the nightly job
 chronostack run scenarios/trial.yml
 ```
 
-Output from a real run on Docker Desktop (abridged):
+**3. Use it on your project:** `cd` to your compose project and run `chronostack up --wait` and `chronostack doctor`. Then follow **[Getting started](docs/GETTING_STARTED.md)**, a 10-minute walkthrough with a cheat sheet and FAQ.
 
-```console
-scenario: Trial expires and the webhook survives an outage (12 steps, run id 684aceea)
-── step 5/12: the webhook receiver is down on day 14 from 02:00 to 06:00
-   ✓ #1: webhooks returns HTTP 503 from 2026-11-29T02:00:02Z until 2026-11-29T06:00:02Z (virtual) (0.0s)
-── step 6/12: fourteen days pass, to day 14 at 00:00 (the 03:00 job runs every day)
-  2026-11-15T03:00:00Z  trigger expire-trials ok 0.93s; barrier api-up ok 0.36s, outbox-settled ok 0.42s
-  …
-   ✓ 15 stop(s), 14 trigger run(s)
-── step 8/12: day 14, hour by hour until noon
-  2026-11-29T03:00:00Z  trigger expire-trials ok 0.95s; barrier api-up ok 0.38s, outbox-settled ok 0.46s
-   ✓ 13 stop(s), 1 trigger run(s)
-── step 10/12: the receiver got the trial.expired webhook exactly once
-   ✓ = 1 (0.4s)
-── step 11/12: it took 4 attempts (3 during the outage, then success)
-   ✓ = 4 (0.4s)
-── step 12/12: it was delivered at 07:00, after the outage ended
-   ✓ = 07 (0.4s)
-PASSED — 12/12 steps passed, 46.0s real time, virtual 2026-11-14T05:40:51Z → 2026-11-29T12:00:07Z
-```
-
-Fifteen virtual days, an outage, retries and a delivered webhook, in under a minute of real time. Then `chronostack -f compose.yml -f compose.bug.yml up --wait` adds a deliberate bug, and the same scenario fails with a report that names it ([demo README](examples/saas-trial-demo/README.md)).
-
-### Build from source
-
-You need Docker with Compose v2, and a stable Rust toolchain.
-
-```sh
-git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack
-docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .   # controller image
-cargo install --path crates/cli                                         # installs `chronostack`
-
-cd /path/to/your/compose/project
-chronostack up --wait     # same compose file, no changes needed; waits until every service sees virtual time
-chronostack doctor        # what is virtualized, and why not
-chronostack advance 7d    # moves time and verifies every service sees it
-chronostack down -v
-```
-
-ChronoStack runs your project under a **separate** Compose project name (`<name>-chronostack`) with its own volumes. Your normal stack and its data are untouched, and your compose files are never modified.
+Update any time with `chronostack update`. The installer verifies checksums and puts `chronostack` on your PATH; [details and uninstall](docs/GETTING_STARTED.md#1-install).
 
 ## How it works
 
 ```mermaid
 flowchart LR
-  CLI["chronostack CLI<br/>(host)"] -- HTTP, localhost + token --> CLOCKD["clockd container<br/>single clock writer"]
-  CLOCKD -- writes --> PAGE[("clock page on a<br/>Docker named volume")]
-  PAGE -- read-only mmap --> SVC["your services<br/>LD_PRELOAD=libchronoclock.so"]
-  CLI -- triggers / barriers --> SVC
+  CLI["chronostack CLI<br/>(your machine)"] -- "localhost API + token" --> CLOCKD["clockd container<br/>the only clock writer"]
+  CLOCKD -- writes --> PAGE[("shared clock page<br/>(Docker volume)")]
+  PAGE -- "read-only" --> SVC["your services<br/>Postgres · Redis · Node · Python · JVM"]
+  CLI -- "triggers · barriers · probes" --> SVC
 ```
 
-- **Preload library (`libchronoclock`).** A small C library, loaded into each process with `LD_PRELOAD`. It reads a shared clock page through a lock-free sequence counter (a seqlock) and adds the virtual offset to wall-clock reads.
-  - Monotonic clocks are never changed.
-  - Absolute wall-clock deadlines are converted back to real time, so lock and semaphore timeouts don't hang.
-- **Controller (`clockd`).** A container that is the only writer of the clock page. It runs inside the Docker VM, so the design works the same on Linux, macOS and Windows.
-- **CLI.** Reads your Compose project and generates an override file. It never edits your files or Dockerfiles. It also runs the step / trigger / barrier engine.
+1. **One clock for every service.** A small C library loaded with `LD_PRELOAD` makes wall-clock reads (`now()`, `Date.now()`, `time.time()`, Redis expiry) return virtual time. It adds about 13 ns per read. Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so locks and timeouts never hang.
+2. **Moving the clock runs your scheduled work.** Changing the clock doesn't fire timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So `advance` stops at each interesting virtual time, runs the **triggers** you declare (e.g. "the nightly job at 03:00"), and waits on **barriers** (e.g. "the queue is empty") before moving on. pg_cron is detected and handled automatically.
+3. **Everything is verified.** After each advance, every service is probed to confirm it sees the new time, and `doctor` explains anything it can't reach.
 
-Details: [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/ARCHITECTURE_DECISIONS.md) · [Feasibility research](docs/TECHNICAL_FEASIBILITY.md) · [Source verification](docs/SOURCE_VERIFICATION.md)
+### Scenarios: repeatable tests in virtual time
 
-## How it differs from existing tools
+Script the story, including an outage of an HTTP dependency in **virtual time**, and assert the outcome:
 
-| Tool | What it does | What ChronoStack adds |
-|---|---|---|
-| [libfaketime](https://github.com/wolfcw/libfaketime) | Fakes time per process with `LD_PRELOAD` | Live control across containers, verification probes, safe deadline handling, scheduler-aware stepping |
-| [Stripe Test Clocks](https://docs.stripe.com/billing/testing/test-clocks) | Simulated time for Stripe Billing objects | The same idea applied to *your* database, cache and jobs |
-| Fake timers (Node `MockTimers`, freezegun, time-machine) | In-process time for unit tests | Integration across processes and services |
-| [Toxiproxy](https://github.com/Shopify/toxiproxy) | TCP fault injection in real time | Faults scheduled on the virtual timeline |
+<img src="docs/assets/scenario.gif" alt="chronostack run: 15 virtual days, the webhook receiver is down on day 14, the webhook is retried and delivered exactly once at 07:00; PASSED 12/12" width="860">
 
-The time-faking mechanism itself is not new. The value is in the orchestration, safety and lifecycle workflow. Full analysis: [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md).
+```yaml
+steps:
+  - fault: { target: webhooks, from: +14d2h, for: 4h }   # partner down on day 14, 02:00–06:00
+  - advance: 14d
+  - advance: { by: 12h, step: 1h }
+  - assert: { redis: { service: cache, command: [HGET, webhook:received, "trial.expired:${user_id}"], equals: "1" } }
+```
 
-## Compatibility (pre-alpha)
+### Failure reports a newcomer can read
 
-Nothing is listed as tested unless an automated test covers it ([testing strategy](docs/TESTING_STRATEGY.md)). "CI" means the GitHub Actions end-to-end tests on native Linux x86_64 and arm64.
+When something breaks, the Markdown report says what was expected, what happened, and what the services did:
+
+<img src="docs/assets/failure.gif" alt="With a deliberate bug the scenario fails at step 10; the report shows the receiver never got the webhook and the only request was a 503 during the outage" width="860">
+
+## Features
+
+- **No code changes:** works on your existing `compose.yml`, as a separate copy. Your containers, data and files are untouched.
+- **Scheduler-aware stepping:** triggers run at their exact virtual times. BullMQ and Celery beat fire on their own, and pg_cron jobs are never skipped.
+- **Outages in virtual time:** a small proxy in front of HTTP dependencies (`http` or `https`) makes "the payment API is down on day 3 from 09:00 to 11:00" a one-liner.
+- **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports, with secrets redacted.
+- **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#8-in-ci), and a strict mode.
+- **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe tool set (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`).
+- **Host-native Node:** `node -r sdk/node/register.js app.js` puts a Node process outside Docker on the same clock ([details](sdk/node/README.md)).
+- **Safe by design:** never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.
+
+## Compatibility
+
+Listed as tested only where an automated test covers it.
 
 | Component | Status |
 |---|---|
-| PostgreSQL 16 (Debian, Alpine), including pg_cron | **Tested** in CI |
-| Redis 7 (Debian, Alpine) | **Tested** in CI |
-| Node.js 22 (Debian, Alpine), Python 3.10 / 3.12 (Debian, Alpine): wall-clock time and no hangs | **Tested** (CI, plus a nightly no-hang suite) |
-| Node.js 20, Python 3.13+ | Untested (expected to work) |
-| JVM 21 | Tested for no hangs (nightly); otherwise **experimental** |
-| JVM 17, Ruby 3.x | Experimental (untested) |
-| Schedulers: BullMQ, Celery beat (`beat_max_loop_interval ≤ 1`) | **Tested**: fire on their own ([matrix](docs/MVP_SCOPE.md)) |
-| Schedulers: node-cron, APScheduler 3 | Need a `chronostack.yml` trigger (measured) |
-| Go, statically linked binaries, setuid binaries | **Not supported** (`LD_PRELOAD` cannot reach them); flagged by `doctor` |
-| Hosts: Linux x86_64 / arm64 (Docker Engine) | **Tested** in CI |
-| Host: Windows x64 (Docker Desktop, WSL2) | Tested by hand |
-| Host: macOS (Docker Desktop, OrbStack) | **Untested** — [help wanted](#help-wanted-test-on-macos) |
+| PostgreSQL 16 (Debian, Alpine), including pg_cron · Redis 7 (Debian, Alpine) | ✅ Tested in CI |
+| Node.js 22 · Python 3.10 / 3.12 (Debian, Alpine) | ✅ Tested in CI, plus a nightly no-hang suite |
+| JVM 21 | ✅ No-hang suite; otherwise experimental |
+| Node.js 20, Python 3.13+, JVM 17, Ruby 3.x, MariaDB | Expected to work; not covered by tests |
+| BullMQ, Celery beat (`beat_max_loop_interval ≤ 1`), pg_cron | ✅ Work without triggers (measured) |
+| node-cron, APScheduler, `setTimeout`-style loops | Need a trigger (measured) |
+| Go and other static or setuid binaries | ❌ Not supported (`LD_PRELOAD` can't reach them); flagged by `doctor` |
+| Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop) | ✅ CI · tested by hand |
+| Host: macOS (Docker Desktop, OrbStack) | ❓ Untested ([help wanted](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
 
-## Known limitations (by design)
+**Limitations:**
+- Time only moves forward.
+- App timers don't fire early; use triggers.
+- Postgres `now()` is fixed within a transaction.
+- Outage URLs must come from environment variables.
 
-- Time only moves **forward**.
-- Application timers (`setTimeout`, `asyncio.sleep`, node-cron, APScheduler) do not fire early. Use triggers.
-- Postgres `now()` is fixed for the length of a transaction.
-- Go and statically linked programs are not virtualized (`chronostack doctor` flags them, including Go servers behind a C supervisor).
-- The ChronoStack copy doesn't publish your project's host ports (so it can run alongside your normal stack); use `chronostack up --keep-ports` to reach it from the host.
-- pg_cron jobs whose minute or hour field starts with `*` (e.g. `*/5 * * * *`) run at most once per clock stop. `advance` says how many will run; `--pg-cron-all` runs every occurrence.
-- Data written with virtual timestamps stays in ChronoStack's volumes.
+[Full list](docs/RISKS_AND_LIMITATIONS.md).
 
-Full list: [docs/RISKS_AND_LIMITATIONS.md](docs/RISKS_AND_LIMITATIONS.md)
+## How it compares
 
-## Security
+| Tool | What it does | What ChronoStack adds |
+|---|---|---|
+| [libfaketime](https://github.com/wolfcw/libfaketime) | Fakes time per process (`LD_PRELOAD`) | Live control across containers, deadline safety, scheduler-aware stepping, probes, outages, scenarios |
+| [Stripe Test Clocks](https://docs.stripe.com/billing/testing/test-clocks) | Simulated time for Stripe objects | The same idea for *your* database, cache and jobs |
+| Fake timers (Node `MockTimers`, freezegun, time-machine) | In-process time for unit tests | Integration across processes and services |
+| [Toxiproxy](https://github.com/Shopify/toxiproxy) | TCP faults in real time | Outages scheduled on the virtual timeline |
 
-ChronoStack never changes your host's clock, needs no privileged containers, and never gives a container the Docker socket. Its control API listens only on localhost and requires a token. See [SECURITY.md](SECURITY.md) and [docs/SECURITY_AND_RELIABILITY.md](docs/SECURITY_AND_RELIABILITY.md).
-
-## Roadmap
-
-| Version | Focus |
-|---|---|
-| **M0 (done, see [results](docs/M0_RESULTS.md))** | Feasibility spike:<br>• correct time in Postgres, Redis, Node, Python and the JVM<br>• no hangs<br>• glibc and musl, on Docker Desktop (WSL2); arm64 later covered by CI |
-| **M1 (done, see [results](docs/M1_RESULTS.md))** | Controller, CLI, Compose integration, `doctor` |
-| **M2 (done on Linux, see [results](docs/M2_RESULTS.md))** | Step / trigger / barrier engine, pg_cron stepping, reference demo, scheduler matrix |
-| **M3 (done, see [results](docs/M3_RESULTS.md))** | Fault proxy with outage windows in virtual time, scenarios, failure reports |
-| **M4 (done, see [results](docs/M4_RESULTS.md))** | MCP server (2025 and 2026-07-28 protocol revisions), Node register |
-| **M5 (done, see [results](docs/M5_RESULTS.md))** | Release pipeline, install scripts, `chronostack update`, GitHub Action |
-| v0.1.0 (stable) | The same, once macOS is verified ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
-| v0.2 | Virtual user cohorts, seeded network faults, npm package and JS SDK, Homebrew/Scoop packages, signed binaries, scheduler inspection |
-| v1.0 | Snapshot and restore (which would allow moving backward in time), timeline viewer, investigation of Go support |
-
-Details: [docs/FEATURE_ROADMAP.md](docs/FEATURE_ROADMAP.md) · [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
-
-## Contributing
-
-The project is pre-alpha, with a first pre-release. The most useful contributions right now:
-
-- trying `chronostack up` / `doctor` / `advance` on your own Compose project and reporting what breaks;
-- running it on macOS (see below);
-- reviewing the [architecture decisions](docs/ARCHITECTURE_DECISIONS.md) and the [feasibility research](docs/TECHNICAL_FEASIBILITY.md);
-- sharing how you test time-dependent behaviour today.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-### Help wanted: test on macOS
-
-**Have a Mac?** ChronoStack has never been run on macOS. GitHub's macOS runners can't run Docker, so the maintainers can't test it in CI, and this is the last open item of the M2 milestone. One run on your machine would help a lot, especially an Apple Silicon Mac with Docker Desktop. OrbStack and Colima results are welcome too.
-
-You need Docker (Docker Desktop, OrbStack or Colima), git and Python 3. No Rust: the test uses the released macOS binary, which is exactly what needs checking. It takes about 5 minutes after the images download.
-
-```sh
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.2 sh
-export PATH="$HOME/.local/bin:$PATH"
-git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack
-python3 tests/e2e/run_m2.py --cli "$(command -v chronostack)" --repeat 3
-```
-
-It should end with `ALL CHECKS PASSED`, including "3 runs produced identical outcomes". Then comment on the pinned issue [#5](https://github.com/Asmodeus14/ChronoStack/issues/5) with:
-
-- your Mac model (chip) and macOS version;
-- the Docker product and version (`docker version`);
-- the last 30 lines of the output, pass or fail.
-
-A failure report is just as useful as a pass. The test runs under its own Compose project names and removes its containers and volumes at the end.
-
-## License
-
-Licensed under either of
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-
-at your option.
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+Faking the time isn't new; the orchestration, safety and lifecycle workflow are what ChronoStack adds. [Full analysis](docs/COMPETITIVE_ANALYSIS.md).
 
 ## Documentation
 
-Start at the [documentation index](docs/README.md).
+| | |
+|---|---|
+| [Getting started](docs/GETTING_STARTED.md) | Install, demo, your first project, cheat sheet, FAQ |
+| [Guide](docs/GUIDE.md) | `doctor`, triggers, barriers, outages, scenarios, CI, troubleshooting |
+| [Demo app](examples/saas-trial-demo/README.md) | The SaaS example used above |
+| [Architecture](docs/ARCHITECTURE.md) · [Decisions](docs/ARCHITECTURE_DECISIONS.md) | How it works, and why |
+| [Project status](docs/IMPLEMENTATION_PLAN.md) | Milestones M0–M5 and their test results |
+| [All documents](docs/README.md) | The index |
+
+## Contributing
+
+The most useful help right now:
+- Try `chronostack up --wait && chronostack doctor` on your own compose project and [tell us what breaks](https://github.com/Asmodeus14/ChronoStack/issues). Include the `doctor` output.
+- Run the macOS test in [#5](https://github.com/Asmodeus14/ChronoStack/issues/5).
+- Share how you test time-dependent code today.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through [SECURITY.md](SECURITY.md), not public issues.
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
