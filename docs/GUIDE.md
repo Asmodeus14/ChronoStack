@@ -39,7 +39,7 @@ Each service gets one row:
 | PLATFORM | CPU architecture and C library of the image: `x86_64/gnu`, `aarch64/musl`, …, or `…/static` |
 | VIRTUALIZED | `yes`, or `no — <reason>` |
 | SHIM IN PID1 | whether the preload library is loaded in the container's main process |
-| PROBE | `ok` (sees virtual time), `skew` (sees another time), `unavailable` (the probe command failed) |
+| PROBE | `ok` (sees virtual time), `skew` (sees another time), `unavailable` (the probe command failed), `completed` (a one-shot container such as a migrator exited with code 0; not a problem) |
 
 Reasons a service is **not virtualized**, and what to do:
 
@@ -78,10 +78,12 @@ After each advance, every service is probed.
 | Scheduler | After an advance | What to do |
 |---|---|---|
 | **BullMQ** (delayed jobs, job schedulers) | Fires within about 1 s | Nothing |
-| **Celery beat** with `beat_max_loop_interval ≤ 1` | Fires within about 2 s | Set that option in test/dev |
+| **Celery beat** with `beat_max_loop_interval ≤ 1` (or `celery beat --max-interval 1`) | Fires within about 2 s | Set that option in test/dev |
 | **pg_cron** | Detected automatically; ChronoStack stops the clock on each job's minute | Nothing. Jobs like `*/5 * * * *` run once per stop; `advance --pg-cron-all` runs every occurrence. |
 | A worker that polls the database (`WHERE run_at <= now()`) | Runs at its next poll | A barrier (section 5) so ChronoStack waits for it |
 | **node-cron**, **APScheduler**, `setTimeout`-based loops, Spring `@Scheduled` | Does not fire | Declare a **trigger** |
+
+**Schedulers that fire on their own run a missed job when the clock lands, not at the job's own time.** After `advance 1d` from 01:30, a 01:00 Celery beat job runs at 01:30 plus a second or two, so its `now()` is 01:30. If a test depends on a job's exact time (for example "exactly 30 days after creation"), land each step just after the job's time (`advance: { to: next 01:01 }`, then `step: 1d`), or declare a trigger, which always runs at the scheduled time.
 
 A trigger runs your job's code **at its virtual time**, in the container, like the scheduler would:
 
@@ -197,6 +199,7 @@ Keep `.chronostack/reports/` as a build artifact, so a failed run can be read la
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | A job didn't run after `advance` | Its scheduler doesn't notice wall-clock jumps (section 4) | Add a trigger, or a barrier if it polls |
+| A file you mounted at `/chronostack` is missing in the container | ChronoStack mounts its own files at `/chronostack` in every virtualized service | Mount yours at another path |
 | `advance` stops with exit 5 | A barrier stayed false | `chronostack advance … --json` shows the last value; raise its `timeout` or fix the condition |
 | `advance` stops with exit 4 | A trigger failed or timed out | The output shows the command's error; timed-out commands are stopped inside the container |
 | Exit 3 after `advance` | A service doesn't see the virtual time | `chronostack doctor` |

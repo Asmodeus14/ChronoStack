@@ -761,7 +761,7 @@ pub fn advance_full(
     } else {
         probe::probe_all(session, client)
     };
-    if code == 0 && probes.iter().any(|p| p.status != "ok") {
+    if code == 0 && probes.iter().any(|p| !p.passes()) {
         code = 3;
     }
     let trigger_runs: usize = results.iter().map(|r| r.triggers.len()).sum();

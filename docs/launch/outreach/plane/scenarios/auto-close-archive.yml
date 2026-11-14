@@ -1,0 +1,46 @@
+version: 1
+name: A stale issue is auto-closed after 1 month, then auto-archived
+description: >-
+  A project set to auto-close after 1 month and auto-archive after 1 month.
+  One issue in "In Progress", created at 12:00, is never touched again. Celery
+  beat runs archive_and_close_old_issues every day at 01:00 UTC, on its own (no
+  triggers). Each day's step lands at 01:01, so beat fires the job then.
+
+steps:
+  - name: start at 12:00 UTC (day 0)
+    advance: { to: next 12:00 }
+
+  - name: create the project and the issue
+    exec: { service: worker, command: [python, /seed/seed.py, "${run_id}"] }
+    save: issue_id
+
+  - name: the issue is in progress
+    assert: { sql: { service: plane-db, user: plane, database: plane, query: "select s.group || coalesce(case when i.archived_at is not null then ' archived' end, '') from issues i join states s on s.id = i.state_id where i.id = '${issue_id}'", equals: started } }
+
+  - name: to day 1, 01:01
+    advance: { to: next 01:01, dwell: 3s }
+
+  - name: 29 more days, one day at a time
+    advance: { by: 29d, step: 1d, dwell: 3s }
+
+  - name: day 30, 01:01 — not yet (29 days 13 h since the last update)
+    assert: { sql: { service: plane-db, user: plane, database: plane, query: "select s.group || coalesce(case when i.archived_at is not null then ' archived' end, '') from issues i join states s on s.id = i.state_id where i.id = '${issue_id}'", equals: started } }
+
+  - name: one more day
+    advance: { by: 1d, dwell: 5s }
+
+  - name: day 31, 01:01 — auto-closed to Cancelled
+    assert: { sql: { service: plane-db, user: plane, database: plane, query: "select s.group || coalesce(case when i.archived_at is not null then ' archived' end, '') from issues i join states s on s.id = i.state_id where i.id = '${issue_id}'", equals: cancelled } }
+
+  - name: record the issue's state for the next 3 days
+    advance: { by: 3d, step: 1d, dwell: 3s }
+
+  - name: day 34 — state
+    exec: { service: plane-db, command: [psql, -U, plane, -d, plane, -Atc, "select s.group || coalesce(case when i.archived_at is not null then ' archived' end, '') from issues i join states s on s.id = i.state_id where i.id = '${issue_id}'"] }
+    save: day34
+
+  - name: 30 more days
+    advance: { by: 30d, step: 1d, dwell: 3s }
+
+  - name: day 64 — auto-archived
+    assert: { sql: { service: plane-db, user: plane, database: plane, query: "select s.group || coalesce(case when i.archived_at is not null then ' archived' end, '') from issues i join states s on s.id = i.state_id where i.id = '${issue_id}'", equals: "cancelled archived" } }

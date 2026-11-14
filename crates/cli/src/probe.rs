@@ -17,11 +17,25 @@ const TOLERANCE_S: f64 = 1.0;
 pub struct ProbeResult {
     pub service: String,
     pub method: &'static str,
-    /// `ok`, `skew`, `unavailable`.
+    /// `ok`, `skew`, `unavailable`, or `completed` (a one-shot container,
+    /// such as a migrator, that exited with code 0: nothing left to probe).
     pub status: &'static str,
     /// Observed minus expected virtual time, seconds.
     pub skew_s: Option<f64>,
     pub detail: Option<String>,
+}
+
+impl ProbeResult {
+    /// The service is fine: it sees the virtual time, or it is a one-shot
+    /// container that already finished successfully.
+    pub fn passes(&self) -> bool {
+        status_passes(self.status)
+    }
+}
+
+/// See [`ProbeResult::passes`]; for statuses read back from JSON.
+pub fn status_passes(status: &str) -> bool {
+    matches!(status, "ok" | "completed")
 }
 
 fn command(spec: &ProbeSpec) -> (&'static str, Vec<String>) {
@@ -103,9 +117,12 @@ pub fn probe_one(
     }
 }
 
-/// Probe every virtualized service in parallel.
+/// Probe every virtualized service in parallel. Services whose containers
+/// all exited with code 0 (one-shot jobs such as migrators) are reported as
+/// `completed` instead of being probed.
 pub fn probe_all(session: &Session, client: &Client) -> Vec<ProbeResult> {
     let compose = session.compose();
+    let completed = completed_services(&compose).unwrap_or_default();
     std::thread::scope(|scope| {
         let handles: Vec<_> = session
             .services
@@ -113,7 +130,23 @@ pub fn probe_all(session: &Session, client: &Client) -> Vec<ProbeResult> {
             .filter(|e| e.plan.virtualized)
             .map(|e| {
                 let compose = &compose;
-                scope.spawn(move || probe_one(compose, &e.plan.service, &e.probe, client))
+                let done = completed.contains(&e.plan.service);
+                scope.spawn(move || {
+                    if done {
+                        let (method, _) = command(&e.probe);
+                        ProbeResult {
+                            service: e.plan.service.clone(),
+                            method,
+                            status: "completed",
+                            skew_s: None,
+                            detail: Some(
+                                "one-shot container exited with code 0; nothing to probe".into(),
+                            ),
+                        }
+                    } else {
+                        probe_one(compose, &e.plan.service, &e.probe, client)
+                    }
+                })
             })
             .collect();
         handles
@@ -274,14 +307,29 @@ pub fn process_report(compose: &Compose, service: &str) -> Option<ProcessReport>
 }
 
 /// Services Compose reports as running.
-pub fn running_services(compose: &Compose) -> Result<Vec<String>> {
-    let out = docker::run(&compose.args(&["ps", "--format", "json"]))?;
-    let mut running = Vec::new();
+/// One row of `docker compose ps -a`.
+struct ContainerState {
+    service: String,
+    state: String,
+    exit_code: Option<i64>,
+}
+
+fn container_states(compose: &Compose) -> Result<Vec<ContainerState>> {
+    let out = docker::run(&compose.args(&["ps", "-a", "--format", "json"]))?;
+    Ok(parse_ps(&out))
+}
+
+/// Parses `docker compose ps --format json`: a JSON array (older Compose) or
+/// one object per line (newer Compose).
+fn parse_ps(out: &str) -> Vec<ContainerState> {
+    let mut rows = Vec::new();
     let mut push = |v: &serde_json::Value| {
-        if v["State"].as_str() == Some("running") {
-            if let Some(s) = v["Service"].as_str() {
-                running.push(s.to_string());
-            }
+        if let Some(service) = v["Service"].as_str() {
+            rows.push(ContainerState {
+                service: service.to_string(),
+                state: v["State"].as_str().unwrap_or("").to_string(),
+                exit_code: v["ExitCode"].as_i64(),
+            });
         }
     };
     let trimmed = out.trim();
@@ -296,5 +344,66 @@ pub fn running_services(compose: &Compose) -> Result<Vec<String>> {
             }
         }
     }
-    Ok(running)
+    rows
+}
+
+pub fn running_services(compose: &Compose) -> Result<Vec<String>> {
+    Ok(container_states(compose)?
+        .into_iter()
+        .filter(|c| c.state == "running")
+        .map(|c| c.service)
+        .collect())
+}
+
+/// Services whose containers have all exited with code 0: one-shot jobs
+/// (migrators, seeders) that finished. A crashed container is not included.
+pub fn completed_services(compose: &Compose) -> Result<Vec<String>> {
+    Ok(completed_from(&container_states(compose)?))
+}
+
+fn completed_from(rows: &[ContainerState]) -> Vec<String> {
+    let mut done: Vec<String> = rows
+        .iter()
+        .filter(|c| c.state == "exited" && c.exit_code == Some(0))
+        .map(|c| c.service.clone())
+        .collect();
+    done.retain(|svc| {
+        rows.iter()
+            .filter(|c| c.service == *svc)
+            .all(|c| c.state == "exited" && c.exit_code == Some(0))
+    });
+    done.sort();
+    done.dedup();
+    done
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completed_only_counts_clean_exits() {
+        let ps = r#"{"Service":"migrator","State":"exited","ExitCode":0}
+{"Service":"seed","State":"exited","ExitCode":1}
+{"Service":"worker","State":"running","ExitCode":0}
+{"Service":"web","State":"exited","ExitCode":0}
+{"Service":"web","State":"running","ExitCode":0}"#;
+        assert_eq!(completed_from(&parse_ps(ps)), vec!["migrator".to_string()]);
+    }
+
+    #[test]
+    fn parses_the_array_format() {
+        let ps = r#"[{"Service":"migrator","State":"exited","ExitCode":0},{"Service":"db","State":"running","ExitCode":0}]"#;
+        let rows = parse_ps(ps);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(completed_from(&rows), vec!["migrator".to_string()]);
+    }
+
+    #[test]
+    fn completed_passes_but_unavailable_does_not() {
+        assert!(status_passes("ok"));
+        assert!(status_passes("completed"));
+        assert!(!status_passes("unavailable"));
+        assert!(!status_passes("skew"));
+    }
 }

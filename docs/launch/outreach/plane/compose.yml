@@ -1,0 +1,54 @@
+# Plane's self-hosted backend (deployments/cli/community), trimmed to what the
+# Celery automation needs: published makeplane/plane-backend image, unmodified.
+x-app-env: &app-env
+  DEBUG: "0"
+  SECRET_KEY: chronostack-test-secret-key-0123456789abcdefghijklmnop
+  DATABASE_URL: postgresql://plane:plane@plane-db/plane
+  REDIS_URL: redis://plane-redis:6379/
+  AMQP_URL: amqp://plane:plane@plane-mq:5672/plane
+  WEB_URL: http://localhost
+  USE_MINIO: "0"
+
+services:
+  plane-db:
+    image: postgres:15.7-alpine
+    environment:
+      POSTGRES_USER: plane
+      POSTGRES_PASSWORD: plane
+      POSTGRES_DB: plane
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plane"]
+      interval: 5s
+      retries: 20
+
+  plane-redis:
+    image: valkey/valkey:7.2.11-alpine
+
+  plane-mq:
+    image: rabbitmq:3.13.6-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: plane
+      RABBITMQ_DEFAULT_PASS: plane
+      RABBITMQ_DEFAULT_VHOST: plane
+
+  migrator:
+    image: makeplane/plane-backend:stable
+    command: ./bin/docker-entrypoint-migrator.sh
+    environment: *app-env
+    depends_on: [plane-db, plane-redis]
+
+  worker:
+    image: makeplane/plane-backend:stable
+    command: ./bin/docker-entrypoint-worker.sh
+    environment: *app-env
+    volumes:
+      - ./seed:/seed:ro
+    depends_on: [plane-db, plane-redis, plane-mq]
+
+  beat-worker:
+    image: makeplane/plane-backend:stable
+    # Same as ./bin/docker-entrypoint-beat.sh, plus --max-interval 1 so beat
+    # notices clock jumps within a second (ChronoStack guide, section 4).
+    command: ["bash", "-c", "python manage.py wait_for_db && python manage.py wait_for_migrations && celery -A plane beat -l info --max-interval 1"]
+    environment: *app-env
+    depends_on: [plane-db, plane-redis, plane-mq]

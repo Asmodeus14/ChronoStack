@@ -349,7 +349,7 @@ fn run(cli: Cli) -> Result<i32> {
             } else {
                 probe::print_probes(&probes);
             }
-            Ok(if probes.iter().any(|p| p.status != "ok") {
+            Ok(if probes.iter().any(|p| !p.passes()) {
                 3
             } else {
                 0
@@ -775,7 +775,7 @@ fn wait_for_probes(session: &Session, c: &Client, timeout: Duration) -> i32 {
         if pending.is_empty() {
             println!();
             probe::print_probes(&probes);
-            return if probes.iter().all(|p| p.status == "ok") {
+            return if probes.iter().all(|p| p.passes()) {
                 0
             } else {
                 3
@@ -880,10 +880,12 @@ fn doctor(json_out: bool) -> Result<i32> {
         }));
     }
     let problems = rows.iter().filter(|r| {
+        let completed = r["probe"]["status"] == "completed";
         r["virtualized"] == true
+            && !completed
             && (r["running"] == false
                 || r["shim_in_pid1"] == false
-                || r["probe"]["status"] != "ok"
+                || !probe::status_passes(r["probe"]["status"].as_str().unwrap_or(""))
                 || r["processes"]["go_processes"]
                     .as_array()
                     .is_some_and(|g| !g.is_empty()))
