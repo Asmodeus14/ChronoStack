@@ -17,6 +17,12 @@
 //!
 //! Steps run in order and stop at the first failure. Every run writes a report
 //! (see [`crate::report`]). Exit code 0 = passed, 6 = a step failed.
+//!
+//! **Variables.** `${run_id}` is a random id for each run (use it to make
+//! names unique, so a scenario can run again on the same stack). An `exec`
+//! step with `save: name` stores the last line of its output as `${name}` for
+//! later steps. References are checked before the run; reports show the
+//! `${…}` form, not the values.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -45,6 +51,62 @@ pub struct Scenario {
     pub name: String,
     pub description: Option<String>,
     pub steps: Vec<Step>,
+    /// Steps as written (with `${…}` unresolved), re-read at run time after
+    /// substituting variables.
+    #[serde(skip)]
+    pub raw_steps: Vec<Value>,
+}
+
+/// Built-in variables.
+const BUILTIN_VARS: [&str; 1] = ["run_id"];
+
+fn var_regex() -> &'static regex::Regex {
+    static R: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    R.get_or_init(|| regex::Regex::new(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}").expect("valid regex"))
+}
+
+/// Every `${name}` referenced in a JSON tree.
+fn var_refs(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::String(s) => {
+            out.extend(var_regex().captures_iter(s).map(|c| c[1].to_string()));
+        }
+        Value::Array(a) => a.iter().for_each(|x| var_refs(x, out)),
+        Value::Object(m) => m.values().for_each(|x| var_refs(x, out)),
+        _ => {}
+    }
+}
+
+/// Replace `${name}` in every string of a JSON tree.
+fn substitute(v: &Value, vars: &std::collections::BTreeMap<String, String>) -> Value {
+    match v {
+        Value::String(s) => Value::String(
+            var_regex()
+                .replace_all(s, |c: &regex::Captures<'_>| {
+                    vars.get(&c[1]).cloned().unwrap_or_else(|| c[0].to_string())
+                })
+                .into_owned(),
+        ),
+        Value::Array(a) => Value::Array(a.iter().map(|x| substitute(x, vars)).collect()),
+        Value::Object(m) => Value::Object(
+            m.iter()
+                .map(|(k, x)| (k.clone(), substitute(x, vars)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+/// Parse scenario YAML (typed steps for checking, raw steps for running).
+pub fn parse(text: &str) -> Result<Scenario> {
+    let mut sc: Scenario = serde_norway::from_str(text)?;
+    let raw: Value = serde_norway::from_str(text)?;
+    sc.raw_steps = raw
+        .get("steps")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(sc)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,6 +129,8 @@ pub struct Step {
     pub wait_for: Option<Check>,
     /// Real time to wait (lets services react).
     pub sleep: Option<String>,
+    /// `exec` only: store the last line of the output as `${name}`.
+    pub save: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -263,8 +327,7 @@ fn dur(what: &str, v: &str) -> Result<i64> {
 pub fn load(path: &Path, cfg: &Resolved, services: &[String]) -> Result<Scenario> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    let sc: Scenario = serde_norway::from_str(&text)
-        .with_context(|| format!("invalid scenario {}", path.display()))?;
+    let sc = parse(&text).with_context(|| format!("invalid scenario {}", path.display()))?;
     validate(&sc, cfg, services).with_context(|| format!("invalid scenario {}", path.display()))?;
     Ok(sc)
 }
@@ -286,12 +349,35 @@ pub fn validate(sc: &Scenario, cfg: &Resolved, services: &[String]) -> Result<()
         Ok(())
     };
     let proxies: Vec<&str> = cfg.config.proxies.iter().map(|p| p.name.as_str()).collect();
+    let mut defined: Vec<String> = BUILTIN_VARS.iter().map(|s| s.to_string()).collect();
     for (i, st) in sc.steps.iter().enumerate() {
         let what = format!(
             "step {} ({})",
             i + 1,
             st.name.as_deref().unwrap_or(st.kind())
         );
+        if let Some(raw) = sc.raw_steps.get(i) {
+            let mut refs = Vec::new();
+            var_refs(raw, &mut refs);
+            if let Some(missing) = refs.iter().find(|r| !defined.contains(r)) {
+                bail!(
+                    "{what}: `${{{missing}}}` is not defined (built-in: {}; an earlier exec step can `save:` it)",
+                    BUILTIN_VARS.join(", ")
+                );
+            }
+        }
+        if let Some(name) = &st.save {
+            if st.exec.is_none() {
+                bail!("{what}: `save` works only on exec steps");
+            }
+            let ok = !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !name.starts_with(|c: char| c.is_ascii_digit());
+            if !ok || BUILTIN_VARS.contains(&name.as_str()) {
+                bail!("{what}: `save: {name}` must be a new name of letters, digits and `_`");
+            }
+            defined.push(name.clone());
+        }
         if st.actions() != 1 {
             bail!(
                 "{what}: set exactly one of advance, trigger, exec, http, fault, fault_clear, assert, wait_for, sleep"
@@ -481,6 +567,8 @@ struct StepOutcome {
     ok: bool,
     detail: String,
     advance: Option<Value>,
+    /// Unredacted output of an `exec` step (for `save:`).
+    output: Option<String>,
 }
 
 fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Result<StepOutcome> {
@@ -489,6 +577,7 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
         ok,
         detail,
         advance: None,
+        output: None,
     };
     match st.kind() {
         "advance" => {
@@ -550,6 +639,7 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
                 ok,
                 detail,
                 advance: Some(advance_summary(&out.summary)),
+                output: None,
             })
         }
         "trigger" => {
@@ -573,7 +663,13 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
                 st.exec.as_ref().expect("kind"),
                 DEFAULT_EXEC_TIMEOUT,
             );
-            Ok(done(ok, redact(d.as_deref().unwrap_or(""))))
+            let raw = d.unwrap_or_default();
+            Ok(StepOutcome {
+                ok,
+                detail: redact(&raw),
+                advance: None,
+                output: Some(raw),
+            })
         }
         "http" => {
             let (ok, d) =
@@ -688,8 +784,12 @@ pub fn run(
     let start = client.clock()?;
     let first_seq = client.events(u64::MAX).map(|e| e.last_seq).unwrap_or(0);
     let total = sc.steps.len();
+    let mut rid = [0u8; 4];
+    getrandom::fill(&mut rid).map_err(|e| anyhow::anyhow!("no OS randomness: {e}"))?;
+    let run_id: String = rid.iter().map(|b| format!("{b:02x}")).collect();
+    let mut vars = std::collections::BTreeMap::from([("run_id".to_string(), run_id.clone())]);
     if !json_out {
-        println!("scenario: {} ({total} steps)\n", sc.name);
+        println!("scenario: {} ({total} steps, run id {run_id})\n", sc.name);
     }
     let mut steps: Vec<Value> = Vec::new();
     let mut clock_log = vec![
@@ -710,11 +810,40 @@ pub fn run(
         }
         let before = client.clock()?;
         let s0 = Instant::now();
-        let out = run_step(st, session, client, cfg).unwrap_or_else(|e| StepOutcome {
-            ok: false,
-            detail: redact(&format!("{e:#}")),
-            advance: None,
-        });
+        // Run the step as written, with variables substituted. The title above
+        // keeps the `${…}` form so saved values (tokens) don't reach the report.
+        let resolved: Result<Step> = match sc.raw_steps.get(i) {
+            Some(raw) => serde_json::from_value(substitute(raw, &vars))
+                .context("step after substituting variables"),
+            None => Ok(st.clone()),
+        };
+        let mut out = resolved
+            .and_then(|step| run_step(&step, session, client, cfg))
+            .unwrap_or_else(|e| StepOutcome {
+                ok: false,
+                detail: redact(&format!("{e:#}")),
+                advance: None,
+                output: None,
+            });
+        if let (true, Some(name)) = (out.ok, &st.save) {
+            let value = out
+                .output
+                .as_deref()
+                .unwrap_or("")
+                .lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if value.is_empty() {
+                out.ok = false;
+                out.detail = format!("`save: {name}`: the command printed nothing");
+            } else {
+                vars.insert(name.clone(), value);
+                out.detail = format!("{} (saved as ${{{name}}})", out.detail);
+            }
+        }
         let after = client.clock()?;
         clock_log.push(json!({ "after_step": idx, "virtual": format_utc(after.virtual_ns), "generation": after.generation, "frozen": after.frozen }));
         if !json_out {
@@ -779,6 +908,7 @@ pub fn run(
         "report_version": 1,
         "chronostack_version": env!("CARGO_PKG_VERSION"),
         "scenario": { "name": sc.name, "description": sc.description, "path": path.to_string_lossy().replace('\\', "/") },
+        "run_id": run_id,
         "result": if passed { "passed" } else { "failed" },
         "failed_step": failed,
         "project": session.project,
@@ -834,7 +964,7 @@ mod tests {
     }
 
     fn parse(y: &str) -> Result<Scenario> {
-        let sc: Scenario = serde_norway::from_str(y)?;
+        let sc = super::parse(y)?;
         validate(&sc, &cfg(), &["db".into(), "worker".into(), "cache".into()])?;
         Ok(sc)
     }
@@ -875,6 +1005,30 @@ steps:
     }
 
     #[test]
+    fn variables() {
+        let sc = parse(
+            "version: 1\nname: x\nsteps:\n  - exec: { service: db, command: [psql, '${run_id}'] }\n    save: user_id\n  - assert: { sql: { service: db, query: \"select '${user_id}'\", equals: '${user_id}' } }\n",
+        )
+        .unwrap();
+        let vars = std::collections::BTreeMap::from([
+            ("run_id".to_string(), "ab12cd34".to_string()),
+            ("user_id".to_string(), "7".to_string()),
+        ]);
+        let s0: Step = serde_json::from_value(substitute(&sc.raw_steps[0], &vars)).unwrap();
+        assert_eq!(s0.exec.unwrap().command, vec!["psql", "ab12cd34"]);
+        let s1: Step = serde_json::from_value(substitute(&sc.raw_steps[1], &vars)).unwrap();
+        let sql = s1.check.unwrap().sql.unwrap();
+        assert_eq!(
+            (sql.query.as_str(), sql.equals.as_deref()),
+            ("select '7'", Some("7"))
+        );
+        assert!(
+            sc.steps[1].title().contains("${user_id}"),
+            "titles keep the ${{…}} form"
+        );
+    }
+
+    #[test]
     fn rejects_mistakes() {
         let cases = [
             ("version: 1\nname: x\nsteps: []", "empty"),
@@ -908,6 +1062,22 @@ steps:
             ),
             ("version: 1\nname: x\nsteps: [{sleep: 1h}]", "at most 10m"),
             ("version: 1\nname: x\nsteps: [{advance: banana}]", "step 1"),
+            (
+                "version: 1\nname: x\nsteps: [{exec: {service: db, command: ['${nope}']}}]",
+                "`${nope}` is not defined",
+            ),
+            (
+                "version: 1\nname: x\nsteps: [{exec: {service: db, command: ['${later}']}}, {exec: {service: db, command: [x]}, save: later}]",
+                "`${later}` is not defined",
+            ),
+            (
+                "version: 1\nname: x\nsteps: [{sleep: 1s, save: x}]",
+                "only on exec",
+            ),
+            (
+                "version: 1\nname: x\nsteps: [{exec: {service: db, command: [x]}, save: run_id}]",
+                "new name",
+            ),
         ];
         for (y, want) in cases {
             let err = format!("{:#}", parse(y).unwrap_err());

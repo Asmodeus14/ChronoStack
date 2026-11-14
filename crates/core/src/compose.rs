@@ -303,15 +303,18 @@ pub fn rewrite_url(original: &str, upstream: &str, proxy: &str) -> Result<String
     Ok(format!("{proxy}{rest}"))
 }
 
-/// Validate a proxy upstream: `http://host[:port]`, no path, query or credentials.
+/// Validate a proxy upstream: `http[s]://host[:port]`, no path, query or
+/// credentials. The app always talks plain HTTP to the proxy inside the Compose
+/// network; the proxy uses TLS to an `https://` upstream.
 pub fn check_upstream(upstream: &str) -> Result<(), String> {
-    let rest = upstream.strip_prefix("http://").ok_or_else(|| {
-        format!("upstream `{upstream}` must start with http:// (the proxy does not speak TLS)")
-    })?;
+    let rest = upstream
+        .strip_prefix("http://")
+        .or_else(|| upstream.strip_prefix("https://"))
+        .ok_or_else(|| format!("upstream `{upstream}` must start with http:// or https://"))?;
     let rest = rest.trim_end_matches('/');
     if rest.is_empty() || rest.contains(['/', '?', '#', '@']) {
         return Err(format!(
-            "upstream `{upstream}` must be http://host[:port] with no path, query or credentials"
+            "upstream `{upstream}` must be http[s]://host[:port] with no path, query or credentials"
         ));
     }
     Ok(())
@@ -654,7 +657,18 @@ mod tests {
         assert!(rewrite_url("http://receiver:40001/x", &t.upstream, &base).is_err());
         assert!(rewrite_url("http://other:4000/x", &t.upstream, &base).is_err());
         assert!(check_upstream("http://receiver:4000").is_ok());
-        assert!(check_upstream("https://receiver").is_err());
+        assert!(check_upstream("https://api.partner.example").is_ok());
+        assert!(check_upstream("ftp://receiver").is_err());
+        assert_eq!(
+            rewrite_url(
+                "https://api.partner.example/v1/hooks",
+                "https://api.partner.example",
+                &base
+            )
+            .unwrap(),
+            "http://chronostack-clockd:7200/v1/hooks",
+            "the app talks plain HTTP to the proxy; the proxy uses TLS upstream"
+        );
         assert!(check_upstream("http://receiver:4000/hooks").is_err());
         assert!(check_upstream("http://u:p@receiver").is_err());
 

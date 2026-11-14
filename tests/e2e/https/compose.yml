@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# HTTPS upstream fixture: the client calls an https:// URL from its environment.
+# In the ChronoStack copy it talks plain HTTP to the fault proxy, which uses TLS
+# to the real upstream. Needs internet access (example.com, IANA's test domain).
+name: e2e-https
+services:
+  client:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
+    environment:
+      TARGET_URL: https://example.com/

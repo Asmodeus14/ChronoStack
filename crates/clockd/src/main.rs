@@ -121,9 +121,12 @@ mod linux {
             eprintln!("clockd: at most {MAX_PROXY_TARGETS} proxy targets");
             return 2;
         }
-        // Outage windows are stored next to the clock page, so they survive a restart.
+        // Outage windows and the event log are stored next to the clock page, so
+        // they survive a restart.
         let faults_path = std::path::Path::new(&page).with_file_name("faults.json");
-        let events = events::Events::new();
+        let events = events::Events::open(Some(
+            std::path::Path::new(&page).with_file_name("events.jsonl"),
+        ));
         let faults = faults::Faults::load(Some(faults_path));
         let ctx = server::Ctx {
             clock: &clock,

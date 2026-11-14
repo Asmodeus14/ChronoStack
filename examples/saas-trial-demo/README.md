@@ -40,8 +40,9 @@ chronostack down -v
 [`scenarios/trial.yml`](scenarios/trial.yml) runs the whole story and checks it: a user signs up, the receiver is down on day 14 from 02:00 to 06:00, the trial expires at the 03:00 job, the webhook is retried during the outage and delivered exactly once at 07:00.
 
 ```sh
-chronostack down -v && chronostack up --wait     # scenarios expect a fresh stack
+chronostack up --wait
 chronostack run scenarios/trial.yml              # about 40 s; exit code 0
+chronostack run scenarios/trial.yml              # again: each run signs up its own user (${run_id})
 ```
 
 The report is written to `.chronostack/reports/<time>-<name>.md` (for people) and `.json` (everything, for tools).

@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=../../../docs/schema/chronostack.schema.json
+version: 1
+proxies:
+  - name: ext
+    upstream: https://example.com
+    env: { client: TARGET_URL }

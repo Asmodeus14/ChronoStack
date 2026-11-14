@@ -18,7 +18,7 @@
   - `chronostack fault set <target> --from now|+2d|next 09:00|<UTC> --for 2h | --until … [--status 503]`, `fault list`, `fault clear <id> | --all`;
   - `chronostack events [--since N]`;
   - `chronostack run <scenario.yml> [--json]`: exit 0 = passed, 6 = a step failed.
-- **Scenarios** (`crates/cli/src/scenario.rs`, [JSON Schema](schema/scenario.schema.json)). Linear steps, each with one action: `advance` (the full step → trigger → barrier engine), `trigger`, `exec`, `http`, `fault`, `fault_clear`, `assert`, `wait_for`, `sleep`. Validated before anything runs, so a typo fails in milliseconds rather than after 10 virtual days.
+- **Scenarios** (`crates/cli/src/scenario.rs`, [JSON Schema](schema/scenario.schema.json)), with variables (see below). Linear steps, each with one action: `advance` (the full step → trigger → barrier engine), `trigger`, `exec`, `http`, `fault`, `fault_clear`, `assert`, `wait_for`, `sleep`. Validated before anything runs, so a typo fails in milliseconds rather than after 10 virtual days.
 - **Reports** in `.chronostack/reports/<time>-<scenario>.json` and `.md`:
   - the result and, on failure, a "What failed" section with the step, the virtual time, and what was expected versus found;
   - every step with its virtual time, every request through the proxy with its outcome, the outage windows, and a probe of every service at the end;
@@ -79,8 +79,13 @@ A reader can tell without opening the code that the webhook was attempted once, 
 
 ## Known gaps
 
-- **Proxy is HTTP only.** TLS upstreams (`https://`) are rejected with a clear message; the app must call an `http://` URL inside the Compose network.
-- **Apps that hard-code URLs** can't be routed through the proxy (R14 in RISKS_AND_LIMITATIONS): the URL must come from an environment variable set in the Compose file.
-- **Scenarios have no variables.** Steps can't reuse output from earlier steps (e.g. a token). Assertions use SQL/Redis instead. Run scenarios on a fresh stack (`down -v`, `up`).
-- **Event log is in memory** (the last 1,000 events); a `clockd` restart clears it. Windows themselves persist.
+Closed after the M3 review (2026-11-14):
+
+1. ~~Proxy is HTTP only~~ **Fixed.** Upstreams may be `https://`. The app's URL is rewritten to plain HTTP to the proxy inside the Compose network, and the proxy uses TLS (rustls, Mozilla root store) to the real upstream. e2e: an `https://example.com` upstream is fetched through the proxy, and an outage window blocks it with a 503. The controller image grew to 17 MB.
+2. ~~Scenarios have no variables~~ **Fixed.** `${run_id}` (random per run) and `save: name` on `exec` steps (last line of output), usable as `${name}` in any later string. References are checked before the run, and reports show the `${…}` form, not the values. The demo scenario now uses its own user each run, so it **passes again on the same stack** (e2e checks a second run gives an identical outcome).
+3. ~~Event log is in memory~~ **Fixed.** Appended to `events.jsonl` next to the clock page and reloaded on start (sequence numbers continue); compacted to the last 1,000 events. e2e: all 4 proxied requests are still listed after `docker compose restart chronostack-clockd`.
+
+Still open:
+
+- **Apps that hard-code URLs** can't be routed through the proxy (R15 in RISKS_AND_LIMITATIONS): the URL must come from an environment variable set in the Compose file. Intercepting hard-coded hostnames needs DNS takeover inside the network, and for HTTPS a trusted certificate; see the options in the risk entry.
 - **macOS** remains untested (issue #5).

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Asmodeus14/ChronoStack/blob/main/docs/schema/scenario.schema.json",
   "title": "ChronoStack scenario",
-  "description": "Linear steps for `chronostack run`. Each step has exactly one action.",
+  "description": "Linear steps for `chronostack run`. Each step has exactly one action. Strings may use ${run_id} (a random id per run) and ${name} saved by an earlier exec step with `save: name`.",
   "type": "object",
   "required": [
     "version",
@@ -375,6 +375,11 @@
           "sleep": {
             "$ref": "#/$defs/duration",
             "description": "Real time, at most 10m."
+          },
+          "save": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "description": "exec steps only: store the last line of the output as ${name} for later steps."
           }
         }
       }

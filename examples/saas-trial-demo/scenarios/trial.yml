@@ -1,5 +1,7 @@
 # yaml-language-server: $schema=../../../docs/schema/scenario.schema.json
-# Run on a fresh stack:  chronostack up --wait && chronostack run scenarios/trial.yml
+# chronostack up --wait && chronostack run scenarios/trial.yml
+# Safe to run again on the same stack: each run signs up its own user
+# (alice-${run_id}@example.com) and checks only that user's webhook.
 version: 1
 name: Trial expires and the webhook survives an outage
 description: >-
@@ -13,11 +15,17 @@ steps:
     advance: { to: next 00:00 }
 
   - name: alice signs up
-    exec: { service: api, command: [node, scripts/call.js, signup, alice@example.com] }
+    exec: { service: api, command: [node, scripts/call.js, signup, "alice-${run_id}@example.com"] }
+
+  - name: look up alice's user id
+    exec:
+      service: db
+      command: [psql, -U, app, -d, app, -Atc, "select id from users where email = 'alice-${run_id}@example.com'"]
+    save: user_id
 
   - name: alice is on the trial plan
     assert:
-      sql: { service: db, query: "select plan from users where email = 'alice@example.com'", equals: trial }
+      sql: { service: db, query: "select plan from users where id = ${user_id}", equals: trial }
 
   - name: the webhook receiver is down on day 14 from 02:00 to 06:00
     fault: { target: webhooks, from: +14d2h, for: 4h }
@@ -27,26 +35,26 @@ steps:
 
   - name: alice is still on the trial
     assert:
-      sql: { service: db, query: "select plan from users where email = 'alice@example.com'", equals: trial }
+      sql: { service: db, query: "select plan from users where id = ${user_id}", equals: trial }
 
   - name: day 14, hour by hour until noon
     advance: { by: 12h, step: 1h }
 
   - name: alice was downgraded to the free plan
     assert:
-      sql: { service: db, query: "select plan from users where email = 'alice@example.com'", equals: free }
+      sql: { service: db, query: "select plan from users where id = ${user_id}", equals: free }
 
   - name: the receiver got the trial.expired webhook exactly once
     assert:
-      redis: { service: cache, command: [HGET, webhook:received, "trial.expired:1"], equals: "1" }
+      redis: { service: cache, command: [HGET, webhook:received, "trial.expired:${user_id}"], equals: "1" }
 
   - name: it took 4 attempts (3 during the outage, then success)
     assert:
-      sql: { service: db, query: "select attempts from webhook_outbox where event_id = 'trial.expired:1'", equals: "4" }
+      sql: { service: db, query: "select attempts from webhook_outbox where event_id = 'trial.expired:${user_id}'", equals: "4" }
 
   - name: it was delivered at 07:00, after the outage ended
     assert:
       sql:
         service: db
-        query: "select to_char(delivered_at at time zone 'UTC', 'HH24') from webhook_outbox where event_id = 'trial.expired:1'"
+        query: "select to_char(delivered_at at time zone 'UTC', 'HH24') from webhook_outbox where event_id = 'trial.expired:${user_id}'"
         equals: "07"

@@ -28,6 +28,7 @@ for _s in (sys.stdout, sys.stderr):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEMO = os.path.join(ROOT, "examples", "saas-trial-demo")
+HTTPS = os.path.join(ROOT, "tests", "e2e", "https")
 FAILS = []
 
 
@@ -127,8 +128,8 @@ def proxy_checks(d, up_out):
     check("receiver got the forwarded request body", got.strip() == "1", got.strip())
     rc, ev = d.js("events")
     proxy = [e for e in ev.get("events", []) if e["kind"] == "proxy"]
-    check("event log: proxied requests after the restart (fault, forwarded)",
-          [e["outcome"] for e in proxy] == ["fault", "forwarded"], json.dumps(proxy)[:400])
+    check("event log survives the clockd restart (all 4 proxied requests, in order)",
+          [e["outcome"] for e in proxy] == ["forwarded", "fault", "fault", "forwarded"], json.dumps(proxy)[:400])
 
 
 def scenario_pass(d, n):
@@ -145,7 +146,7 @@ def scenario_pass(d, n):
     outcomes = [e["outcome"] for e in proxy]
     check(f"run {n}: report shows 3 attempts blocked by the outage, then 1 delivery",
           outcomes == ["fault", "fault", "fault", "forwarded"], str(outcomes))
-    check(f"run {n}: markdown report written", "PASSED" in md and "blocked by outage window #1" in md)
+    check(f"run {n}: markdown report written", "PASSED" in md and re.search(r"blocked by outage window #\d+", md) is not None)
     return tuple(outcomes) + tuple(s["status"] for s in rep["steps"]) + (proxy[-1]["virtual_time"][11:13] if proxy else "",)
 
 
@@ -156,18 +157,52 @@ def scenario_bug(d):
     if not rep:
         return
     f = rep.get("failed_step") or {}
-    check("bug: fails at step 9 (receiver got the webhook exactly once)",
-          f.get("index") == 9 and "exactly once" in f.get("name", ""), json.dumps(f)[:300])
+    check("bug: fails at step 10 (receiver got the webhook exactly once)",
+          f.get("index") == 10 and "exactly once" in f.get("name", ""), json.dumps(f)[:300])
     check("bug: detail says what was expected and what was found", "expected `1`" in f.get("detail", ""), f.get("detail", ""))
     proxy = [e for e in rep["events"] if e["kind"] == "proxy"]
     check("bug: report shows the single 503 that the worker treated as delivered",
           [(e["outcome"], e["status"]) for e in proxy] == [("fault", 503)], json.dumps(proxy)[:300])
-    check("bug: later steps marked skipped", [s["status"] for s in rep["steps"][9:]] == ["skipped", "skipped"])
-    check("bug: markdown has a 'What failed' section", "## What failed" in md and "Step 9 of 11" in md)
+    check("bug: later steps marked skipped", [s["status"] for s in rep["steps"][10:]] == ["skipped", "skipped"])
+    check("bug: markdown has a 'What failed' section", "## What failed" in md and "Step 10 of 12" in md)
     text = json.dumps(rep) + md
     leaked = re.findall(r"\b[a-f0-9]{32}\b", text)
     check("bug: no session token in the report (redacted)", not leaked, str(leaked[:2]))
     check("bug: CLI prints the report path", "report:" in out and ".md" in out, out[-300:])
+
+
+def https_upstream(cli):
+    """Proxy to a real https:// upstream (needs internet access)."""
+    def cs(*a, timeout=900):
+        p = subprocess.run([cli, *a], cwd=HTTPS, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
+        return p.returncode, p.stdout, p.stderr
+
+    def ex(*cmd):
+        s = json.load(open(os.path.join(HTTPS, ".chronostack", "session.json"), encoding="utf-8"))
+        args = ["docker", "compose"]
+        for f in s["compose_files"]:
+            args += ["-f", f]
+        p = subprocess.run(args + ["-p", s["project"], "exec", "-T", "client", *cmd], cwd=HTTPS,
+                           capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
+        return p.returncode, p.stdout, p.stderr
+
+    if os.path.exists(os.path.join(HTTPS, ".chronostack", "session.json")):
+        cs("down", "-v")
+    rc, out, err = cs("up", "--wait", timeout=1800)
+    check("https: up", rc == 0, (err or out)[-400:] if rc else "")
+    if rc:
+        return
+    try:
+        _, url, _ = ex("printenv", "TARGET_URL")
+        check("https: client URL points at the proxy over plain HTTP", url.strip() == "http://chronostack-clockd:7200/", url.strip())
+        _, body, err = ex("sh", "-c", "wget -q -O- \"$TARGET_URL\"")
+        check("https: proxy fetched the https:// upstream", "Example Domain" in body, (body or err)[:200])
+        cs("fault", "set", "ext", "--for", "1h")
+        _, body, err = ex("sh", "-c", "wget -q -O- \"$TARGET_URL\" 2>&1; echo rc=$?")
+        check("https: outage window applies to the https upstream", "503" in body or "rc=1" in body, body[:200])
+    finally:
+        rc, out, err = cs("down", "-v")
+        check("https: down -v", rc == 0)
 
 
 def main():
@@ -194,10 +229,17 @@ def main():
         if ok:
             try:
                 outcomes.append(scenario_pass(d, i + 1))
+                if i == 0:
+                    print("\n=== scenario again on the same stack (variables make it repeatable)", flush=True)
+                    again = scenario_pass(d, "1b")
+                    check("same stack: second run gives the same outcome", again == outcomes[-1], str(again))
             finally:
                 d.down()
     if a.repeat > 1:
         check(f"scenario: {a.repeat} runs produced identical outcomes", len(set(outcomes)) == 1 and None not in outcomes, str(set(outcomes)))
+
+    print("\n=== https upstream", flush=True)
+    https_upstream(cli)
 
     print("\n=== deliberate bug (compose.bug.yml)", flush=True)
     ok, _ = d.up("compose.yml", "compose.bug.yml")

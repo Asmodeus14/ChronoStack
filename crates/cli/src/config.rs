@@ -379,7 +379,7 @@ barriers:
                 "unique names",
             ),
             (
-                "version: 1\nproxies: [{name: a, upstream: 'https://r'}]",
+                "version: 1\nproxies: [{name: a, upstream: 'ftp://r'}]",
                 "http://",
             ),
             (

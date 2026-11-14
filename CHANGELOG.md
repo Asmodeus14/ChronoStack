@@ -80,6 +80,7 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
   - `chronostack.yml`: `equals:` for SQL checks, `body:`/`content_type:` for HTTP.
   - Demo: transactional outbox, webhook retries with backoff, a receiver, `scenarios/trial.yml` and a deliberate bug (`compose.bug.yml`).
   - `tests/e2e/run_m3.py` in CI; nightly runs the scenario 5×.
+- After the M3 review: `https://` proxy upstreams (TLS from the proxy; rustls), scenario variables (`${run_id}`, `save:` on exec steps), and a persistent event log (`events.jsonl`, survives `clockd` restarts).
 
 ### Fixed
 

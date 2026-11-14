@@ -1,7 +1,14 @@
 //! Event log: a bounded ring buffer of clock changes, fault changes and proxied
 //! requests. The CLI reads it for reports (`GET /v1/events?since=`).
+//!
+//! The log is also appended to a JSON-lines file next to the clock page, so a
+//! `clockd` restart keeps it (and its sequence numbers). The file is compacted
+//! to the last [`EVENT_RING`] events whenever it grows to twice that.
 
 use std::collections::VecDeque;
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use chronostack_core::api::{ClockState, EVENT_RING, Event, EventsResponse};
@@ -15,14 +22,46 @@ pub struct Events {
 struct Inner {
     ring: VecDeque<Event>,
     last_seq: u64,
+    path: Option<PathBuf>,
+    file: Option<File>,
+    /// Lines in the file (compaction trigger).
+    lines: usize,
 }
 
 impl Events {
+    /// In-memory only (tests).
+    #[cfg(test)]
     pub fn new() -> Events {
+        Events::open(None)
+    }
+
+    /// Load the persisted log from `path` (if any) and keep appending to it.
+    /// Unreadable lines are skipped; a missing file starts an empty log.
+    pub fn open(path: Option<PathBuf>) -> Events {
+        let mut ring = VecDeque::with_capacity(EVENT_RING);
+        let mut lines = 0;
+        if let Some(f) = path.as_ref().and_then(|p| File::open(p).ok()) {
+            for line in BufReader::new(f).lines().map_while(Result::ok) {
+                lines += 1;
+                if let Ok(e) = serde_json::from_str::<Event>(&line) {
+                    if ring.len() == EVENT_RING {
+                        ring.pop_front();
+                    }
+                    ring.push_back(e);
+                }
+            }
+        }
+        let last_seq = ring.back().map(|e: &Event| e.seq).unwrap_or(0);
+        let file = path
+            .as_ref()
+            .and_then(|p| OpenOptions::new().create(true).append(true).open(p).ok());
         Events {
             inner: Mutex::new(Inner {
-                ring: VecDeque::with_capacity(EVENT_RING),
-                last_seq: 0,
+                ring,
+                last_seq,
+                path,
+                file,
+                lines,
             }),
         }
     }
@@ -39,6 +78,7 @@ impl Events {
             g.ring.pop_front();
         }
         g.ring.push_back(e.clone());
+        persist(&mut g, &e);
         e
     }
 
@@ -53,6 +93,34 @@ impl Events {
             events: g.ring.iter().filter(|e| e.seq > since).cloned().collect(),
             last_seq: g.last_seq,
             truncated: since.saturating_add(1) < oldest && since < g.last_seq,
+        }
+    }
+}
+
+/// Append one event to the file; rewrite it with only the ring once it holds
+/// twice as many lines. Failures are ignored: the in-memory log stays correct.
+fn persist(g: &mut Inner, e: &Event) {
+    let Ok(line) = serde_json::to_string(e) else {
+        return;
+    };
+    if let Some(f) = g.file.as_mut() {
+        if writeln!(f, "{line}").is_ok() {
+            g.lines += 1;
+        }
+    }
+    if g.lines >= 2 * EVENT_RING {
+        if let Some(p) = g.path.clone() {
+            let tmp = p.with_extension("tmp");
+            let body: String = g
+                .ring
+                .iter()
+                .filter_map(|e| serde_json::to_string(e).ok())
+                .map(|l| l + "\n")
+                .collect();
+            if fs::write(&tmp, body).is_ok() && fs::rename(&tmp, &p).is_ok() {
+                g.lines = g.ring.len();
+                g.file = OpenOptions::new().append(true).open(&p).ok();
+            }
         }
     }
 }
@@ -108,5 +176,37 @@ mod tests {
         assert!(!tail.truncated);
         assert_eq!(tail.events[1].generation, 7);
         assert!(ev.since(all.last_seq).events.is_empty());
+    }
+
+    #[test]
+    fn survives_a_restart_and_compacts() {
+        let dir = std::env::temp_dir().join(format!("cs-events-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("events.jsonl");
+        let _ = fs::remove_file(&path);
+        {
+            let ev = Events::open(Some(path.clone()));
+            for i in 0..3 {
+                ev.push(&st(i), event("advance"));
+            }
+        }
+        let ev = Events::open(Some(path.clone()));
+        let all = ev.since(0);
+        assert_eq!(all.events.len(), 3, "reloaded from the file");
+        assert_eq!(
+            ev.push(&st(9), event("freeze")).seq,
+            4,
+            "sequence continues"
+        );
+
+        for i in 0..(2 * EVENT_RING as i64) {
+            ev.push(&st(i), event("advance"));
+        }
+        let lines = fs::read_to_string(&path).unwrap().lines().count();
+        assert!(lines < 2 * EVENT_RING, "compacted: {lines} lines");
+        let reloaded = Events::open(Some(path.clone()));
+        assert_eq!(reloaded.since(0).last_seq, ev.since(0).last_seq);
+        assert_eq!(reloaded.since(0).events.len(), EVENT_RING);
+        let _ = fs::remove_dir_all(dir);
     }
 }
