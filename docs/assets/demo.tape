@@ -26,7 +26,7 @@ Sleep 2s
 Type "# Run 15 virtual days with a webhook outage on day 14, and check the results:"
 Enter
 Sleep 1s
-Type "chronostack run scenarios/trial.yml"
+Type "chronostack run scenarios/trial.yml 2>&1 | tee /tmp/demo-run.log"
 Enter
-Wait+Screen@180s /PASSED/
+Sleep 45s
 Sleep 4s

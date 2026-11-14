@@ -27,6 +27,9 @@ jobs:
       - uses: charmbracelet/vhs-action@v2
         with:
           path: docs/assets/demo.tape
+      - name: What the recording shell printed
+        if: always()
+        run: cat /tmp/demo-run.log || echo "(no log)"
       - name: Stop the demo
         if: always()
         working-directory: examples/saas-trial-demo
