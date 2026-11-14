@@ -43,5 +43,5 @@ Open-source projects with real time-dependent features, on stacks ChronoStack co
 | Project | Tested flow | Result | Posted | Reply | Mac report |
 |---|---|---|---|---|---|
 | Rallly | Poll auto-close, inactive delete, purge ([files](outreach/rallly/)) | 12/12 passed on `lukevella/rallly:latest`, 2026-11-14 | [#3721](https://github.com/lukevella/rallly/discussions/3721), 2026-11-14 | | |
-| Plane | Auto-close and auto-archive via Celery beat ([files](outreach/plane/)) | 12/12 passed on `makeplane/plane-backend:stable`, 2026-11-14; found the one-shot container bug | Draft ready (waits for the fix release) | | |
+| Plane | Auto-close and auto-archive via Celery beat ([files](outreach/plane/)) | 12/12 passed on `makeplane/plane-backend:stable`, 2026-11-14; found the one-shot container bug | [#10286](https://github.com/orgs/makeplane/discussions/10286), 2026-11-14 | | |
 | Polar | Cancel at period end, free renewal via their APScheduler job store ([files](outreach/polar/)) | 11/11 passed (built from `server/`, 2026-11-14); found a `KeyError` in their `DebounceMiddleware`; ChronoStack got `${var}` in `advance.to` | Draft bug report (send via dashboard support or Discord; no GitHub issues) | | |

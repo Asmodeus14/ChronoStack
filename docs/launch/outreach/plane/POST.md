@@ -1,4 +1,4 @@
-<!-- Draft for https://github.com/makeplane/plane/discussions, category: Show and tell. Not posted yet. Post only after the release that fixes one-shot containers (the migrator) is out. -->
+<!-- Posted 2026-11-14: https://github.com/orgs/makeplane/discussions/10286 (Show and tell) -->
 
 **Title:** Tested Plane's auto-close and auto-archive across 9 weeks of virtual time
 
@@ -20,6 +20,6 @@ Setup: a project with **auto-close after 1 month** (to Cancelled) and **auto-arc
 
 The only change to Plane's setup was adding `--max-interval 1` to `celery beat`, so beat notices clock jumps within a second.
 
-The compose file, seed script, scenario and run report are here: https://github.com/Asmodeus14/ChronoStack/tree/main/docs/launch/outreach/plane
+The compose file, seed script, scenario and run report are here: https://github.com/Asmodeus14/ChronoStack/tree/main/docs/launch/outreach/plane (needs ChronoStack v0.1.0-alpha.3 or later, which handles one-shot containers like the migrator).
 
 If it's useful, I'm happy to help turn it into a CI check for the automation tasks. And if anyone is on an Apple-silicon Mac, `chronostack doctor` output would help me a lot: macOS is the one platform I haven't been able to test yet.
