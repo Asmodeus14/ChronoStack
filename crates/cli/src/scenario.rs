@@ -395,7 +395,9 @@ pub fn validate(sc: &Scenario, cfg: &Resolved, services: &[String]) -> Result<()
                     if let Some(b) = &f.by {
                         dur(&what, b)?;
                     }
-                    if let Some(t) = &f.to {
+                    // A target with a saved variable (`to: "${ends_at}"`) is
+                    // checked at run time, once the variable has a value.
+                    if let Some(t) = f.to.as_ref().filter(|t| !var_regex().is_match(t)) {
                         fault::parse_when(t, 0).with_context(|| what.clone())?;
                     }
                     for v in [&f.step, &f.dwell].into_iter().flatten() {
@@ -1026,6 +1028,45 @@ steps:
             sc.steps[1].title().contains("${user_id}"),
             "titles keep the ${{…}} form"
         );
+    }
+
+    #[test]
+    fn advance_to_a_saved_variable() {
+        let y = "version: 1
+name: x
+steps:
+  - exec: { service: db, command: [x] }
+    save: ends_at
+  - advance: { to: \"${ends_at}\" }
+";
+        let sc = parse(y).expect("a saved variable is accepted as an advance target");
+        let vars = std::collections::BTreeMap::from([(
+            "ends_at".to_string(),
+            "2026-12-14T17:10:00Z".to_string(),
+        )]);
+        let st: Step = serde_json::from_value(substitute(&sc.raw_steps[1], &vars)).unwrap();
+        let Some(AdvanceStep::Full(f)) = st.advance else {
+            panic!("expected a full advance step")
+        };
+        assert!(fault::parse_when(f.to.as_deref().unwrap(), 0).is_ok());
+        // Still rejected: a variable nothing defines, and a malformed literal.
+        for (y, want) in [
+            (
+                "version: 1
+name: x
+steps: [{advance: {to: '${nope}'}}]",
+                "`${nope}` is not defined",
+            ),
+            (
+                "version: 1
+name: x
+steps: [{advance: {to: 'tomorrow'}}]",
+                "expected `now`",
+            ),
+        ] {
+            let err = format!("{:#}", parse(y).unwrap_err());
+            assert!(err.contains(want), "`{y}` gave `{err}`, wanted `{want}`");
+        }
     }
 
     #[test]

@@ -1,0 +1,45 @@
+# Polar's backend (polarsource/polar, server/) built from source by ./Dockerfile,
+# with Postgres and Redis as in server/docker-compose.yml.
+x-env: &env
+  POLAR_ENV: development
+  POLAR_POSTGRES_HOST: db
+  POLAR_POSTGRES_USER: polar
+  POLAR_POSTGRES_PWD: polar
+  POLAR_POSTGRES_DATABASE: polar
+  POLAR_REDIS_HOST: redis
+  POLAR_EMAIL_SENDER: logger
+
+services:
+  db:
+    image: postgres:18.6-bookworm
+    command: ["postgres", "-c", "max_locks_per_transaction=256"]
+    environment:
+      POSTGRES_USER: polar
+      POSTGRES_PASSWORD: polar
+      POSTGRES_DB: polar
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "polar", "-U", "polar"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:alpine
+
+  migrate:
+    image: polar-server:chronostack
+    command: ["python", "-m", "scripts.db", "upgrade"]
+    environment: *env
+    depends_on:
+      db: { condition: service_healthy }
+
+  worker:
+    image: polar-server:chronostack
+    # server/pyproject.toml task "worker", without --watch
+    command: ["dramatiq", "-p", "1", "-t", "1", "-f", "polar.worker.scheduler:start", "polar.worker.run"]
+    environment: *env
+    volumes:
+      - ${POLAR_SERVER:-../polar/server}/tests:/app/server/tests:ro
+      - ./seed:/seed:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
