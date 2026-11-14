@@ -185,7 +185,7 @@ cargo build -p chronostack
 python3 tests/e2e/run_m2.py --cli target/debug/chronostack --repeat 3
 ```
 
-It should end with `ALL CHECKS PASSED`, including "3 runs produced identical outcomes". Then [open an issue](https://github.com/Asmodeus14/ChronoStack/issues/new?template=bug_report.yml&title=macOS+test+report) with:
+It should end with `ALL CHECKS PASSED`, including "3 runs produced identical outcomes". Then comment on the pinned issue [#5](https://github.com/Asmodeus14/ChronoStack/issues/5) with:
 
 - your Mac model (chip) and macOS version;
 - the Docker product and version (`docker version`);
