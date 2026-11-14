@@ -5,16 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once the first release is tagged.
 
-No versions have been released. ChronoStack is pre-alpha and usable from source.
+ChronoStack is pre-alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
+
+## [0.1.0-alpha.2] - 2026-11-14
+
+The first published pre-release. It includes everything listed under 0.1.0-alpha.1, which was built but not published.
 
 ### Added
 
 - `chronostack update [--check] [--version X] [--pre] [--force]`: updates the CLI from GitHub Releases. It verifies `SHA256SUMS` and replaces the running binary (Windows included), with no admin rights.
 - GitHub Action (`action.yml`), MCP bundles and `server.json` for the MCP Registry, `docs/GUIDE.md`, demo GIF, launch drafts.
 
-## [0.1.0-alpha.1] - 2026-11-14
+## [0.1.0-alpha.1] - 2026-11-14 (not published)
 
 ### Added
 

@@ -9,14 +9,14 @@ The release carries everything the registry needs:
 - one MCP bundle per target, `chronostack-mcp-<version>-<target>.mcpb`. Each is a zip with `manifest.json` (MCPB manifest 0.3) and the binary;
 - `server.json` (registry schema 2025-12-11) listing those bundles with their SHA-256.
 
-They are built by `scripts/build_mcpb.py` in the release workflow, and were added by hand to `v0.1.0-alpha.1`.
+They are built by `scripts/build_mcpb.py` in the release workflow (first included in `v0.1.0-alpha.2`).
 
 Steps (once the release is **published**: the registry checks that the files are publicly downloadable):
 
 1. Install the publisher: `brew install mcp-publisher`, or the archive for your OS from https://github.com/modelcontextprotocol/registry/releases.
 2. Download `server.json` from the release into an empty folder.
 3. `mcp-publisher login github`. Sign in as **Asmodeus14**: the name `io.github.asmodeus14/chronostack` is tied to that account.
-4. `mcp-publisher publish`. Expect `✓ Server io.github.asmodeus14/chronostack version 0.1.0-alpha.1`.
+4. `mcp-publisher publish`. Expect `✓ Server io.github.asmodeus14/chronostack version 0.1.0-alpha.2`.
 5. Check: `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.asmodeus14/chronostack"`.
 
 Notes:

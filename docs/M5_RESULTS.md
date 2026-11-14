@@ -3,7 +3,7 @@
 **Date:** 2026-11-14
 **Exit gate** ([IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md#m5--release-weeks-1112)): *tag v0.1.0.*
 
-**Status: release pipeline built and dry-run green; not tagged yet.**
+**Status: first pre-release `v0.1.0-alpha.2`.** (`v0.1.0-alpha.1` was tagged and built, run 43563492172, but not published: it predated `chronostack update`, the GitHub Action and the MCP bundles.)
 
 The first tag will be **`v0.1.0-alpha.1`**, not `v0.1.0`. [RELEASE_PROCESS](development/RELEASE_PROCESS.md) requires smoke tests on fresh Linux **and macOS** machines for a stable 0.1.0, and macOS is untested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). Tagging is a public, outward-facing step, so it waits for the owner's go-ahead.
 
@@ -51,9 +51,6 @@ The first tag will be **`v0.1.0-alpha.1`**, not `v0.1.0`. [RELEASE_PROCESS](deve
 
 ## Not done
 
-- **Tag `v0.1.0-alpha.1`.** Waiting for the owner. After the tag:
-  1. make the GHCR package `chronostack-clockd` **public** (GitHub creates it private);
-  2. review and publish the draft release.
 - **macOS smoke test.** GitHub's macOS runners can't run Docker. The macOS binaries are built and run `--version` in CI, but have not been used against a real Docker. Needed for `v0.1.0` stable (issue #5).
-- **20-second terminal recording.** Not made. The README has a transcript copied from a real run instead. A GIF needs a recorder (asciinema or vhs) on a machine with a display.
+- ~~20-second terminal recording~~ **Done:** `docs/assets/demo.gif`, rendered with vhs by the `demo-gif` workflow.
 - **README compatibility table generated from CI.** Still maintained by hand; it lists only what the tests cover.

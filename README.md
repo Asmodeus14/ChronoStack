@@ -4,13 +4,13 @@
 Move the whole stack — Postgres, Redis, and your services — forward in time together, run the scheduled jobs that depend on it, and check the results.
 
 > [!IMPORTANT]
-> **Status: pre-alpha. Works on Linux and Windows hosts; first pre-release `v0.1.0-alpha.1`.**
+> **Status: pre-alpha. Works on Linux and Windows hosts; first pre-release `v0.1.0-alpha.2`.**
 > - **M0 feasibility spike: passed** ([results](docs/M0_RESULTS.md)). Virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read.
 > - **M1 (controller + core CLI): implemented.** `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe` and `doctor` work. They are tested end to end in CI on Linux x86_64 and arm64, and locally on Docker Desktop (Windows).
 > - **M2 (step → trigger → barrier engine): implemented.** `chronostack.yml` triggers and barriers, scheduled triggers in virtual time, automatic pg_cron sub-stepping, `--dry-run`, and a [reference demo](examples/saas-trial-demo/README.md). In the demo, `advance 14d` runs the daily job 14 times in about 17 s ([results](docs/M2_RESULTS.md)).
 > - **M3 (outage windows, scenarios, reports): implemented.** A fault proxy for outages in virtual time, `chronostack run <scenario.yml>`, and readable failure reports ([results](docs/M3_RESULTS.md)).
 > - **M4 (MCP server, Node register): implemented.** AI agents can drive the clock through `chronostack mcp`, and host-native Node apps follow it with `-r register` ([results](docs/M4_RESULTS.md)).
-> - **M5 (release): pipeline ready** ([results](docs/M5_RESULTS.md)). Binaries for Linux, macOS and Windows, a controller image on GHCR and install scripts; the first pre-release is `v0.1.0-alpha.1`. macOS is untested.
+> - **M5 (release): pipeline ready** ([results](docs/M5_RESULTS.md)). Binaries for Linux, macOS and Windows, a controller image on GHCR and install scripts; the first pre-release is `v0.1.0-alpha.2`. macOS is untested.
 
 ![ChronoStack running 15 virtual days of a SaaS demo, including a webhook outage, in about 20 seconds](docs/assets/demo.gif)
 
@@ -76,12 +76,12 @@ You need Docker with Compose v2 (Docker Desktop, or Docker Engine on Linux).
 
 ```sh
 # Linux / macOS: installs to ~/.local/bin after checking SHA256SUMS
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.1/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.1 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.2 sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-$env:CHRONOSTACK_VERSION = "0.1.0-alpha.1"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.1/install.ps1 | iex
+$env:CHRONOSTACK_VERSION = "0.1.0-alpha.2"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.ps1 | iex
 ```
 
 **No admin rights needed.** The CLI goes into your user directory (`~/.local/bin`, or `%LOCALAPPDATA%\chronostack\bin` on Windows). **Update** any time with `chronostack update` (`--check` only checks); it verifies the release checksum and replaces itself.

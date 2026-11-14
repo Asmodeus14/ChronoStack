@@ -5,7 +5,7 @@
 #   curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh | sh
 #
 # Options (environment variables):
-#   CHRONOSTACK_VERSION        version to install, e.g. 0.1.0-alpha.1 (default: the newest release,
+#   CHRONOSTACK_VERSION        version to install, e.g. 0.1.0-alpha.2 (default: the newest release,
 #                              including pre-releases)
 #   CHRONOSTACK_INSTALL_DIR    where to put the binary (default: $HOME/.local/bin)
 #   CHRONOSTACK_DOWNLOAD_BASE  download from here instead of GitHub Releases (testing)

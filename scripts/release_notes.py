@@ -2,7 +2,7 @@
 """Print GitHub Release notes for a version: its CHANGELOG section plus install
 instructions and a manual-verification checklist.
 
-Usage: python scripts/release_notes.py 0.1.0-alpha.1
+Usage: python scripts/release_notes.py 0.1.0-alpha.2
 """
 import os
 import re

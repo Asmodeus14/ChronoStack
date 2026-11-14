@@ -174,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Asmodeus14/ChronoStack@main    # installs the CLI (checksum-verified); pin a release tag from v0.1.0-alpha.2 on
+      - uses: Asmodeus14/ChronoStack@v0.1.0-alpha.2    # installs the CLI (checksum-verified)
       - run: chronostack up --wait
       - run: chronostack run scenarios/trial.yml
       - if: always()
@@ -185,7 +185,7 @@ jobs:
 Any other CI with Docker:
 
 ```sh
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.1/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.1 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.2 sh
 export PATH="$HOME/.local/bin:$PATH"
 chronostack up --wait && chronostack run scenarios/trial.yml
 ```

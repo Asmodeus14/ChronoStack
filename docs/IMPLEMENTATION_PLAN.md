@@ -100,7 +100,7 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 
 **Objective.** Installable v0.1 with honest docs.
 
-> **Status (2026-11-14): pipeline built; dry run green; tag pending the owner's go-ahead.** See [M5_RESULTS.md](M5_RESULTS.md). The first tag is `v0.1.0-alpha.1`: a stable `v0.1.0` needs the macOS smoke test (issue #5).
+> **Status (2026-11-14): first pre-release `v0.1.0-alpha.2`.** See [M5_RESULTS.md](M5_RESULTS.md). (`v0.1.0-alpha.1` was built but not published: it predated `chronostack update`.) A stable `v0.1.0` needs the macOS smoke test (issue #5).
 
 **Tasks.** Release process per [development/RELEASE_PROCESS.md](development/RELEASE_PROCESS.md): shim builds (zig), CLI for linux-x64/arm64 and darwin-arm64/x64 (cargo-zigbuild), win32-x64 (native Windows runner); clockd multi-arch image on GHCR; checksums + SBOM; install script; README (positioning, 60-second demo, compatibility table generated from test results, limitations); 20-second terminal recording; CONTRIBUTING; SECURITY.md.
 **Automated tests.** Release smoke test: fresh VM → install → demo acceptance.

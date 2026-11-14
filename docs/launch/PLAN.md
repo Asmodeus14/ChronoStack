@@ -6,7 +6,7 @@
 
 ## Before posting anywhere
 
-- [ ] Publish the `v0.1.0-alpha.1` draft release and make the GHCR package `chronostack-clockd` public.
+- [ ] Publish the `v0.1.0-alpha.2` draft release and make the GHCR package `chronostack-clockd` public.
 - [ ] Run the `action-test` workflow (installs the published release through `action.yml` and runs the demo on x86_64 and arm64).
 - [x] Demo GIF in the README (`demo-gif` workflow, rendered 2026-11-14).
 - [x] Guide for your own project: [GUIDE.md](../GUIDE.md).
