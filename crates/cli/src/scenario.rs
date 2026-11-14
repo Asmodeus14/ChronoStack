@@ -549,7 +549,7 @@ fn advance_failure(v: &Value) -> String {
             .as_array()
             .into_iter()
             .flatten()
-            .filter(|p| p["status"] != "ok")
+            .filter(|p| !crate::probe::status_passes(p["status"].as_str().unwrap_or("")))
             .map(|p| {
                 format!(
                     "{} ({})",

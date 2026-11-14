@@ -9,6 +9,16 @@ ChronoStack is pre-alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] - 2026-11-14
+
+### Fixed
+
+- One-shot containers that exit with code 0, such as a migrator, no longer fail every `advance`, scenario and `doctor` run with "unavailable". They are reported as `completed`. A container that exited with an error still fails. Found while testing Plane's self-hosted stack.
+
+### Documentation
+
+- Guide: schedulers that fire on their own (Celery beat) run a missed job when the clock lands, not at the job's own time, and how to land steps for exact-time tests. Also: don't mount your own files at `/chronostack`.
+
 ## [0.1.0-alpha.2] - 2026-11-14
 
 The first published pre-release. It includes everything listed under 0.1.0-alpha.1, which was built but not published.
