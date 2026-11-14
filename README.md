@@ -130,7 +130,7 @@ Nothing is listed as tested unless an automated test covers it ([testing strateg
 | Go, statically linked binaries, setuid binaries | **Not supported** (`LD_PRELOAD` cannot reach them); flagged by `doctor` |
 | Hosts: Linux x86_64 / arm64 (Docker Engine) | **Tested** in CI |
 | Host: Windows x64 (Docker Desktop, WSL2) | Tested by hand |
-| Host: macOS (Docker Desktop, OrbStack) | **Untested** |
+| Host: macOS (Docker Desktop, OrbStack) | **Untested** — [help wanted](#help-wanted-test-on-macos) |
 
 ## Known limitations (by design)
 
@@ -166,11 +166,32 @@ Details: [docs/FEATURE_ROADMAP.md](docs/FEATURE_ROADMAP.md) · [docs/IMPLEMENTAT
 The project is pre-alpha: it works from source, and nothing is released yet. The most useful contributions right now:
 
 - trying `chronostack up` / `doctor` / `advance` on your own Compose project and reporting what breaks;
-- running it on macOS (Docker Desktop or OrbStack), which is untested;
+- running it on macOS (see below);
 - reviewing the [architecture decisions](docs/ARCHITECTURE_DECISIONS.md) and the [feasibility research](docs/TECHNICAL_FEASIBILITY.md);
 - sharing how you test time-dependent behaviour today.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+### Help wanted: test on macOS
+
+**Have a Mac?** ChronoStack has never been run on macOS. GitHub's macOS runners can't run Docker, so the maintainers can't test it in CI, and this is the last open item of the M2 milestone. One run on your machine would help a lot, especially an Apple Silicon Mac with Docker Desktop. OrbStack and Colima results are welcome too.
+
+You need Docker (Docker Desktop, OrbStack or Colima), a stable Rust toolchain and Python 3. The test takes about 5 minutes after the images download.
+
+```sh
+git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack
+docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+cargo build -p chronostack
+python3 tests/e2e/run_m2.py --cli target/debug/chronostack --repeat 3
+```
+
+It should end with `ALL CHECKS PASSED`, including "3 runs produced identical outcomes". Then [open an issue](https://github.com/Asmodeus14/ChronoStack/issues/new?template=bug_report.yml&title=macOS+test+report) with:
+
+- your Mac model (chip) and macOS version;
+- the Docker product and version (`docker version`);
+- the last 30 lines of the output, pass or fail.
+
+A failure report is just as useful as a pass. The test runs under its own Compose project names and removes its containers and volumes at the end.
 
 ## License
 
