@@ -1,0 +1,52 @@
+version: 1
+name: Subscriptions reach the end of their billing period
+description: >-
+  Two monthly subscriptions created today. A was canceled by the customer to end
+  at the period end; B is free and renews. Polar's own APScheduler job store
+  (polar.worker.scheduler) must pick both up when their period ends, with no
+  triggers: it checks for due subscriptions at least every 30 s.
+
+steps:
+  - name: seed two subscriptions with Polar's test factories
+    exec: { service: worker, command: [python, /seed/seed.py, "${run_id}"] }
+    save: a_id
+
+  - name: look up the free subscription
+    exec:
+      service: db
+      command: [psql, -U, polar, -d, polar, -Atc, "select s.id from subscriptions s join customers c on c.id = s.customer_id where c.email = 'free-${run_id}@example.com'"]
+    save: b_id
+
+  - name: A is active, set to end at the period end
+    assert: { sql: { service: db, user: polar, database: polar, query: "select status || ' ' || cancel_at_period_end from subscriptions where id = '${a_id}'", equals: active true } }
+
+  - name: 29 days pass
+    advance: 29d
+
+  - name: A is still active one day before its period ends
+    assert: { sql: { service: db, user: polar, database: polar, query: "select status from subscriptions where id = '${a_id}'", equals: active } }
+
+  - name: B is still in its first period
+    assert: { sql: { service: db, user: polar, database: polar, query: "select current_period_start::date = started_at::date from subscriptions where id = '${b_id}'", equals: t } }
+
+  - name: note A's period end, plus one minute
+    exec:
+      service: db
+      command: [psql, -U, polar, -d, polar, -Atc, "select to_char((ends_at + interval '1 minute') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') from subscriptions where id = '${a_id}'"]
+    save: a_end
+
+  - name: to one minute after A's period end
+    advance: { to: "${a_end}" }
+
+  - name: the scheduler ends A
+    wait_for:
+      sql: { service: db, user: polar, database: polar, query: "select status = 'canceled' from subscriptions where id = '${a_id}'" }
+      timeout: 90s
+
+  - name: A ended within 5 virtual minutes of its period end
+    assert: { sql: { service: db, user: polar, database: polar, query: "select ended_at - ends_at < interval '5 minutes' from subscriptions where id = '${a_id}'", equals: t } }
+
+  - name: the scheduler renews B into its second period
+    wait_for:
+      sql: { service: db, user: polar, database: polar, query: "select current_period_start > started_at + interval '20 days' and status = 'active' from subscriptions where id = '${b_id}'" }
+      timeout: 90s

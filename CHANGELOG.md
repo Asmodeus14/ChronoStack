@@ -9,6 +9,10 @@ ChronoStack is pre-alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Added
+
+- Scenarios: `advance: { to: "${var}" }` accepts a value saved by an earlier step, so a test can advance to a time read from the data (for example a subscription's period end). Found while testing Polar.
+
 ## [0.1.0-alpha.3] - 2026-11-14
 
 ### Fixed
