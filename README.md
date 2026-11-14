@@ -12,6 +12,8 @@ Move the whole stack — Postgres, Redis, and your services — forward in time 
 > - **M4 (MCP server, Node register): implemented.** AI agents can drive the clock through `chronostack mcp`, and host-native Node apps follow it with `-r register` ([results](docs/M4_RESULTS.md)).
 > - **M5 (release): pipeline ready** ([results](docs/M5_RESULTS.md)). Binaries for Linux, macOS and Windows, a controller image on GHCR and install scripts; the first pre-release is `v0.1.0-alpha.1`. macOS is untested.
 
+![ChronoStack running 15 virtual days of a SaaS demo, including a webhook outage, in about 20 seconds](docs/assets/demo.gif)
+
 ---
 
 ## The problem
