@@ -3,7 +3,7 @@
 **Date:** 2026-11-14
 **Exit gate** ([IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md#m3--webhook-outage-windows-scenarios-failure-reports-weeks-89)): *the deliberate-bug demo produces a report a new developer can understand without reading code.*
 
-**Status: met locally on Docker Desktop (WSL2).** The e2e test also runs in CI on Linux x86_64 and arm64, and nightly runs the scenario 5 times in a row (see the CHANGELOG and CI history for those runs).
+**Status: met.** Locally on Docker Desktop (WSL2), and in CI on native Linux x86_64 and arm64. In the first nightly run ([43554434710](https://github.com/Asmodeus14/ChronoStack/actions/runs/43554434710)) the scenario ran **5 times in a row with identical outcomes on both architectures**: 3 blocked attempts, 1 delivery at 07:00, all 11 steps passing, in 10–15 s real time per run on CI hardware.
 
 ## What was built
 
