@@ -1,6 +1,12 @@
 <div align="center">
 
-# ChronoStack
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/chronostack-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/brand/chronostack-logo-light.svg">
+    <img alt="ChronoStack" src="docs/assets/brand/chronostack-logo-light.svg" width="440">
+  </picture>
+</h1>
 
 **Stripe Test Clocks for your Docker Compose stack.**
 
