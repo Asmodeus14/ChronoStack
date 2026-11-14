@@ -18,7 +18,7 @@ Nothing in the app knows about ChronoStack. [`chronostack.yml`](chronostack.yml)
 
 ## Run it
 
-From this directory, after building the controller image and installing the CLI (see the main [README](../../README.md#try-it-from-source-pre-alpha)):
+From this directory, after installing the CLI (see the main [README](../../README.md#install)):
 
 ```sh
 chronostack up --wait

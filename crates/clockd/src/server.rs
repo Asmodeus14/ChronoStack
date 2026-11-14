@@ -145,7 +145,10 @@ fn handle(ctx: &Ctx<'_>, req: &mut Request) -> Reply {
     let path = url.split('?').next().unwrap_or("").to_string();
     let method = req.method().clone();
     if method == Method::Get && path == "/v1/health" {
-        return (200, r#"{"ok":true}"#.into());
+        return (
+            200,
+            format!(r#"{{"ok":true,"version":"{}"}}"#, env!("CARGO_PKG_VERSION")),
+        );
     }
     if !authorized(req, ctx.token) {
         return err(401, "missing or invalid bearer token");

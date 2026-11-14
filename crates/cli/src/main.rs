@@ -26,6 +26,14 @@ use clap::{Parser, Subcommand};
 use serde_json::json;
 
 use crate::client::Client;
+
+/// Controller image used by `up`. Release builds set it (at compile time) to
+/// the published image pinned by digest; source builds use a locally built image.
+const DEFAULT_CLOCKD_IMAGE: &str = match option_env!("CHRONOSTACK_DEFAULT_CLOCKD_IMAGE") {
+    Some(v) => v,
+    None => LOCAL_CLOCKD_IMAGE,
+};
+const LOCAL_CLOCKD_IMAGE: &str = "chronostack/clockd:dev";
 use crate::docker::Compose;
 use crate::session::{ProbeSpec, ServiceEntry, Session};
 
@@ -57,7 +65,7 @@ enum Cmd {
         #[arg(
             long,
             env = "CHRONOSTACK_CLOCKD_IMAGE",
-            default_value = "chronostack/clockd:dev"
+            default_value = DEFAULT_CLOCKD_IMAGE
         )]
         clockd_image: String,
         /// Keep published host ports and container names in the ChronoStack copy.
@@ -570,11 +578,18 @@ fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> 
         .status
         .success()
     {
-        bail!(
-            "controller image `{clockd_image}` not found locally.\n\
-             Build it from the repository root with:\n  \
-             docker build -f docker/clockd.Dockerfile -t {clockd_image} ."
-        );
+        if clockd_image == LOCAL_CLOCKD_IMAGE {
+            bail!(
+                "controller image `{clockd_image}` not found locally.\n\
+                 Build it from the repository root with:\n  \
+                 docker build -f docker/clockd.Dockerfile -t {clockd_image} .\n\
+                 (release builds of the CLI pull a published image instead)"
+            );
+        }
+        eprintln!("pulling controller image {clockd_image} …");
+        if docker::run_inherit(&docker::s(&["pull", clockd_image])).is_err() {
+            bail!("could not pull the controller image `{clockd_image}`");
+        }
     }
 
     let user_compose = Compose {
@@ -845,20 +860,33 @@ fn doctor(json_out: bool) -> Result<i32> {
                     .is_some_and(|g| !g.is_empty()))
     });
     let problem_count = problems.count();
+    let clockd_version = c.version().ok();
 
     if json_out {
         println!(
             "{}",
-            json!({ "clock": clock.as_ref().ok(), "clockd_reachable": clock.is_ok(), "services": rows, "problems": problem_count })
+            json!({ "clock": clock.as_ref().ok(), "clockd_reachable": clock.is_ok(), "cli_version": env!("CARGO_PKG_VERSION"), "clockd_version": clockd_version, "services": rows, "problems": problem_count })
         );
     } else {
         match &clock {
-            Ok(st) => println!(
-                "clockd   reachable on 127.0.0.1:{}  virtual {}  ({})",
-                s.port,
-                format_utc(st.virtual_ns),
-                format_span(st.offset_ns)
-            ),
+            Ok(st) => {
+                println!(
+                    "clockd   reachable on 127.0.0.1:{}  virtual {}  ({})  version {}",
+                    s.port,
+                    format_utc(st.virtual_ns),
+                    format_span(st.offset_ns),
+                    clockd_version.as_deref().unwrap_or("unknown")
+                );
+                if clockd_version.as_deref() != Some(env!("CARGO_PKG_VERSION")) {
+                    println!(
+                        "warning: the CLI is {} but the controller is {}; run `chronostack down` and `up` with matching versions",
+                        env!("CARGO_PKG_VERSION"),
+                        clockd_version
+                            .as_deref()
+                            .unwrap_or("older than 0.1.0-alpha.1")
+                    );
+                }
+            }
             Err(e) => println!("clockd   NOT reachable: {e:#}"),
         }
         println!();

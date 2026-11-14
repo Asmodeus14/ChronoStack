@@ -1,6 +1,19 @@
-# Release & Maintenance Strategy (planned)
+# Release & Maintenance Strategy
 
-Nothing here is automated yet. **No publishing workflow will be added until the package layout and this process have been tried by hand at least once (alpha.1).**
+**Status (M5, 2026-11-14):** the release is automated in [`.github/workflows/release.yml`](../../.github/workflows/release.yml), in **draft mode**. A tag never publishes a finished release by itself: the workflow creates a *draft* GitHub Release that a maintainer reviews and publishes by hand. Run the workflow manually (`workflow_dispatch`) for a **dry run**, which builds and smoke-tests everything and publishes nothing.
+
+### How to cut a release
+
+1. Set `version` in the root `Cargo.toml` (and `sdk/node/package.json`). Rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z[-pre]] - YYYY-MM-DD`.
+2. Run the workflow by hand (dry run) and wait for it to pass.
+3. Push an annotated tag `vX.Y.Z[-pre]`. The workflow checks the tag matches `Cargo.toml`, then:
+   - builds the controller image natively on x86_64 and arm64, pushes `ghcr.io/asmodeus14/chronostack-clockd:X.Y.Z-amd64/-arm64` and the multi-arch `:X.Y.Z`;
+   - builds the CLI for linux-x64/arm64 (static musl), darwin-arm64/x64 and win32-x64, with the image **pinned by digest** as the default;
+   - extracts the 4 preload libraries, writes `SHA256SUMS` and an SPDX SBOM;
+   - installs with `install.sh` on fresh Linux x86_64 and arm64 runners and runs the demo scenario (must finish in under 5 minutes);
+   - creates a **draft** release (marked pre-release for `-alpha/-beta/-rc`) with all files and notes from `scripts/release_notes.py`.
+4. **First release only:** GHCR creates the `chronostack-clockd` package as **private**. Make it public in GitHub → Packages → chronostack-clockd → Package settings → Change visibility, otherwise users can't pull the image.
+5. Review the draft and publish it.
 
 ## Versioning
 
@@ -51,7 +64,7 @@ Nothing here is automated yet. **No publishing workflow will be added until the 
 |---|---|---|
 | [release-plz](https://github.com/release-plz/release-plz) | Automates release PRs, changelog (git-cliff) and crates.io publishing. Good for multi-crate workspaces publishing to crates.io. | **Later.** ChronoStack's main artifacts are binaries and a container image, not crates. Revisit if crates are published. |
 | [cargo-release](https://github.com/crate-ci/cargo-release) | Local CLI for version bump, tag and push; dry-run by default. | **Use for alpha/beta.** It is explicit, human-driven and safe. |
-| GitHub Actions release workflow (cargo-zigbuild + Docker buildx) | Builds and attaches artifacts on tag push | Add **after** alpha.1 has been produced by hand. Start in draft-release mode. |
+| GitHub Actions release workflow (native runners + Docker) | Builds and attaches artifacts on tag push | **Adopted in M5, in draft-release mode.** Native runners for every target instead of cargo-zigbuild (Linux uses the static musl target; macOS builds both architectures on one runner). |
 
 ## CI requirements (once code exists)
 
@@ -107,6 +120,6 @@ Follow [SECURITY.md](../../SECURITY.md):
 
 ## Dependency updates
 
-- Dependabot handles `github-actions` now. `cargo`, `npm` and `docker` will be added when those manifests exist.
+- Dependabot handles `github-actions`, `cargo` and `docker` (the Node SDK has no dependencies).
 - Updates are grouped weekly.
 - Security updates are reviewed within 7 days.

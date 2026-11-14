@@ -126,6 +126,15 @@ impl Client {
         self.call::<_, ()>("GET", &format!("/v1/events?since={since}"), None)
     }
 
+    /// Controller version from `/v1/health` (absent before 0.1.0-alpha.1).
+    pub fn version(&self) -> Result<String> {
+        let v: serde_json::Value = self.call::<_, ()>("GET", "/v1/health", None)?;
+        v.get("version")
+            .and_then(|x| x.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| anyhow!("controller does not report a version"))
+    }
+
     /// Wait for the API to answer (after `up`).
     pub fn wait_ready(&self, timeout: Duration) -> Result<ClockState> {
         let start = std::time::Instant::now();

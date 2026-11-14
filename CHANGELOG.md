@@ -88,6 +88,12 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
   - Controller: `GET /v1/clock/wait` long-poll.
   - `tests/e2e/run_m4.py` in CI.
 
+- **M5 — release:**
+  - `.github/workflows/release.yml`: on a `v*` tag, builds the controller image (x86_64 + arm64, pushed to GHCR) and the CLI for 5 targets, the preload libraries, `SHA256SUMS` and an SBOM; smoke-tests the install on fresh Linux runners; creates a draft GitHub Release. Manual runs are dry runs.
+  - `install/install.sh` (Linux, macOS) and `install/install.ps1` (Windows): download a release, verify `SHA256SUMS`, install to a user directory.
+  - The CLI's default controller image is set at build time; release builds pull `ghcr.io/asmodeus14/chronostack-clockd` pinned by digest. `doctor` shows the controller version and warns on a mismatch (`/v1/health` now reports it).
+  - README: install instructions and a demo transcript from a real run.
+
 ### Fixed
 
 - A timed-out `exec` trigger is now stopped inside its container (TERM, then KILL), including child processes. Previously only the local `docker` CLI was killed.

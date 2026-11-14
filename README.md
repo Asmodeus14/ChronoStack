@@ -35,8 +35,6 @@ None of these exercise the real interaction between database time (`now()`), cac
 
 ## What ChronoStack does
 
-Items marked *(planned)* are not built yet.
-
 - **Shared virtual wall-clock time across your Compose services, with no code changes.** A small preload library makes `NOW()` in Postgres, Redis expiry, `Date.now()` in Node and `time.time()` in Python all report the same virtual time.
 - **Advancing time actually runs scheduled work.** Changing the clock alone does *not* fire your timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So each step works like this:
   1. advance the clock;
@@ -51,7 +49,7 @@ Items marked *(planned)* are not built yet.
 
 ### Workflow
 
-Commands marked *(planned)* are not implemented yet. Scheduled work is declared once in `chronostack.yml`:
+Scheduled work is declared once in `chronostack.yml`:
 
 ```yaml
 version: 1
@@ -70,7 +68,55 @@ $ chronostack fault set webhooks --from +2d --for 2h   # partner endpoint down o
 $ chronostack run scenarios/trial.yml # pass/fail + .chronostack/reports/<time>-<name>.{json,md}
 ```
 
-### Try it from source (pre-alpha)
+### Install
+
+You need Docker with Compose v2 (Docker Desktop, or Docker Engine on Linux).
+
+```sh
+# Linux / macOS: installs to ~/.local/bin after checking SHA256SUMS
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.ps1 | iex
+```
+
+Binaries are built for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), with checksums and an SBOM on each [release](https://github.com/Asmodeus14/ChronoStack/releases). Releases are pre-releases until macOS has been tested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). On first `chronostack up`, the CLI pulls the matching controller image from `ghcr.io/asmodeus14/chronostack-clockd`, pinned by digest.
+
+### See it in 60 seconds
+
+```sh
+git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack/examples/saas-trial-demo
+chronostack up --wait
+chronostack run scenarios/trial.yml
+```
+
+Output from a real run on Docker Desktop (abridged):
+
+```console
+scenario: Trial expires and the webhook survives an outage (12 steps, run id 684aceea)
+── step 5/12: the webhook receiver is down on day 14 from 02:00 to 06:00
+   ✓ #1: webhooks returns HTTP 503 from 2026-11-29T02:00:02Z until 2026-11-29T06:00:02Z (virtual) (0.0s)
+── step 6/12: fourteen days pass, to day 14 at 00:00 (the 03:00 job runs every day)
+  2026-11-15T03:00:00Z  trigger expire-trials ok 0.93s; barrier api-up ok 0.36s, outbox-settled ok 0.42s
+  …
+   ✓ 15 stop(s), 14 trigger run(s)
+── step 8/12: day 14, hour by hour until noon
+  2026-11-29T03:00:00Z  trigger expire-trials ok 0.95s; barrier api-up ok 0.38s, outbox-settled ok 0.46s
+   ✓ 13 stop(s), 1 trigger run(s)
+── step 10/12: the receiver got the trial.expired webhook exactly once
+   ✓ = 1 (0.4s)
+── step 11/12: it took 4 attempts (3 during the outage, then success)
+   ✓ = 4 (0.4s)
+── step 12/12: it was delivered at 07:00, after the outage ended
+   ✓ = 07 (0.4s)
+PASSED — 12/12 steps passed, 46.0s real time, virtual 2026-11-14T05:40:51Z → 2026-11-29T12:00:07Z
+```
+
+Fifteen virtual days, an outage, retries and a delivered webhook, in under a minute of real time. Then `chronostack -f compose.yml -f compose.bug.yml up --wait` adds a deliberate bug, and the same scenario fails with a report that names it ([demo README](examples/saas-trial-demo/README.md)).
+
+### Build from source
 
 You need Docker with Compose v2, and a stable Rust toolchain.
 

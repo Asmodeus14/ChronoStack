@@ -1,0 +1,285 @@
+name: release
+
+# Builds every release artifact, smoke-tests the result on fresh runners, and,
+# only for a pushed tag `vX.Y.Z[-pre]`, publishes:
+#   - the controller image to GHCR (multi-arch, referenced by digest from the CLI),
+#   - a DRAFT GitHub Release (marked pre-release for -alpha/-beta/-rc) with the
+#     CLI archives, the preload libraries, install scripts, SHA256SUMS and an SBOM.
+# Run it by hand (workflow_dispatch) for a dry run: everything is built and
+# tested, nothing is published.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/asmodeus14/chronostack-clockd
+  CARGO_TERM_COLOR: always
+
+jobs:
+  meta:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            if [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match Cargo.toml version $version"
+              exit 1
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+          case "$version" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT";; *) echo "prerelease=false" >> "$GITHUB_OUTPUT";; esac
+          echo "version $version, publish=$([ "${GITHUB_EVENT_NAME}" = push ] && echo yes || echo no)"
+
+  image:
+    name: Controller image (${{ matrix.arch }})
+    needs: meta
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, uname: x86_64, runner: ubuntu-latest }
+          - { arch: arm64, uname: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build (runs the clockd unit tests)
+        run: docker build -f docker/clockd.Dockerfile -t "$IMAGE:$VERSION-${{ matrix.arch }}" .
+      - name: Extract the preload libraries
+        run: |
+          id=$(docker create "$IMAGE:$VERSION-${{ matrix.arch }}")
+          mkdir -p out
+          docker cp "$id:/opt/chronostack/lib/libchronoclock-${{ matrix.uname }}-gnu.so" out/
+          docker cp "$id:/opt/chronostack/lib/libchronoclock-${{ matrix.uname }}-musl.so" out/
+          docker rm "$id"
+          ls -l out
+      - name: Save the image for the smoke test
+        run: docker save "$IMAGE:$VERSION-${{ matrix.arch }}" | gzip > "out/clockd-image-${{ matrix.arch }}.tar.gz"
+      - name: Push (tags only)
+        if: needs.meta.outputs.publish == 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE:$VERSION-${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-${{ matrix.arch }}
+          path: out/
+
+  manifest:
+    name: Multi-arch manifest
+    needs: [meta, image]
+    if: needs.meta.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.m.outputs.ref }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - id: m
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker buildx imagetools create -t "$IMAGE:$VERSION" "$IMAGE:$VERSION-amd64" "$IMAGE:$VERSION-arm64"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          echo "ref=$IMAGE:$VERSION@$digest" >> "$GITHUB_OUTPUT"
+          echo "published $IMAGE:$VERSION@$digest"
+
+  cli:
+    name: CLI (${{ matrix.name }})
+    needs: [meta, manifest]
+    if: ${{ !cancelled() && needs.meta.result == 'success' && needs.manifest.result != 'failure' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { name: linux-arm64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+          - { name: darwin-arm64, runner: macos-latest, target: aarch64-apple-darwin }
+          - { name: darwin-x64, runner: macos-latest, target: x86_64-apple-darwin }
+          - { name: win32-x64, runner: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      # Release builds pull the published controller image, pinned by digest.
+      # Dry runs use the version tag; the smoke test loads that image locally.
+      CHRONOSTACK_DEFAULT_CLOCKD_IMAGE: ${{ needs.manifest.outputs.ref || format('ghcr.io/asmodeus14/chronostack-clockd:{0}', needs.meta.outputs.version) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: contains(matrix.target, 'linux-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked -p chronostack --target ${{ matrix.target }}
+        shell: bash
+      - name: Package
+        shell: bash
+        run: |
+          dir="chronostack-$VERSION-${{ matrix.name }}"
+          mkdir -p dist stage
+          cp LICENSE-MIT LICENSE-APACHE README.md stage/
+          if [ "${{ matrix.name }}" = win32-x64 ]; then
+            cp "target/${{ matrix.target }}/release/chronostack.exe" stage/
+            (cd stage && 7z a -tzip "../dist/$dir.zip" chronostack.exe LICENSE-MIT LICENSE-APACHE README.md >/dev/null)
+          else
+            cp "target/${{ matrix.target }}/release/chronostack" stage/
+            tar -C stage -czf "dist/$dir.tar.gz" chronostack LICENSE-MIT LICENSE-APACHE README.md
+          fi
+          ls -l dist
+      - name: Runs (native targets)
+        if: matrix.name != 'darwin-x64'
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/chronostack"
+          "$bin" --version
+          "$bin" --help | head -3
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.name }}
+          path: dist/
+
+  sbom:
+    name: SBOM
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: chronostack-${{ needs.meta.outputs.version }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: chronostack-${{ needs.meta.outputs.version }}.spdx.json
+
+  package:
+    name: Assemble release files
+    needs: [meta, image, cli, sbom]
+    if: ${{ !cancelled() && needs.cli.result == 'success' && needs.image.result == 'success' && needs.sbom.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: in
+      - run: |
+          mkdir -p release
+          cp in/cli-*/* release/
+          cp in/image-*/libchronoclock-*.so release/
+          cp in/sbom/* release/
+          cp install/install.sh install/install.ps1 release/
+          (cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+          python3 scripts/release_notes.py "$VERSION" > release-notes.md
+          cat release-notes.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: |
+            release/
+            release-notes.md
+
+  smoke:
+    name: Smoke test (${{ matrix.runner }})
+    # A fresh runner: install with install.sh from the release files, then run
+    # the demo scenario from a copy of the example directory.
+    needs: [meta, package]
+    if: ${{ !cancelled() && needs.package.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, arch: amd64 }
+          - { runner: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: examples/saas-trial-demo
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dl
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-${{ matrix.arch }}
+          path: img
+      - name: Controller image
+        run: |
+          if [ "${{ needs.meta.outputs.publish }}" = "true" ]; then
+            # The CLI pulls the published image itself (logged in, in case the
+            # GHCR package is not public yet).
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          else
+            gunzip -c img/clockd-image-${{ matrix.arch }}.tar.gz | docker load
+            docker tag "$IMAGE:$VERSION-${{ matrix.arch }}" "$IMAGE:$VERSION"
+          fi
+      - name: Install with install.sh (served locally)
+        run: |
+          (cd dl/release && python3 -m http.server 8765 >/dev/null 2>&1 &)
+          sleep 1
+          CHRONOSTACK_VERSION="$VERSION" CHRONOSTACK_DOWNLOAD_BASE=http://127.0.0.1:8765 sh dl/release/install.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Demo from zero (< 5 minutes)
+        run: |
+          chronostack --version
+          cp -r examples/saas-trial-demo "$RUNNER_TEMP/demo" && cd "$RUNNER_TEMP/demo"
+          start=$(date +%s)
+          chronostack up --wait --wait-timeout 240s
+          chronostack run scenarios/trial.yml
+          end=$(date +%s)
+          chronostack down -v
+          echo "demo took $((end - start)) s"
+          test $((end - start)) -lt 300
+
+  release:
+    name: Draft GitHub Release
+    needs: [meta, smoke]
+    if: needs.meta.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dl
+      - run: |
+          flags="--draft"
+          if [ "${{ needs.meta.outputs.prerelease }}" = "true" ]; then flags="$flags --prerelease"; fi
+          gh release create "v$VERSION" dl/release/* $flags \
+            --repo "$GITHUB_REPOSITORY" --title "ChronoStack $VERSION" --notes-file dl/release-notes.md --verify-tag
