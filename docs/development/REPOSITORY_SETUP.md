@@ -59,7 +59,7 @@ all = { level = "warn", priority = -1 }
 
 ## GitHub repository metadata (owner applies in repository settings)
 
-- **Description** (≤ 350 chars): `Stripe Test Clocks for your Docker Compose stack: advance time across Postgres, Redis and your services, run the jobs that depend on it, and verify the results. (Pre-alpha: works from source; not released.)` Applied 2026-11-13.
+- **Description** (≤ 350 chars): `Stripe Test Clocks for your Docker Compose stack: advance time across Postgres, Redis and your services, run the jobs that depend on it, and verify the results. (Pre-alpha; first pre-release v0.1.0-alpha.2.)` Applied 2026-11-14.
 - **Topics:**
   - `testing`, `integration-testing`, `time-travel`, `faketime`, `ld-preload`
   - `docker-compose`, `postgresql`, `redis`

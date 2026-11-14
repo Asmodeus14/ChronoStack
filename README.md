@@ -7,10 +7,10 @@ Move the whole stack — Postgres, Redis, and your services — forward in time 
 > **Status: pre-alpha. Works on Linux and Windows hosts; first pre-release `v0.1.0-alpha.2`.**
 > - **M0 feasibility spike: passed** ([results](docs/M0_RESULTS.md)). Virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read.
 > - **M1 (controller + core CLI): implemented.** `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe` and `doctor` work. They are tested end to end in CI on Linux x86_64 and arm64, and locally on Docker Desktop (Windows).
-> - **M2 (step → trigger → barrier engine): implemented.** `chronostack.yml` triggers and barriers, scheduled triggers in virtual time, automatic pg_cron sub-stepping, `--dry-run`, and a [reference demo](examples/saas-trial-demo/README.md). In the demo, `advance 14d` runs the daily job 14 times in about 17 s ([results](docs/M2_RESULTS.md)).
+> - **M2 (step → trigger → barrier engine): implemented.** `chronostack.yml` triggers and barriers, scheduled triggers in virtual time, automatic pg_cron sub-stepping, `--dry-run`, and a [reference demo](examples/saas-trial-demo/README.md). In the demo, `advance 14d` runs the daily job 14 times in about 20 s ([results](docs/M2_RESULTS.md)).
 > - **M3 (outage windows, scenarios, reports): implemented.** A fault proxy for outages in virtual time, `chronostack run <scenario.yml>`, and readable failure reports ([results](docs/M3_RESULTS.md)).
 > - **M4 (MCP server, Node register): implemented.** AI agents can drive the clock through `chronostack mcp`, and host-native Node apps follow it with `-r register` ([results](docs/M4_RESULTS.md)).
-> - **M5 (release): pipeline ready** ([results](docs/M5_RESULTS.md)). Binaries for Linux, macOS and Windows, a controller image on GHCR and install scripts; the first pre-release is `v0.1.0-alpha.2`. macOS is untested.
+> - **M5 (release): done** ([results](docs/M5_RESULTS.md)). Binaries for Linux, macOS and Windows, a controller image on GHCR, install scripts, `chronostack update` and a GitHub Action. First pre-release: [`v0.1.0-alpha.2`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.2). macOS is untested.
 
 ![ChronoStack running 15 virtual days of a SaaS demo, including a webhook outage, in about 20 seconds](docs/assets/demo.gif)
 
@@ -213,15 +213,16 @@ ChronoStack never changes your host's clock, needs no privileged containers, and
 | **M2 (done on Linux, see [results](docs/M2_RESULTS.md))** | Step / trigger / barrier engine, pg_cron stepping, reference demo, scheduler matrix |
 | **M3 (done, see [results](docs/M3_RESULTS.md))** | Fault proxy with outage windows in virtual time, scenarios, failure reports |
 | **M4 (done, see [results](docs/M4_RESULTS.md))** | MCP server (2025 and 2026-07-28 protocol revisions), Node register |
-| v0.1 (remaining) | M5: release (binaries, controller image, install script) |
-| v0.2 | Virtual user cohorts, seeded network faults, npm package and JS SDK, scheduler inspection, GitHub Action |
+| **M5 (done, see [results](docs/M5_RESULTS.md))** | Release pipeline, install scripts, `chronostack update`, GitHub Action |
+| v0.1.0 (stable) | The same, once macOS is verified ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
+| v0.2 | Virtual user cohorts, seeded network faults, npm package and JS SDK, Homebrew/Scoop packages, signed binaries, scheduler inspection |
 | v1.0 | Snapshot and restore (which would allow moving backward in time), timeline viewer, investigation of Go support |
 
 Details: [docs/FEATURE_ROADMAP.md](docs/FEATURE_ROADMAP.md) · [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
 
 ## Contributing
 
-The project is pre-alpha: it works from source, and nothing is released yet. The most useful contributions right now:
+The project is pre-alpha, with a first pre-release. The most useful contributions right now:
 
 - trying `chronostack up` / `doctor` / `advance` on your own Compose project and reporting what breaks;
 - running it on macOS (see below);
@@ -234,13 +235,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT
 
 **Have a Mac?** ChronoStack has never been run on macOS. GitHub's macOS runners can't run Docker, so the maintainers can't test it in CI, and this is the last open item of the M2 milestone. One run on your machine would help a lot, especially an Apple Silicon Mac with Docker Desktop. OrbStack and Colima results are welcome too.
 
-You need Docker (Docker Desktop, OrbStack or Colima), a stable Rust toolchain and Python 3. The test takes about 5 minutes after the images download.
+You need Docker (Docker Desktop, OrbStack or Colima), git and Python 3. No Rust: the test uses the released macOS binary, which is exactly what needs checking. It takes about 5 minutes after the images download.
 
 ```sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.2 sh
+export PATH="$HOME/.local/bin:$PATH"
 git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack
-docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
-cargo build -p chronostack
-python3 tests/e2e/run_m2.py --cli target/debug/chronostack --repeat 3
+python3 tests/e2e/run_m2.py --cli "$(command -v chronostack)" --repeat 3
 ```
 
 It should end with `ALL CHECKS PASSED`, including "3 runs produced identical outcomes". Then comment on the pinned issue [#5](https://github.com/Asmodeus14/ChronoStack/issues/5) with:

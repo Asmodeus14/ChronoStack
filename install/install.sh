@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Install the ChronoStack CLI on Linux or macOS.
 #
-#   curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v<VERSION>/install.sh | sh
+#   (or https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh once a
+#   stable release exists: GitHub's "latest" link skips pre-releases)
 #
 # Options (environment variables):
 #   CHRONOSTACK_VERSION        version to install, e.g. 0.1.0-alpha.2 (default: the newest release,
