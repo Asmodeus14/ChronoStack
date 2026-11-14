@@ -76,7 +76,7 @@ all = { level = "warn", priority = -1 }
 
 ## Social preview image
 
-Created: [`docs/assets/social-preview.png`](../assets/social-preview.png), drawn in Cascadia Mono (SIL Open Font License). Upload it in **Settings → General → Social preview** (GitHub has no API for this). Concept:
+Created: [`docs/assets/social-preview.png`](../assets/social-preview.png) with the ChronoStack logo (see [brand](../assets/brand/README.md)), text in Cascadia Mono (SIL Open Font License). Upload it in **Settings → General → Social preview** (GitHub has no API for this). Concept:
 
 - Size: 1280×640.
 - Dark background with a horizontal timeline.
