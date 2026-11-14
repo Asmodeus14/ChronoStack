@@ -1,0 +1,58 @@
+version: 1
+name: A poll closes after its last date, then is cleaned up
+description: >-
+  A poll whose only option is in 2 days. The hourly auto-close job must close it
+  once that option has ended (Postgres now()). Thirty days of inactivity later,
+  the daily job must mark it deleted (Node Date.now()), and 7 days after that
+  the purge job must remove it.
+
+steps:
+  - name: start at a UTC midnight
+    advance: { to: next 00:00 }
+
+  - name: create a poll whose only option is in 2 days, 10:00-11:00
+    exec:
+      service: rallly_db
+      command:
+        - psql
+        - -U
+        - postgres
+        - -d
+        - rallly
+        - -v
+        - ON_ERROR_STOP=1
+        - -c
+        - >-
+          insert into polls (id, title, updated_at) values ('cs-${run_id}', 'ChronoStack test', now());
+          insert into options (id, start_time, duration_minutes, poll_id)
+          values ('cs-opt-${run_id}', date_trunc('day', now() at time zone 'UTC') + interval '2 days 10 hours', 60, 'cs-${run_id}');
+
+  - name: the poll is open
+    assert: { sql: { service: rallly_db, user: postgres, database: rallly, query: "select status from polls where id = 'cs-${run_id}'", equals: open } }
+
+  - name: two days pass, to day 2 at 11:00 (auto-close runs every hour at :15)
+    advance: 2d11h
+
+  - name: the poll is still open (the option ends at 11:00, next run is 11:15)
+    assert: { sql: { service: rallly_db, user: postgres, database: rallly, query: "select status from polls where id = 'cs-${run_id}'", equals: open } }
+
+  - name: one more hour
+    advance: 1h
+
+  - name: the poll was auto-closed
+    assert: { sql: { service: rallly_db, user: postgres, database: rallly, query: "select status from polls where id = 'cs-${run_id}'", equals: closed } }
+
+  - name: by the 11:15 run, the first one after the option ended
+    assert: { sql: { service: rallly_db, user: postgres, database: rallly, query: "select to_char(created_at, 'HH24:MI') from poll_activities where poll_id = 'cs-${run_id}' and type = 'poll_closed'", equals: "11:15" } }
+
+  - name: 30 days of inactivity pass
+    advance: 31d
+
+  - name: the poll was marked deleted
+    assert: { sql: { service: rallly_db, user: postgres, database: rallly, query: "select deleted from polls where id = 'cs-${run_id}'", equals: t } }
+
+  - name: 8 more days pass
+    advance: 8d
+
+  - name: the poll was removed for good
+    assert: { sql: { service: rallly_db, user: postgres, database: rallly, query: "select count(*) from polls where id = 'cs-${run_id}'", equals: "0" } }

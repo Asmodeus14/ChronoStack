@@ -1,0 +1,14 @@
+# Rallly's Vercel crons (apps/web/vercel.json), run at their virtual times.
+version: 1
+
+
+triggers:
+  - name: auto-close-polls          # vercel.json: "15 * * * *"
+    schedule: { every: 1h, at: "00:15" }
+    exec: { service: rallly, command: [curl, -fsS, --noproxy, "*", -H, "Authorization: Bearer chronostack-cron", "http://localhost:3000/api/house-keeping/auto-close-polls"] }
+  - name: delete-inactive-polls     # "0 6 * * *"
+    schedule: { every: 1d, at: "06:00" }
+    exec: { service: rallly, command: [curl, -fsS, --noproxy, "*", -H, "Authorization: Bearer chronostack-cron", "http://localhost:3000/api/house-keeping/delete-inactive-polls"] }
+  - name: remove-deleted-polls      # "30 6 * * *"
+    schedule: { every: 1d, at: "06:30" }
+    exec: { service: rallly, command: [curl, -fsS, --noproxy, "*", -H, "Authorization: Bearer chronostack-cron", "http://localhost:3000/api/house-keeping/remove-deleted-polls"] }

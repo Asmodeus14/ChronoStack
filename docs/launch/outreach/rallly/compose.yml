@@ -1,0 +1,26 @@
+# Rallly as published (lukevella/rallly image + Postgres), for testing with ChronoStack.
+services:
+  rallly_db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rallly
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rallly:
+    image: lukevella/rallly:latest
+    depends_on:
+      rallly_db: { condition: service_healthy }
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@rallly_db/rallly
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      SECRET_PASSWORD: chronostack-test-secret-0123456789abcdef
+      SUPPORT_EMAIL: support@example.com
+      SMTP_HOST: localhost
+      CRON_SECRET: chronostack-cron
