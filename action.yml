@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: Setup ChronoStack
+description: Install the ChronoStack CLI (move time across your Docker Compose stack) on a Linux runner.
+author: ChronoStack contributors
+branding:
+  icon: clock
+  color: blue
+
+inputs:
+  version:
+    description: ChronoStack version to install, e.g. 0.1.0-alpha.1.
+    required: false
+    default: 0.1.0-alpha.1
+
+outputs:
+  version:
+    description: The installed version.
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the runner
+      shell: bash
+      run: |
+        if [ "${RUNNER_OS}" != "Linux" ]; then
+          echo "::error::setup-chronostack needs a Linux runner with Docker (GitHub's macOS and Windows runners can't run Linux containers)"
+          exit 1
+        fi
+        docker compose version >/dev/null || { echo "::error::Docker Compose v2 is required"; exit 1; }
+    - id: install
+      name: Install the CLI (checksum-verified)
+      shell: bash
+      env:
+        CHRONOSTACK_VERSION: ${{ inputs.version }}
+        CHRONOSTACK_INSTALL_DIR: ${{ runner.temp }}/chronostack/bin
+      run: |
+        sh "${GITHUB_ACTION_PATH}/install/install.sh"
+        echo "${CHRONOSTACK_INSTALL_DIR}" >> "${GITHUB_PATH}"
+        echo "version=$("${CHRONOSTACK_INSTALL_DIR}/chronostack" --version | awk '{print $2}')" >> "${GITHUB_OUTPUT}"

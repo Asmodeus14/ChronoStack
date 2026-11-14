@@ -1,0 +1,37 @@
+name: demo-gif
+
+# Renders docs/assets/demo.gif from docs/assets/demo.tape against a real demo
+# stack, and uploads it as an artifact. Commit the GIF by hand after checking it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+      - run: |
+          cargo build -p chronostack
+          echo "$GITHUB_WORKSPACE/target/debug" >> "$GITHUB_PATH"
+      - name: Start the demo (not recorded)
+        working-directory: examples/saas-trial-demo
+        run: chronostack up --wait --wait-timeout 240s
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/assets/demo.tape
+      - name: Stop the demo
+        if: always()
+        working-directory: examples/saas-trial-demo
+        run: chronostack down -v
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-gif
+          path: docs/assets/demo.gif

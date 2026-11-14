@@ -1,11 +1,12 @@
 # ChronoStack Documentation
 
-ChronoStack is in its **design phase**. These documents are the research and plan; none of them describe a feature that is already implemented.
+ChronoStack is **pre-alpha** (first pre-release `v0.1.0-alpha.1`). The guide and the results documents describe what is built and tested. The planning documents (vision, architecture, roadmap) also cover work that is not built yet; their status notes say which.
 
 ## Start here
 
 | If you want to… | Read |
 |---|---|
+| Use it on your own project | [GUIDE.md](GUIDE.md) |
 | Understand the product in 5 minutes | [PRODUCT_VISION.md](PRODUCT_VISION.md) → [MVP_SCOPE.md](MVP_SCOPE.md) |
 | See how it will work | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Know why it is designed this way | [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) |
@@ -29,7 +30,12 @@ ChronoStack is in its **design phase**. These documents are the research and pla
 - [M0_RESULTS.md](M0_RESULTS.md): feasibility spike results and exit-gate verdict
 - [M1_RESULTS.md](M1_RESULTS.md): controller and CLI results, including 3 external projects
 - [M2_RESULTS.md](M2_RESULTS.md): step/trigger/barrier engine, demo and pg_cron results
+- [M3_RESULTS.md](M3_RESULTS.md): fault proxy, outage windows, scenarios and reports
+- [M4_RESULTS.md](M4_RESULTS.md): MCP server and Node register
+- [M5_RESULTS.md](M5_RESULTS.md): release pipeline and install scripts
+- [GUIDE.md](GUIDE.md): using ChronoStack on your own project
 - [schema/chronostack.schema.json](schema/chronostack.schema.json): JSON Schema for `chronostack.yml`
+- [schema/scenario.schema.json](schema/scenario.schema.json): JSON Schema for scenario files
 
 ## Planning
 
@@ -46,7 +52,7 @@ ChronoStack is in its **design phase**. These documents are the research and pla
 ## Project development
 
 - [development/RELEASE_PROCESS.md](development/RELEASE_PROCESS.md): versioning, release stages, tooling, support policy
-- [development/LICENSING.md](development/LICENSING.md): licensing options and recommendation (owner decision pending)
+- [development/LICENSING.md](development/LICENSING.md): licensing decision: MIT OR Apache-2.0
 - [development/REPOSITORY_SETUP.md](development/REPOSITORY_SETUP.md): repository metadata, deferred configuration, GitHub settings
 
 ## Glossary

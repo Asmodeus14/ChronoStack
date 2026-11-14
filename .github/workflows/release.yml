@@ -195,6 +195,8 @@ jobs:
           cp in/image-*/libchronoclock-*.so release/
           cp in/sbom/* release/
           cp install/install.sh install/install.ps1 release/
+          # MCP bundles (.mcpb) per target + server.json for the MCP Registry.
+          python3 scripts/build_mcpb.py release "$VERSION"
           (cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS)
           python3 scripts/release_notes.py "$VERSION" > release-notes.md
           cat release-notes.md

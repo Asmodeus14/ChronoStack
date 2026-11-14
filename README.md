@@ -84,6 +84,8 @@ $env:CHRONOSTACK_VERSION = "0.1.0-alpha.1"; irm https://github.com/Asmodeus14/Ch
 
 Binaries are built for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), with checksums and an SBOM on each [release](https://github.com/Asmodeus14/ChronoStack/releases). Releases are pre-releases (so the commands name the version) until macOS has been tested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). On first `chronostack up`, the CLI pulls the matching controller image from `ghcr.io/asmodeus14/chronostack-clockd`, pinned by digest.
 
+**Next:** [use it on your own project](docs/GUIDE.md): reading `doctor`, making your scheduled jobs run, outages, scenarios, CI.
+
 ### See it in 60 seconds
 
 ```sh

@@ -1,0 +1,44 @@
+name: action-test
+
+# Checks the repository's GitHub Action (action.yml) against a PUBLISHED release:
+# install with `uses: ./`, then run the demo scenario. Run it by hand after a
+# release is published and its GHCR image is public.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to install
+        required: true
+        default: 0.1.0-alpha.1
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: cs
+        uses: ./
+        with:
+          version: ${{ inputs.version }}
+      - run: echo "installed ${{ steps.cs.outputs.version }}"
+      - name: Demo scenario (pulls the controller image anonymously from GHCR)
+        working-directory: examples/saas-trial-demo
+        run: |
+          chronostack up --wait --wait-timeout 240s
+          chronostack run scenarios/trial.yml
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-${{ matrix.os }}
+          path: examples/saas-trial-demo/.chronostack/reports/
+      - if: always()
+        working-directory: examples/saas-trial-demo
+        run: chronostack down -v || true
