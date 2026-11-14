@@ -1,0 +1,97 @@
+name: Beta report (I tried it on my stack)
+description: Tell us how ChronoStack did on your own Docker Compose project, whether it worked or not
+title: "Beta report: "
+labels: ["beta-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying ChronoStack on a real project. Short answers are fine; the `doctor` output is the most useful part.
+        Remove secrets, hostnames and anything private before pasting.
+  - type: dropdown
+    id: first-try
+    attributes:
+      label: Did `chronostack up --wait` and `chronostack doctor` work on the first try?
+      options:
+        - "Yes, everything was green"
+        - "Partly: it started, but doctor flagged something"
+        - "No: it failed to start or hung"
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options:
+        - macOS, Apple silicon
+        - macOS, Intel
+        - Linux x86_64
+        - Linux arm64
+        - Windows (Docker Desktop, WSL2)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: docker
+    attributes:
+      label: Docker
+      options:
+        - Docker Desktop
+        - OrbStack
+        - Colima
+        - Docker Engine (Linux)
+        - Rancher Desktop
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: services
+    attributes:
+      label: What runs in your stack?
+      options:
+        - label: PostgreSQL
+        - label: MySQL / MariaDB
+        - label: Redis
+        - label: Node.js
+        - label: Python
+        - label: JVM (Java, Kotlin)
+        - label: Ruby
+        - label: Go
+        - label: Other (say below)
+  - type: checkboxes
+    id: schedulers
+    attributes:
+      label: How do your scheduled jobs run?
+      options:
+        - label: BullMQ
+        - label: Celery beat
+        - label: pg_cron
+        - label: node-cron
+        - label: APScheduler
+        - label: cron inside a container
+        - label: An external scheduler (Kubernetes CronJob, cloud scheduler, CI)
+        - label: Other (say below)
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`chronostack doctor` output"
+      description: Paste the full output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What did you try, and what happened?
+      description: For example, "advance 14d; the nightly job didn't run". Include the error if there was one.
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you test time-dependent code today?
+      description: Trials, renewals, expiry, cron jobs, retries. Hand-edited timestamps, test-only flags, waiting, not at all? This helps more than you'd think.
+  - type: checkboxes
+    id: follow-up
+    attributes:
+      label: Follow-up
+      options:
+        - label: You can contact me here to follow up or to test a fix.

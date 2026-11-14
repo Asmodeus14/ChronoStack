@@ -1,12 +1,12 @@
 name: Bug report
-description: Something is wrong (in the docs today; in ChronoStack once it exists)
+description: Something is wrong in ChronoStack or its docs
 labels: ["bug", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for reporting! **Security issues must not be reported here** — see SECURITY.md.
-        ChronoStack is in its design phase; documentation errors (wrong technical claims, broken links) are valid bugs.
+        Documentation errors (wrong technical claims, broken links) are valid bugs too. Tried it on your own stack? The beta report form is quicker.
   - type: dropdown
     id: area
     attributes:

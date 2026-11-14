@@ -13,6 +13,8 @@
 
 ## 1. Quiet beta (2–3 weeks)
 
+Kit (messages, where to find testers, tracker, exit criteria): [BETA.md](BETA.md). Reports come in through the **Beta report** issue form.
+
 Ask 10–20 developers (friends, communities you're in, X/Bluesky) to run `chronostack up --wait && chronostack doctor` on their own Compose project and report back:
 
 - did it work first try?
