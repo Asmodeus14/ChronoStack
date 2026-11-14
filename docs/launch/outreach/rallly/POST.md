@@ -1,4 +1,4 @@
-<!-- Draft for https://github.com/lukevella/rallly/discussions, category: General. Not posted yet. -->
+<!-- Posted 2026-11-14: https://github.com/lukevella/rallly/discussions/3721 (General) -->
 
 **Title:** Tested Rallly's housekeeping crons across 6 weeks of virtual time (scenario included)
 
@@ -36,6 +36,6 @@ triggers:
 
 </details>
 
-The full scenario file, compose file and run report are here: <LINK TO docs/launch/outreach/rallly ONCE PUSHED>
+The full scenario file, compose file and run report are here: https://github.com/Asmodeus14/ChronoStack/tree/main/docs/launch/outreach/rallly
 
 If this would be useful in Rallly's CI, I'm happy to open a PR with it. And if anyone here is on an Apple-silicon Mac, `chronostack doctor` output from that setup would help me a lot: macOS is the one platform I haven't been able to test yet.

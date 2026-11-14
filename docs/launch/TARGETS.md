@@ -42,4 +42,4 @@ Open-source projects with real time-dependent features, on stacks ChronoStack co
 
 | Project | Tested flow | Result | Posted | Reply | Mac report |
 |---|---|---|---|---|---|
-| Rallly | Poll auto-close, inactive delete, purge ([files](outreach/rallly/)) | 12/12 passed on `lukevella/rallly:latest`, 2026-11-14 | Draft ready | | |
+| Rallly | Poll auto-close, inactive delete, purge ([files](outreach/rallly/)) | 12/12 passed on `lukevella/rallly:latest`, 2026-11-14 | [#3721](https://github.com/lukevella/rallly/discussions/3721), 2026-11-14 | | |
