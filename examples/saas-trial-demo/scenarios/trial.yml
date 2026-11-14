@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=../../../docs/schema/scenario.schema.json
+# Run on a fresh stack:  chronostack up --wait && chronostack run scenarios/trial.yml
+version: 1
+name: Trial expires and the webhook survives an outage
+description: >-
+  A user signs up for a 14-day trial. On day 14 the daily 03:00 job downgrades
+  them and queues a `trial.expired` webhook, but the partner's endpoint is down
+  from 02:00 to 06:00. The worker must retry with backoff and deliver the
+  webhook exactly once, after the outage.
+
+steps:
+  - name: start at a UTC midnight
+    advance: { to: next 00:00 }
+
+  - name: alice signs up
+    exec: { service: api, command: [node, scripts/call.js, signup, alice@example.com] }
+
+  - name: alice is on the trial plan
+    assert:
+      sql: { service: db, query: "select plan from users where email = 'alice@example.com'", equals: trial }
+
+  - name: the webhook receiver is down on day 14 from 02:00 to 06:00
+    fault: { target: webhooks, from: +14d2h, for: 4h }
+
+  - name: fourteen days pass, to day 14 at 00:00 (the 03:00 job runs every day)
+    advance: 14d
+
+  - name: alice is still on the trial
+    assert:
+      sql: { service: db, query: "select plan from users where email = 'alice@example.com'", equals: trial }
+
+  - name: day 14, hour by hour until noon
+    advance: { by: 12h, step: 1h }
+
+  - name: alice was downgraded to the free plan
+    assert:
+      sql: { service: db, query: "select plan from users where email = 'alice@example.com'", equals: free }
+
+  - name: the receiver got the trial.expired webhook exactly once
+    assert:
+      redis: { service: cache, command: [HGET, webhook:received, "trial.expired:1"], equals: "1" }
+
+  - name: it took 4 attempts (3 during the outage, then success)
+    assert:
+      sql: { service: db, query: "select attempts from webhook_outbox where event_id = 'trial.expired:1'", equals: "4" }
+
+  - name: it was delivered at 07:00, after the outage ended
+    assert:
+      sql:
+        service: db
+        query: "select to_char(delivered_at at time zone 'UTC', 'HH24') from webhook_outbox where event_id = 'trial.expired:1'"
+        equals: "07"

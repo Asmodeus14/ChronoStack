@@ -14,3 +14,18 @@ CREATE TABLE job_runs (
   ran_at   timestamptz NOT NULL DEFAULT now(),
   affected integer NOT NULL
 );
+
+-- Outgoing webhooks (transactional outbox). The worker delivers due rows and
+-- retries failures with exponential backoff: 20 min, 40 min, 80 min, …
+CREATE TABLE webhook_outbox (
+  id              serial PRIMARY KEY,
+  event_id        text UNIQUE NOT NULL,        -- also sent as Idempotency-Key
+  type            text NOT NULL,
+  payload         jsonb NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  attempts        integer NOT NULL DEFAULT 0,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  last_error      text,
+  delivered_at    timestamptz,
+  failed_at       timestamptz                  -- gave up after 8 attempts
+);

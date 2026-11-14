@@ -72,6 +72,8 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 
 **Objective.** Test retry logic across a virtual-time outage and capture reproducible failure artifacts.
 
+> **Status (2026-11-14): implemented; exit gate met locally.** See [M3_RESULTS.md](M3_RESULTS.md). Differences from the plan: windows return an HTTP status (no "connection refused" mode); faults are `POST /v1/faults` with ids; scenario parsing lives in `crates/cli/src/scenario.rs` next to the config parser.
+
 **Tasks.** HTTP reverse proxy in clockd for declared egress targets; outage windows keyed to virtual time; override rewrites target URLs via env (`WEBHOOK_URL`) or network alias; linear scenario runner (`advance`, `trigger`, `http`, `assert_sql`, `assert_redis`, `fault`); report JSON (scenario, clock log with generations, probe results, trigger output (redacted), proxy event ring buffer last 1 000).
 **Files.** `crates/clockd/src/proxy.rs`, `crates/core/src/scenario.rs`, `crates/cli/src/report.rs`.
 **Deliverable.** `chronostack run scenarios/trial.yml` → pass/fail + report.

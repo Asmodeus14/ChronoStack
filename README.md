@@ -8,7 +8,8 @@ Move the whole stack — Postgres, Redis, and your services — forward in time 
 > - **M0 feasibility spike: passed** ([results](docs/M0_RESULTS.md)). Virtual time worked across Postgres, Redis, Node, Python and the JVM, with zero hangs and about 13 ns overhead per clock read.
 > - **M1 (controller + core CLI): implemented.** `up`, `down`, `now`, `advance`, `freeze`, `unfreeze`, `probe` and `doctor` work. They are tested end to end in CI on Linux x86_64 and arm64, and locally on Docker Desktop (Windows).
 > - **M2 (step → trigger → barrier engine): implemented.** `chronostack.yml` triggers and barriers, scheduled triggers in virtual time, automatic pg_cron sub-stepping, `--dry-run`, and a [reference demo](examples/saas-trial-demo/README.md). In the demo, `advance 14d` runs the daily job 14 times in about 17 s ([results](docs/M2_RESULTS.md)).
-> - Outage windows, scenarios and MCP are **planned** (M3–M4). macOS is untested.
+> - **M3 (outage windows, scenarios, reports): implemented.** A fault proxy for outages in virtual time, `chronostack run <scenario.yml>`, and readable failure reports ([results](docs/M3_RESULTS.md)).
+> - MCP is **planned** (M4). macOS is untested.
 
 ---
 
@@ -42,8 +43,8 @@ Items marked *(planned)* are not built yet.
   3. wait on barriers (conditions such as "the jobs table is idle") before the next step.
 - **Scheduler-aware stepping.** Scheduled triggers run at their exact virtual times. pg_cron is detected, and the clock stops on each of its job minutes so jobs aren't skipped.
 - **Verification after every step.** Probes check that each service sees the new time. `doctor` reports which services cannot be virtualized, and why.
-- *(planned, M3)* **Outages scheduled in virtual time.** For example, "the webhook receiver is down on day 3 from 09:00 to 11:00", so you can test retries.
-- *(planned, M3)* **Scenarios and failure reports.** Declarative YAML steps with SQL, Redis and HTTP assertions. Each run writes a JSON report.
+- **Outages scheduled in virtual time.** For example, "the webhook receiver is down on day 3 from 09:00 to 11:00", so you can test retries. Declared HTTP targets go through a small proxy in the controller; your app's URL variable is pointed at it, with no code changes.
+- **Scenarios and failure reports.** Declarative YAML steps with SQL, Redis and HTTP assertions. Each run writes a JSON report and a Markdown summary that explains what failed, with secrets redacted.
 - *(planned, M4)* **MCP server.** AI coding agents can control the timeline through a small, safe set of tools.
 
 ### Workflow
@@ -63,7 +64,8 @@ $ chronostack up                      # wraps your existing docker-compose.yml
 $ chronostack doctor                  # shows which services are virtualized
 $ chronostack advance 25h             # Redis session expires; trial still active
 $ chronostack advance 14d             # daily 03:00 trigger runs 14 times; trial expires on day 14
-$ chronostack run scenarios/trial.yml # (planned, M3) pass/fail + .chronostack/report-<run>.json
+$ chronostack fault set webhooks --from +2d --for 2h   # partner endpoint down on day 2, in virtual time
+$ chronostack run scenarios/trial.yml # pass/fail + .chronostack/reports/<time>-<name>.{json,md}
 ```
 
 ### Try it from source (pre-alpha)
@@ -155,7 +157,8 @@ ChronoStack never changes your host's clock, needs no privileged containers, and
 | **M0 (done, see [results](docs/M0_RESULTS.md))** | Feasibility spike:<br>• correct time in Postgres, Redis, Node, Python and the JVM<br>• no hangs<br>• glibc and musl, on Docker Desktop (WSL2); arm64 later covered by CI |
 | **M1 (done, see [results](docs/M1_RESULTS.md))** | Controller, CLI, Compose integration, `doctor` |
 | **M2 (done on Linux, see [results](docs/M2_RESULTS.md))** | Step / trigger / barrier engine, pg_cron stepping, reference demo, scheduler matrix |
-| v0.1 (remaining) | M3: outage windows, scenarios, reports · M4: MCP, Node register · M5: release |
+| **M3 (done, see [results](docs/M3_RESULTS.md))** | Fault proxy with outage windows in virtual time, scenarios, failure reports |
+| v0.1 (remaining) | M4: MCP, Node register · M5: release |
 | v0.2 | Virtual user cohorts, seeded network faults, npm package and JS SDK, scheduler inspection, GitHub Action |
 | v1.0 | Snapshot and restore (which would allow moving backward in time), timeline viewer, investigation of Go support |
 

@@ -10,6 +10,12 @@
 #[cfg(target_os = "linux")]
 mod clock;
 #[cfg(target_os = "linux")]
+mod events;
+#[cfg(target_os = "linux")]
+mod faults;
+#[cfg(target_os = "linux")]
+mod proxy;
+#[cfg(target_os = "linux")]
 mod server;
 
 fn main() {
@@ -30,7 +36,9 @@ mod linux {
 
     use chronostack_core::paths;
 
-    use crate::{clock, server};
+    use chronostack_core::api::{MAX_PROXY_TARGETS, ProxyTarget};
+
+    use crate::{clock, events, faults, server};
 
     fn arg(args: &[String], name: &str, default: &str) -> String {
         args.iter()
@@ -99,7 +107,32 @@ mod linux {
             st.offset_ns,
             st.session_id
         ));
-        server::serve(&clock, &listen, &token)
+        let targets: Vec<ProxyTarget> = match std::env::var("CHRONOSTACK_PROXIES") {
+            Ok(s) if !s.trim().is_empty() => match serde_json::from_str(&s) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("clockd: CHRONOSTACK_PROXIES is not valid JSON: {e}");
+                    return 2;
+                }
+            },
+            _ => Vec::new(),
+        };
+        if targets.len() > MAX_PROXY_TARGETS {
+            eprintln!("clockd: at most {MAX_PROXY_TARGETS} proxy targets");
+            return 2;
+        }
+        // Outage windows are stored next to the clock page, so they survive a restart.
+        let faults_path = std::path::Path::new(&page).with_file_name("faults.json");
+        let events = events::Events::new();
+        let faults = faults::Faults::load(Some(faults_path));
+        let ctx = server::Ctx {
+            clock: &clock,
+            token: &token,
+            events: &events,
+            faults: &faults,
+            targets: &targets,
+        };
+        server::serve(&ctx, &listen)
     }
 
     fn healthcheck(addr: &str) -> i32 {

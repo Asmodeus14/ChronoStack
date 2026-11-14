@@ -5,7 +5,10 @@ mod config;
 mod detect;
 mod docker;
 mod engine;
+mod fault;
 mod probe;
+mod report;
+mod scenario;
 mod session;
 mod yaml;
 
@@ -132,6 +135,62 @@ enum Cmd {
     Doctor {
         #[arg(long)]
         json: bool,
+    },
+    /// Outage windows on proxy targets, in virtual time.
+    Fault {
+        #[command(subcommand)]
+        cmd: FaultCmd,
+    },
+    /// Show the controller's event log (clock changes, faults, proxied requests).
+    Events {
+        /// Only events after this sequence number.
+        #[arg(long, default_value_t = 0)]
+        since: u64,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a scenario file and write a report to .chronostack/reports/.
+    Run {
+        /// Scenario file (YAML).
+        file: String,
+        /// Print the report JSON instead of progress.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum FaultCmd {
+    /// Make a proxy target return an error status during a virtual-time window.
+    Set {
+        /// Proxy target name (from `proxies:` in chronostack.yml).
+        target: String,
+        /// Start: `now`, `+<duration>`, `next HH:MM` (UTC) or a UTC time.
+        #[arg(long, default_value = "now", allow_hyphen_values = true)]
+        from: String,
+        /// Length of the window (e.g. 2h).
+        #[arg(long = "for", conflicts_with = "until")]
+        duration: Option<String>,
+        /// End of the window (same forms as --from).
+        #[arg(long, allow_hyphen_values = true)]
+        until: Option<String>,
+        /// Status returned during the window.
+        #[arg(long)]
+        status: Option<u16>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List proxy targets and outage windows.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove one window (by id) or all of them.
+    Clear {
+        /// Window id (see `fault list`).
+        id: Option<u64>,
+        #[arg(long, conflicts_with = "id")]
+        all: bool,
     },
 }
 
@@ -264,6 +323,83 @@ fn run(cli: Cli) -> Result<i32> {
             })
         }
         Cmd::Doctor { json } => doctor(json),
+        Cmd::Fault { cmd } => {
+            let mut s = Session::load()?;
+            let c = client(&mut s);
+            match cmd {
+                FaultCmd::Set {
+                    target,
+                    from,
+                    duration,
+                    until,
+                    status,
+                    json,
+                } => {
+                    let f = fault::set(
+                        &c,
+                        &target,
+                        &from,
+                        duration.as_deref(),
+                        until.as_deref(),
+                        status,
+                    )?;
+                    if json {
+                        println!("{}", serde_json::to_string(&f)?);
+                    } else {
+                        println!(
+                            "outage #{}: `{}` returns HTTP {} from {} until {} (virtual time)",
+                            f.id,
+                            f.target,
+                            f.status,
+                            format_utc(f.from_ns),
+                            format_utc(f.to_ns)
+                        );
+                    }
+                }
+                FaultCmd::List { json } => {
+                    if json {
+                        println!("{}", serde_json::to_string(&c.faults()?)?);
+                    } else {
+                        fault::print_list(&c)?;
+                    }
+                }
+                FaultCmd::Clear { id, all } => {
+                    if id.is_none() && !all {
+                        bail!("give a window id (see `chronostack fault list`) or --all");
+                    }
+                    let removed = c.fault_clear(id)?;
+                    println!("removed {} outage window(s)", removed.len());
+                }
+            }
+            Ok(0)
+        }
+        Cmd::Events { since, json } => {
+            let mut s = Session::load()?;
+            let e = client(&mut s).events(since)?;
+            if json {
+                println!("{}", serde_json::to_string(&e)?);
+            } else {
+                if e.truncated {
+                    println!("(older events were dropped; the controller keeps the last 1000)");
+                }
+                for ev in &e.events {
+                    println!("{}", fault::describe(ev));
+                }
+                if e.events.is_empty() {
+                    println!("no events after #{since}");
+                }
+            }
+            Ok(0)
+        }
+        Cmd::Run { file, json } => {
+            let mut s = Session::load()?;
+            let cfg = load_config(&s)?;
+            let services: Vec<String> = s.services.iter().map(|e| e.plan.service.clone()).collect();
+            let path = Path::new(&file);
+            let sc = scenario::load(path, &cfg, &services)?;
+            let c = client(&mut s);
+            scenario::run(&s, &c, &cfg, path, &sc, json)
+        }
     }
 }
 
@@ -450,6 +586,13 @@ fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> 
         });
     }
 
+    let names: Vec<String> = project.services.iter().map(|s| s.name.clone()).collect();
+    let proxies = match config::find(Path::new(".")) {
+        Some(p) => config::load(&p, &names)?.config.proxies,
+        None => vec![],
+    };
+    let proxy_plan = fault::plan(&project, &proxies)?;
+
     let token = session::new_token()?;
     let plans: Vec<ServicePlan> = entries.iter().map(|e| e.plan.clone()).collect();
     let mut isolate = if keep_ports {
@@ -459,7 +602,8 @@ fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> 
     };
     if !isolate.is_empty() && !compose_supports_reset() {
         eprintln!(
-            "warning: Docker Compose < 2.24 cannot remove published ports (`!reset`);              the ChronoStack copy keeps them and cannot run next to your own stack"
+            "warning: Docker Compose < 2.24 cannot remove published ports (`!reset`); \
+             the ChronoStack copy keeps them and cannot run next to your own stack"
         );
         isolate.clear();
     }
@@ -468,6 +612,9 @@ fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> 
         &ClockdSpec {
             image: clockd_image,
             token: &token,
+            proxies: &proxy_plan.targets,
+            networks: &proxy_plan.networks,
+            env_rewrites: &proxy_plan.rewrites,
         },
         &isolate,
     );
@@ -519,6 +666,15 @@ isolated from your own stack (use `up --keep-ports` to keep these):"
                 what.push(format!("container_name `{n}` not used"));
             }
             println!("  {}: {}", i.service, what.join("; "));
+        }
+    }
+    if !proxy_plan.rewrites.is_empty() {
+        println!("\nrouted through the fault proxy (`chronostack fault set <target> …`):");
+        for rw in &proxy_plan.rewrites {
+            println!(
+                "  {}: {} = {}  (was {})",
+                rw.service, rw.var, rw.value, rw.original
+            );
         }
     }
     println!();

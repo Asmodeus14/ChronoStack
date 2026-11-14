@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+use crate::api::ProxyTarget;
 use crate::paths;
 
 /// C library family of an image.
@@ -40,6 +41,8 @@ pub struct Service {
     /// Host ports this service publishes (e.g. `80`, `127.0.0.1:3000`).
     pub published_ports: Vec<String>,
     pub container_name: Option<String>,
+    /// Networks the service joins (`default` when none are declared).
+    pub networks: Vec<String>,
 }
 
 /// The resolved Compose project.
@@ -118,6 +121,16 @@ pub fn parse_config(json_text: &str) -> Result<Project, String> {
                     .get("container_name")
                     .and_then(Value::as_str)
                     .map(str::to_string),
+                networks: match s.get("networks") {
+                    Some(Value::Object(m)) => m.keys().cloned().collect(),
+                    Some(Value::Array(a)) => a
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect(),
+                    _ if s.get("network_mode").is_some() => vec![],
+                    _ => vec!["default".to_string()],
+                },
             });
         }
     }
@@ -251,6 +264,57 @@ pub fn merge_ld_preload(ours: &str, existing: Option<&str>) -> String {
 pub struct ClockdSpec<'a> {
     pub image: &'a str,
     pub token: &'a str,
+    /// Fault-proxy targets served by `clockd` (empty = no proxies).
+    pub proxies: &'a [ProxyTarget],
+    /// Networks `clockd` must join so services can reach the proxies.
+    pub networks: &'a [String],
+    /// Environment variables pointed at a proxy.
+    pub env_rewrites: &'a [EnvRewrite],
+}
+
+/// One environment variable of one service, rewritten to go through a proxy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnvRewrite {
+    pub service: String,
+    pub var: String,
+    pub original: String,
+    pub value: String,
+}
+
+/// Base URL of a proxy target as seen from other services.
+pub fn proxy_base(t: &ProxyTarget) -> String {
+    format!("http://{}:{}", paths::CLOCKD_SERVICE, t.listen_port)
+}
+
+/// Point `original` (a URL that must start with `upstream`) at the proxy,
+/// keeping the rest of the URL: `http://receiver:4000/hooks?x=1` with upstream
+/// `http://receiver:4000` becomes `http://chronostack-clockd:7200/hooks?x=1`.
+pub fn rewrite_url(original: &str, upstream: &str, proxy: &str) -> Result<String, String> {
+    let up = upstream.trim_end_matches('/');
+    let head = original.get(..up.len()).unwrap_or("");
+    let rest = original.get(up.len()..).unwrap_or("");
+    if !head.eq_ignore_ascii_case(up)
+        || !(rest.is_empty() || rest.starts_with('/') || rest.starts_with('?'))
+    {
+        return Err(format!(
+            "`{original}` does not start with the proxy's upstream `{upstream}`"
+        ));
+    }
+    Ok(format!("{proxy}{rest}"))
+}
+
+/// Validate a proxy upstream: `http://host[:port]`, no path, query or credentials.
+pub fn check_upstream(upstream: &str) -> Result<(), String> {
+    let rest = upstream.strip_prefix("http://").ok_or_else(|| {
+        format!("upstream `{upstream}` must start with http:// (the proxy does not speak TLS)")
+    })?;
+    let rest = rest.trim_end_matches('/');
+    if rest.is_empty() || rest.contains(['/', '?', '#', '@']) {
+        return Err(format!(
+            "upstream `{upstream}` must be http://host[:port] with no path, query or credentials"
+        ));
+    }
+    Ok(())
 }
 
 /// Marker the CLI turns into Compose's `!reset` YAML tag (JSON cannot carry tags).
@@ -287,11 +351,16 @@ pub fn generate_override(
     isolate: &[Isolation],
 ) -> Value {
     let mut services = Map::new();
+    let mut clockd_env = json!({ "CHRONOSTACK_TOKEN": clockd.token });
+    if !clockd.proxies.is_empty() {
+        clockd_env["CHRONOSTACK_PROXIES"] =
+            Value::String(serde_json::to_string(clockd.proxies).expect("serializable"));
+    }
     services.insert(
         paths::CLOCKD_SERVICE.into(),
         json!({
             "image": clockd.image,
-            "environment": { "CHRONOSTACK_TOKEN": clockd.token },
+            "environment": clockd_env,
             "volumes": [format!("{}:{}", paths::VOLUME, paths::MOUNT)],
             "ports": [format!("127.0.0.1::{}", paths::CLOCKD_PORT)],
             "healthcheck": {
@@ -315,6 +384,25 @@ pub fn generate_override(
                 "depends_on": { paths::CLOCKD_SERVICE: { "condition": "service_healthy" } },
             }),
         );
+    }
+    if !clockd.networks.is_empty() {
+        let mut nets: Vec<&String> = clockd.networks.iter().collect();
+        nets.sort();
+        nets.dedup();
+        services[paths::CLOCKD_SERVICE]["networks"] = json!(nets);
+    }
+    for rw in clockd.env_rewrites {
+        let entry = services
+            .entry(rw.service.clone())
+            .or_insert_with(|| json!({}));
+        if entry.get("environment").is_none() {
+            entry["environment"] = json!({});
+        }
+        entry["environment"][&rw.var] = Value::String(rw.value.clone());
+        if entry.get("depends_on").is_none() {
+            entry["depends_on"] =
+                json!({ paths::CLOCKD_SERVICE: { "condition": "service_healthy" } });
+        }
     }
     for iso in isolate {
         let entry = services
@@ -436,6 +524,7 @@ mod tests {
             environment: BTreeMap::new(),
             published_ports: vec![],
             container_name: None,
+            networks: vec!["default".into()],
         };
         let mut i = info("arm64", Some(Libc::Gnu));
         i.image_ld_preload = Some("/lib/a.so /lib/b.so".into());
@@ -477,6 +566,9 @@ mod tests {
             &ClockdSpec {
                 image: "chronostack/clockd:dev",
                 token: "t0k",
+                proxies: &[],
+                networks: &[],
+                env_rewrites: &[],
             },
             &[],
         );
@@ -531,11 +623,91 @@ mod tests {
             &ClockdSpec {
                 image: "i",
                 token: "t",
+                proxies: &[],
+                networks: &[],
+                env_rewrites: &[],
             },
             &iso,
         );
         assert_eq!(doc["services"]["web"]["ports"][RESET_MARKER], json!([]));
         assert!(doc["services"]["web"]["container_name"][RESET_MARKER].is_null());
         assert!(doc["services"].get("db").is_none());
+    }
+
+    #[test]
+    fn proxy_urls_and_override() {
+        let t = ProxyTarget {
+            name: "hooks".into(),
+            listen_port: 7200,
+            upstream: "http://receiver:4000".into(),
+        };
+        let base = proxy_base(&t);
+        assert_eq!(base, "http://chronostack-clockd:7200");
+        assert_eq!(
+            rewrite_url("http://receiver:4000/hooks?a=1", &t.upstream, &base).unwrap(),
+            "http://chronostack-clockd:7200/hooks?a=1"
+        );
+        assert_eq!(
+            rewrite_url("HTTP://Receiver:4000", "http://receiver:4000/", &base).unwrap(),
+            "http://chronostack-clockd:7200"
+        );
+        assert!(rewrite_url("http://receiver:40001/x", &t.upstream, &base).is_err());
+        assert!(rewrite_url("http://other:4000/x", &t.upstream, &base).is_err());
+        assert!(check_upstream("http://receiver:4000").is_ok());
+        assert!(check_upstream("https://receiver").is_err());
+        assert!(check_upstream("http://receiver:4000/hooks").is_err());
+        assert!(check_upstream("http://u:p@receiver").is_err());
+
+        let p = parse_config(
+            r#"{"name":"x","services":{
+                "worker":{"image":"w","networks":{"back":null}},
+                "host":{"image":"h","network_mode":"host"},
+                "plain":{"image":"p"}}}"#,
+        )
+        .unwrap();
+        let nets = |n: &str| {
+            p.services
+                .iter()
+                .find(|s| s.name == n)
+                .unwrap()
+                .networks
+                .clone()
+        };
+        assert_eq!(nets("worker"), vec!["back"]);
+        assert!(nets("host").is_empty());
+        assert_eq!(nets("plain"), vec!["default"]);
+
+        let rw = EnvRewrite {
+            service: "worker".into(),
+            var: "WEBHOOK_URL".into(),
+            original: "http://receiver:4000/hooks".into(),
+            value: "http://chronostack-clockd:7200/hooks".into(),
+        };
+        let doc = generate_override(
+            &[],
+            &ClockdSpec {
+                image: "i",
+                token: "t",
+                proxies: std::slice::from_ref(&t),
+                networks: &["back".into(), "default".into(), "back".into()],
+                env_rewrites: std::slice::from_ref(&rw),
+            },
+            &[],
+        );
+        let c = &doc["services"]["chronostack-clockd"];
+        let proxies: Vec<ProxyTarget> =
+            serde_json::from_str(c["environment"]["CHRONOSTACK_PROXIES"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(proxies, vec![t]);
+        assert_eq!(c["networks"], json!(["back", "default"]));
+        let w = &doc["services"]["worker"];
+        assert_eq!(
+            w["environment"]["WEBHOOK_URL"],
+            "http://chronostack-clockd:7200/hooks"
+        );
+        assert_eq!(
+            w["depends_on"]["chronostack-clockd"]["condition"],
+            "service_healthy"
+        );
     }
 }

@@ -253,7 +253,7 @@ fn print_wildcards(w: &[WildcardJob]) {
     }
 }
 
-fn tail(s: &str, n: usize) -> String {
+pub(crate) fn tail(s: &str, n: usize) -> String {
     let t = s.trim();
     let start = t
         .char_indices()
@@ -321,7 +321,11 @@ fn stop_in_container(compose: &Compose, service: &str, id: &str) -> &'static str
     }
 }
 
-fn run_exec(compose: &Compose, spec: &ExecSpec, timeout: Duration) -> (bool, Option<String>) {
+pub(crate) fn run_exec(
+    compose: &Compose,
+    spec: &ExecSpec,
+    timeout: Duration,
+) -> (bool, Option<String>) {
     let id = trigger_id();
     let mut args = compose.args(&["exec", "-T", &spec.service, "sh", "-c", WRAP, "sh", &id]);
     args.extend(spec.command.iter().cloned());
@@ -371,7 +375,7 @@ fn run_exec(compose: &Compose, spec: &ExecSpec, timeout: Duration) -> (bool, Opt
     }
 }
 
-fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
+pub(crate) fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
     let agent = crate::client::agent(timeout);
     let builder = ureq::http::Request::builder()
         .method(spec.method.as_str())
@@ -382,10 +386,17 @@ fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
         spec.method.to_ascii_uppercase().as_str(),
         "GET" | "HEAD" | "DELETE" | "OPTIONS"
     );
-    let resp = if no_body {
-        builder.body(()).map(|r| agent.run(r))
-    } else {
-        builder.body(&[][..]).map(|r| agent.run(r))
+    let builder = match &spec.body {
+        Some(_) => builder.header(
+            "Content-Type",
+            spec.content_type.as_deref().unwrap_or("application/json"),
+        ),
+        None => builder,
+    };
+    let resp = match (&spec.body, no_body) {
+        (Some(b), _) => builder.body(b.as_bytes()).map(|r| agent.run(r)),
+        (None, true) => builder.body(()).map(|r| agent.run(r)),
+        (None, false) => builder.body(&[][..]).map(|r| agent.run(r)),
     };
     let resp = match resp {
         Ok(r) => r,
@@ -402,7 +413,7 @@ fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
     (ok, Some(format!("HTTP {code}")))
 }
 
-fn run_trigger(compose: &Compose, t: &Trigger, timeout_ns: i64) -> ActionResult {
+pub(crate) fn run_trigger(compose: &Compose, t: &Trigger, timeout_ns: i64) -> ActionResult {
     let start = Instant::now();
     let timeout = Duration::from_nanos(timeout_ns as u64);
     let (ok, detail) = match (&t.exec, &t.http) {
@@ -419,7 +430,11 @@ fn run_trigger(compose: &Compose, t: &Trigger, timeout_ns: i64) -> ActionResult 
 }
 
 /// Evaluate a barrier once.
-fn barrier_once(session: &Session, compose: &Compose, b: &Barrier) -> (bool, Option<String>) {
+pub(crate) fn barrier_once(
+    session: &Session,
+    compose: &Compose,
+    b: &Barrier,
+) -> (bool, Option<String>) {
     let quick = Duration::from_secs(20);
     if let Some(s) = &b.sql {
         let (u, d) = match session
@@ -438,8 +453,17 @@ fn barrier_once(session: &Session, compose: &Compose, b: &Barrier) -> (bool, Opt
         ]);
         return match docker::output_timeout(&args, quick) {
             Ok(t) => {
-                let v = t.stdout.trim().to_ascii_lowercase();
-                let ok = t.code == Some(0) && matches!(v.as_str(), "t" | "true" | "1");
+                let raw = t.stdout.trim().to_string();
+                let ok = t.code == Some(0)
+                    && match &s.equals {
+                        Some(want) => raw == want.trim(),
+                        None => matches!(raw.to_ascii_lowercase().as_str(), "t" | "true" | "1"),
+                    };
+                let v = if raw.is_empty() {
+                    "(empty)".to_string()
+                } else {
+                    raw
+                };
                 (
                     ok,
                     Some(if t.code == Some(0) {
@@ -458,7 +482,11 @@ fn barrier_once(session: &Session, compose: &Compose, b: &Barrier) -> (bool, Opt
         return match docker::output_timeout(&args, quick) {
             Ok(t) => {
                 let v = t.stdout.trim().to_string();
-                (t.code == Some(0) && v == r.equals, Some(format!("= {v}")))
+                let shown = if v.is_empty() { "(empty)" } else { v.as_str() };
+                (
+                    t.code == Some(0) && v == r.equals,
+                    Some(format!("= {shown}")),
+                )
             }
             Err(e) => (false, Some(e.to_string())),
         };
@@ -472,7 +500,7 @@ fn barrier_once(session: &Session, compose: &Compose, b: &Barrier) -> (bool, Opt
     (false, Some("no condition".into()))
 }
 
-fn wait_barrier(
+pub(crate) fn wait_barrier(
     session: &Session,
     compose: &Compose,
     b: &Barrier,
@@ -551,6 +579,22 @@ fn print_plan(
 }
 
 pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Options) -> Result<i32> {
+    Ok(advance_full(session, client, cfg, opts)?.code)
+}
+
+/// Result of [`advance_full`]: the exit code and the same JSON document that
+/// `advance --json` prints (used by scenario reports).
+pub struct Outcome {
+    pub code: i32,
+    pub summary: serde_json::Value,
+}
+
+pub fn advance_full(
+    session: &Session,
+    client: &Client,
+    cfg: &Resolved,
+    opts: &Options,
+) -> Result<Outcome> {
     let start_state = client.clock()?;
     let from = start_state.virtual_ns;
     let to = match opts.target {
@@ -626,7 +670,10 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
                 print_wildcards(&wildcards);
             }
         }
-        return Ok(0);
+        return Ok(Outcome {
+            code: 0,
+            summary: json!({ "dry_run": true }),
+        });
     }
 
     if !opts.json {
@@ -718,15 +765,13 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
         code = 3;
     }
     let trigger_runs: usize = results.iter().map(|r| r.triggers.len()).sum();
+    let summary = json!({
+        "ok": code == 0, "exit_code": code, "from_ns": from, "to_ns": to,
+        "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_wildcards": wildcards,
+        "trigger_runs": trigger_runs, "stops": results, "clock": end_state, "probes": probes,
+    });
     if opts.json {
-        println!(
-            "{}",
-            json!({
-                "ok": code == 0, "exit_code": code, "from_ns": from, "to_ns": to,
-                "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_wildcards": wildcards,
-                "trigger_runs": trigger_runs, "stops": results, "clock": end_state, "probes": probes,
-            })
-        );
+        println!("{summary}");
     } else {
         println!(
             "\n{} — {} stop(s), {} trigger run(s), {:.1}s real time",
@@ -745,7 +790,7 @@ pub fn advance(session: &Session, client: &Client, cfg: &Resolved, opts: &Option
             probe::print_probes(&probes);
         }
     }
-    Ok(code)
+    Ok(Outcome { code, summary })
 }
 
 fn print_plan_header(
@@ -881,6 +926,8 @@ mod tests {
             url,
             method: method.into(),
             status,
+            body: None,
+            content_type: None,
         }
     }
 

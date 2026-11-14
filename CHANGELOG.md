@@ -72,6 +72,15 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
 - Scheduler matrix: APScheduler 3 (BlockingScheduler).
 - e2e: Postgres after a single 14-day jump (responsive, no checkpoint storm, autovacuum runs once).
 
+- **M3 — outage windows, scenarios, reports:**
+  - HTTP fault proxy in `clockd` (`proxies:` in `chronostack.yml`): URL environment variables are pointed at it in the override; outage windows in virtual time return 503 (or a chosen status); windows persist across restarts.
+  - Event log in `clockd` (last 1,000 events) and `chronostack events`.
+  - `chronostack fault set|list|clear` with `now`, `+<dur>`, `next HH:MM` and UTC times.
+  - `chronostack run <scenario.yml>`: linear steps (`advance`, `trigger`, `exec`, `http`, `fault`, `fault_clear`, `assert`, `wait_for`, `sleep`); JSON and Markdown reports in `.chronostack/reports/` with secrets redacted; exit code 6 on failure. JSON Schema in `docs/schema/scenario.schema.json`.
+  - `chronostack.yml`: `equals:` for SQL checks, `body:`/`content_type:` for HTTP.
+  - Demo: transactional outbox, webhook retries with backoff, a receiver, `scenarios/trial.yml` and a deliberate bug (`compose.bug.yml`).
+  - `tests/e2e/run_m3.py` in CI; nightly runs the scenario 5×.
+
 ### Fixed
 
 - A timed-out `exec` trigger is now stopped inside its container (TERM, then KILL), including child processes. Previously only the local `docker` CLI was killed.

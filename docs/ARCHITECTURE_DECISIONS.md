@@ -66,6 +66,7 @@ Format: Context → Decision → Consequences. Status of all ADRs: **Proposed** 
 **Context.** Toxiproxy already offers mature TCP faults (toxics: latency, bandwidth, slow_close, timeout, reset_peer, slicer, limit_data, packet_loss; "down" by disabling a proxy) with an HTTP API (https://github.com/Shopify/toxiproxy, verified). ChronoStack's unique angle is scheduling faults on the *virtual* timeline (e.g. "webhook endpoint down from day 3 09:00 to day 3 11:00").
 **Decision.** v0.1 ships a minimal reverse proxy inside clockd for declared HTTP egress targets, supporting `down` (503 or connection refused) windows keyed to virtual time. Latency/drop/partition with seeded `ChaCha8Rng` move to v0.2. Document Toxiproxy interop.
 **Consequences.** Smaller surface; webhook-retry demo still possible.
+**Amendment (M3, 2026-11-14).** Implemented as an HTTP status during the window (default 503, configurable 4xx/5xx), not connection refused: a status shows up in the app's logs and the event log, while a refused connection looks like the proxy is broken. Targets are wired by rewriting a URL environment variable in the override (`proxies[].env`), so apps need an env-configurable URL. Upstream failures return 502 (fail closed).
 
 ## ADR-011 — MCP is a thin client of the controller API
 

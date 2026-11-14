@@ -124,7 +124,7 @@ If no triggers or barriers are configured, the engine falls back to `--dwell` (d
 | Barrier never becomes true | The step fails after `timeout` (default 30 s real time) and writes a failure report. The clock stays at the failed step. |
 | Trigger command fails | The step fails. Output is captured, truncated and redacted. |
 | Trigger command times out | The step fails (exit 4). The CLI kills its `docker` process tree and stops the trigger's process tree inside the container (TERM, then KILL after 3 s). Images without `sh` cannot be cleaned up this way; the report says so. |
-| Fault proxy dies | Fails closed (connection refused), is logged as an event, and clockd restarts the proxy task. |
+| Fault proxy cannot reach the upstream | Answers 502 (fails closed) and logs an `upstream_error` event. Proxy listeners run inside `clockd`; if `clockd` stops, requests are refused until it restarts. Outage windows persist across restarts. |
 | Backward advance requested | Rejected in v0.1 (ADR-009). |
 
 **Hard guarantee:** ChronoStack never calls `settimeofday` or `clock_settime`, never requests `CAP_SYS_TIME`, and never runs privileged containers. No container gets the Docker socket. The host and VM clocks are never modified.
@@ -137,8 +137,10 @@ If no triggers or barriers are configured, the engine falls back to `--dwell` (d
 | GET | `/v1/clock` | Returns `{virtual_ns, real_ns, offset_ns, frozen, generation, session_id, layout_version}` |
 | POST | `/v1/clock/advance` | Takes `{by_ns}` or `{to_unix_ns}` (forward only). Performs a single atomic commit. |
 | POST | `/v1/clock/freeze` / `/v1/clock/unfreeze` | Toggle the frozen state |
-| PUT | `/v1/faults/{target}` / DELETE `/v1/faults/{id}` | *(planned, M3)* Outage windows (virtual-time ranges) on proxied targets |
-| GET | `/v1/events?since=` | *(planned, M3)* Event log |
+| GET | `/v1/faults` | Proxy targets and outage windows |
+| POST | `/v1/faults` | Create a window: `{target, from_ns, to_ns, status?}` (virtual time, status default 503) |
+| DELETE | `/v1/faults/{id}` / `/v1/faults` | Remove one window / all windows |
+| GET | `/v1/events?since=<seq>` | Event log: the last 1,000 clock changes, window changes and proxied requests |
 | GET | `/v1/stream` | *(planned, M4)* Server-sent events stream of clock changes (Node SDK) |
 
 Stepping, triggers, barriers, scenarios and reports are **not** controller endpoints; the CLI engine owns them.

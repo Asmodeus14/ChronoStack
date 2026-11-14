@@ -60,3 +60,5 @@ jobs:
         run: python3 tests/e2e/run_m1.py --skip-image-build --cli target/debug/chronostack
       - name: Run e2e (M2 — demo lifecycle, pg_cron sub-stepping)
         run: python3 tests/e2e/run_m2.py --cli target/debug/chronostack
+      - name: Run e2e (M3 - fault proxy, scenarios, reports)
+        run: python3 tests/e2e/run_m3.py --cli target/debug/chronostack

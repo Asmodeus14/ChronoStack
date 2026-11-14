@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-# A small SaaS app with a 14-day trial, 24-hour sessions and a daily job.
+# A small SaaS app with a 14-day trial, 24-hour sessions, a daily job and
+# outgoing webhooks with retries.
 # Nothing in here knows about ChronoStack; see chronostack.yml for the time setup.
 name: saas-trial-demo
 
@@ -36,6 +37,16 @@ services:
   worker:
     build: ./app
     command: ["node", "src/worker.js"]
-    environment: *env
+    environment:
+      <<: *env
+      WEBHOOK_URL: http://receiver:4000/hooks
     depends_on:
       db: { condition: service_healthy }
+
+  # Stand-in for a partner's webhook endpoint.
+  receiver:
+    build: ./app
+    command: ["node", "src/receiver.js"]
+    environment: *env
+    depends_on:
+      cache: { condition: service_started }

@@ -13,3 +13,20 @@ barriers:
   # Before moving on, make sure the API is still serving (a cheap health gate).
   - name: api-up
     exec: { service: api, command: [wget, -q, -O, /dev/null, "http://127.0.0.1:3000/users"] }
+  # The worker polls the outbox every 500 ms using the database's now(). Wait
+  # until it has handled every webhook that is due at this virtual time.
+  - name: outbox-settled
+    sql:
+      service: db
+      query: >-
+        select count(*) = 0 from webhook_outbox
+         where delivered_at is null and failed_at is null and next_attempt_at <= now()
+
+proxies:
+  # Webhooks go through ChronoStack's fault proxy, so outages can be scheduled
+  # in virtual time (`chronostack fault set webhooks …` or a scenario step).
+  # ChronoStack points the worker's WEBHOOK_URL at the proxy; compose.yml is
+  # unchanged.
+  - name: webhooks
+    upstream: http://receiver:4000
+    env: { worker: WEBHOOK_URL }

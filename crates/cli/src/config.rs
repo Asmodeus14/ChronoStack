@@ -13,6 +13,10 @@
 //! barriers:
 //!   - name: queue-drained
 //!     redis: { service: cache, command: [LLEN, jobs], equals: "0" }
+//! proxies:                                     # HTTP fault proxy (outage windows)
+//!   - name: webhooks
+//!     upstream: http://receiver:4000
+//!     env: { worker: WEBHOOK_URL }             # service: variable pointed at the proxy
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -34,6 +38,21 @@ pub struct Config {
     pub triggers: Vec<Trigger>,
     #[serde(default)]
     pub barriers: Vec<Barrier>,
+    #[serde(default)]
+    pub proxies: Vec<ProxyCfg>,
+}
+
+/// An HTTP egress target routed through the `clockd` fault proxy.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProxyCfg {
+    pub name: String,
+    /// `http://host:port` the requests really go to (inside the Compose network).
+    pub upstream: String,
+    /// `service: VARIABLE` pairs: each variable (a URL starting with `upstream`)
+    /// is rewritten to point at the proxy in the ChronoStack copy.
+    #[serde(default)]
+    pub env: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -66,6 +85,9 @@ pub struct HttpSpec {
     pub method: String,
     /// Expected status; default: any 2xx.
     pub status: Option<u16>,
+    /// Request body (sent as `application/json` unless `content_type` is set).
+    pub body: Option<String>,
+    pub content_type: Option<String>,
 }
 
 fn default_post() -> String {
@@ -76,8 +98,10 @@ fn default_post() -> String {
 #[serde(deny_unknown_fields)]
 pub struct SqlSpec {
     pub service: String,
-    /// Must return a single boolean-ish value: `t`, `true`, `1` = satisfied.
+    /// Without `equals`: must return a single boolean-ish value (`t`, `true`, `1` = satisfied).
     pub query: String,
+    /// Expected value of the (single-cell) result, compared as text.
+    pub equals: Option<String>,
     pub user: Option<String>,
     pub database: Option<String>,
 }
@@ -140,6 +164,7 @@ impl Resolved {
                 advance: AdvanceCfg::default(),
                 triggers: vec![],
                 barriers: vec![],
+                proxies: vec![],
             },
             max_jump_ns: None,
             dwell_ns: None,
@@ -249,6 +274,35 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
             None => barrier_timeout_ns,
         });
     }
+    let mut proxy_names = std::collections::HashSet::new();
+    if config.proxies.len() > chronostack_core::api::MAX_PROXY_TARGETS {
+        bail!(
+            "at most {} proxies",
+            chronostack_core::api::MAX_PROXY_TARGETS
+        );
+    }
+    for px in &config.proxies {
+        let what = format!("proxy `{}`", px.name);
+        let valid_name = !px.name.is_empty()
+            && px
+                .name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if !valid_name || !proxy_names.insert(px.name.clone()) {
+            bail!(
+                "proxies need unique names made of letters, digits, `-` and `_` (`{}`)",
+                px.name
+            );
+        }
+        chronostack_core::compose::check_upstream(&px.upstream)
+            .map_err(|e| anyhow::anyhow!("{what}: {e}"))?;
+        for (svc, var) in &px.env {
+            check_service(&format!("{what}: env"), svc)?;
+            if var.trim().is_empty() {
+                bail!("{what}: env.{svc}: empty variable name");
+            }
+        }
+    }
     let max_jump_ns = config
         .advance
         .max_jump
@@ -306,6 +360,40 @@ barriers:
         assert_eq!(r.max_jump_ns, Some(3_600_000_000_000));
         assert_eq!(r.config.triggers[1].http.as_ref().unwrap().method, "POST");
         assert_eq!(r.barrier_timeouts_ns, vec![10_000_000_000; 2]);
+    }
+
+    #[test]
+    fn proxies() {
+        let r = parse(
+            "version: 1\nproxies:\n  - name: hooks\n    upstream: http://receiver:4000\n    env: { worker: WEBHOOK_URL }\n",
+        )
+        .unwrap();
+        assert_eq!(r.config.proxies[0].env["worker"], "WEBHOOK_URL");
+        for (y, want) in [
+            (
+                "version: 1\nproxies: [{name: 'a b', upstream: 'http://r'}]",
+                "unique names",
+            ),
+            (
+                "version: 1\nproxies: [{name: a, upstream: 'http://r'}, {name: a, upstream: 'http://r'}]",
+                "unique names",
+            ),
+            (
+                "version: 1\nproxies: [{name: a, upstream: 'https://r'}]",
+                "http://",
+            ),
+            (
+                "version: 1\nproxies: [{name: a, upstream: 'http://r/x'}]",
+                "no path",
+            ),
+            (
+                "version: 1\nproxies: [{name: a, upstream: 'http://r', env: {nope: X}}]",
+                "unknown service",
+            ),
+        ] {
+            let err = format!("{:#}", parse(y).unwrap_err());
+            assert!(err.contains(want), "`{y}` gave `{err}`, wanted `{want}`");
+        }
     }
 
     #[test]

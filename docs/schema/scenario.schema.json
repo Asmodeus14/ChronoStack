@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Asmodeus14/ChronoStack/blob/main/docs/schema/scenario.schema.json",
+  "title": "ChronoStack scenario",
+  "description": "Linear steps for `chronostack run`. Each step has exactly one action.",
+  "type": "object",
+  "required": [
+    "version",
+    "name",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^([0-9]+(w|d|h|m|s|ms))+$|^[0-9]+$",
+      "description": "e.g. 90s, 25h, 14d, 1h30m, 500ms"
+    },
+    "exec": {
+      "type": "object",
+      "required": [
+        "service",
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "http": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Must be reachable from the host running the CLI."
+        },
+        "method": {
+          "type": "string",
+          "default": "POST"
+        },
+        "status": {
+          "type": "integer",
+          "description": "Expected status; default any 2xx."
+        },
+        "body": {
+          "type": "string",
+          "description": "Request body (sent as application/json unless content_type is set)."
+        },
+        "content_type": {
+          "type": "string"
+        }
+      }
+    },
+    "sql": {
+      "type": "object",
+      "required": [
+        "service",
+        "query"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string",
+          "description": "Without `equals`: must return t/true/1 when satisfied."
+        },
+        "user": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "equals": {
+          "type": "string",
+          "description": "Expected single-cell result, compared as text."
+        }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "required": [
+        "service",
+        "command",
+        "equals"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "equals": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "advance"
+            ]
+          },
+          {
+            "required": [
+              "trigger"
+            ]
+          },
+          {
+            "required": [
+              "exec"
+            ]
+          },
+          {
+            "required": [
+              "http"
+            ]
+          },
+          {
+            "required": [
+              "fault"
+            ]
+          },
+          {
+            "required": [
+              "fault_clear"
+            ]
+          },
+          {
+            "required": [
+              "assert"
+            ]
+          },
+          {
+            "required": [
+              "wait_for"
+            ]
+          },
+          {
+            "required": [
+              "sleep"
+            ]
+          }
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Shown in output and reports."
+          },
+          "advance": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/duration"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "required": [
+                      "by"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "to"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "by": {
+                    "$ref": "#/$defs/duration"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "`now`, `+<duration>`, `next HH:MM` (UTC) or a UTC time like 2026-12-01T00:00:00Z."
+                  },
+                  "step": {
+                    "$ref": "#/$defs/duration"
+                  },
+                  "max_jump": {
+                    "type": "string",
+                    "description": "auto, none or a duration"
+                  },
+                  "dwell": {
+                    "$ref": "#/$defs/duration"
+                  },
+                  "probe": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            ]
+          },
+          "trigger": {
+            "type": "string",
+            "description": "Name of a trigger in chronostack.yml, run now."
+          },
+          "exec": {
+            "$ref": "#/$defs/exec"
+          },
+          "http": {
+            "$ref": "#/$defs/http"
+          },
+          "fault": {
+            "type": "object",
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "for"
+                ]
+              },
+              {
+                "required": [
+                  "until"
+                ]
+              }
+            ],
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "A proxy name from chronostack.yml."
+              },
+              "from": {
+                "type": "string",
+                "description": "`now`, `+<duration>`, `next HH:MM` (UTC) or a UTC time like 2026-12-01T00:00:00Z.",
+                "default": "now"
+              },
+              "for": {
+                "$ref": "#/$defs/duration"
+              },
+              "until": {
+                "type": "string",
+                "description": "`now`, `+<duration>`, `next HH:MM` (UTC) or a UTC time like 2026-12-01T00:00:00Z."
+              },
+              "status": {
+                "type": "integer",
+                "minimum": 400,
+                "maximum": 599,
+                "default": 503
+              }
+            }
+          },
+          "fault_clear": {
+            "type": "string",
+            "description": "A proxy name, `#<id>` or `all`."
+          },
+          "assert": {
+            "type": "object",
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "sql"
+                ]
+              },
+              {
+                "required": [
+                  "redis"
+                ]
+              },
+              {
+                "required": [
+                  "exec"
+                ]
+              },
+              {
+                "required": [
+                  "http"
+                ]
+              }
+            ],
+            "properties": {
+              "sql": {
+                "$ref": "#/$defs/sql"
+              },
+              "redis": {
+                "$ref": "#/$defs/redis"
+              },
+              "exec": {
+                "$ref": "#/$defs/exec"
+              },
+              "http": {
+                "$ref": "#/$defs/http"
+              }
+            }
+          },
+          "wait_for": {
+            "type": "object",
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "required": [
+                  "sql"
+                ]
+              },
+              {
+                "required": [
+                  "redis"
+                ]
+              },
+              {
+                "required": [
+                  "exec"
+                ]
+              },
+              {
+                "required": [
+                  "http"
+                ]
+              }
+            ],
+            "properties": {
+              "sql": {
+                "$ref": "#/$defs/sql"
+              },
+              "redis": {
+                "$ref": "#/$defs/redis"
+              },
+              "exec": {
+                "$ref": "#/$defs/exec"
+              },
+              "http": {
+                "$ref": "#/$defs/http"
+              },
+              "timeout": {
+                "$ref": "#/$defs/duration",
+                "description": "Real time; default 30s."
+              }
+            }
+          },
+          "sleep": {
+            "$ref": "#/$defs/duration",
+            "description": "Real time, at most 10m."
+          }
+        }
+      }
+    }
+  }
+}
