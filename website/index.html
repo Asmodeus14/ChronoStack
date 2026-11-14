@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en" class="is-locked">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChronoStack: time-travel testing for Docker Compose stacks</title>
+  <meta name="description" content="Stripe Test Clocks for your Docker Compose stack. Advance Postgres, Redis and your services in virtual time, run the cron jobs that depend on it, and test trials, renewals and retries. Open source CLI.">
+  <meta name="keywords" content="time travel testing, fake time, virtual time, docker compose testing, test time-dependent code, test cron jobs, libfaketime alternative, stripe test clocks, integration testing, postgres now(), redis ttl, subscription testing, trial expiry testing">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://chronostack.vercel.app/">
+  <meta name="theme-color" content="#0B0C0E">
+  <meta name="color-scheme" content="dark">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ChronoStack">
+  <meta property="og:url" content="https://chronostack.vercel.app/">
+  <meta property="og:title" content="ChronoStack: Stripe Test Clocks for your Docker Compose stack">
+  <meta property="og:description" content="Move Postgres, Redis and your services forward in time together, run the jobs that depend on it, and verify what happened. No code changes.">
+  <meta property="og:image" content="https://chronostack.vercel.app/assets/og.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="ChronoStack: four services, postgres, redis, api and worker, advancing together on one virtual clock to day 14, 03:00.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ChronoStack: Stripe Test Clocks for your Docker Compose stack">
+  <meta name="twitter:description" content="Advance your whole stack in virtual time, run the jobs that depend on it, and verify what happened. Open source.">
+  <meta name="twitter:image" content="https://chronostack.vercel.app/assets/og.png">
+  <meta name="twitter:image:alt" content="ChronoStack: four services advancing together on one virtual clock.">
+
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="assets/chronostack-mark-dark.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://chronostack.vercel.app/#app",
+        "name": "ChronoStack",
+        "alternateName": "chronostack",
+        "description": "An open-source CLI that gives a Docker Compose stack one virtual clock. Advance Postgres, Redis and your services in time together, run the scheduled jobs that depend on it, inject outages on the virtual timeline, and verify the outcome with scenario tests.",
+        "url": "https://chronostack.vercel.app/",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Testing tool",
+        "operatingSystem": "Linux, Windows, macOS",
+        "softwareVersion": "0.1.0-alpha.2",
+        "downloadUrl": "https://github.com/Asmodeus14/ChronoStack/releases",
+        "installUrl": "https://chronostack.vercel.app/#install",
+        "image": "https://chronostack.vercel.app/assets/og.png",
+        "license": "https://github.com/Asmodeus14/ChronoStack#license",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": [
+          "Advance Postgres, Redis, Node.js, Python and JVM services in virtual time with no code changes",
+          "Scheduler-aware stepping: triggers, barriers, pg_cron, BullMQ and Celery beat",
+          "Outages of HTTP dependencies scheduled on the virtual timeline",
+          "YAML scenarios with SQL, Redis, HTTP and exec assertions, and JSON or Markdown reports",
+          "GitHub Action and CI exit codes",
+          "MCP server for AI coding agents"
+        ]
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "name": "ChronoStack",
+        "codeRepository": "https://github.com/Asmodeus14/ChronoStack",
+        "programmingLanguage": ["Rust", "C"],
+        "license": "https://github.com/Asmodeus14/ChronoStack#license",
+        "targetProduct": { "@id": "https://chronostack.vercel.app/#app" }
+      },
+      {
+        "@type": "WebSite",
+        "name": "ChronoStack",
+        "url": "https://chronostack.vercel.app/"
+      }
+    ]
+  }
+  </script>
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IM+Fell+English:ital@0;1&display=swap">
+  <link rel="stylesheet" href="intro/intro.css">
+  <link rel="stylesheet" href="site/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ================================================================ intro -->
+  <div id="intro" class="intro" role="presentation">
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <p class="sr-only" id="intro-status" aria-live="polite">Loading ChronoStack…</p>
+  </div>
+
+  <!-- ================================================================ fixed chrome -->
+  <header class="nav" aria-label="Site">
+    <a class="nav-brand" href="#top" aria-label="ChronoStack, back to top">
+      <span class="nav-mark" data-hands></span>
+      <span class="nav-name">ChronoStack</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#scenarios">Scenarios</a>
+      <a href="#compat">Compatibility</a>
+      <a href="#install">Install</a>
+      <a class="nav-gh" href="https://github.com/Asmodeus14/ChronoStack">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="scroll-clock" aria-hidden="true">
+    <span class="scroll-clock-hands" data-hands></span>
+    <span class="scroll-clock-text">
+      <span class="scroll-clock-name">virtual time</span>
+      <span class="scroll-clock-value" id="scroll-time">+00d 00:00</span>
+    </span>
+  </div>
+
+  <main id="main" class="page">
+
+    <!-- ================================================================ hero -->
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-inner">
+        <h1 id="hero-title" class="hero-logo" data-hero><img src="assets/chronostack-logo-dark.svg" alt="ChronoStack" width="560" height="158" fetchpriority="high"><span class="sr-only">: time-travel testing for Docker Compose stacks</span></h1>
+        <p class="hero-tagline" data-hero>Stripe Test Clocks for your Docker&nbsp;Compose stack.</p>
+        <p class="hero-sub" data-hero>Move Postgres, Redis and your services forward in time together, run the jobs that depend on it, and verify what happened. No code changes.</p>
+        <div class="hero-actions" data-hero>
+          <a class="btn btn-solid" href="#install">Install</a>
+          <a class="btn btn-line" href="https://github.com/Asmodeus14/ChronoStack">View on GitHub</a>
+        </div>
+        <p class="hero-status" data-hero>
+          Pre-alpha · <a href="https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.2">v0.1.0-alpha.2</a> · MIT or Apache-2.0
+        </p>
+      </div>
+      <p class="hero-cue" data-hero aria-hidden="true">
+        <span class="hero-cue-hand" data-hands></span>
+        Scroll to advance time
+      </p>
+    </section>
+
+    <!-- ================================================================ problem -->
+    <section class="problem" aria-labelledby="problem-title">
+      <h2 id="problem-title" class="problem-statement" data-words>Trials expire. Sessions time out. Renewals, dunning, retention purges and webhook retries all wait for a date. Time-dependent code is some of the least-tested code in any SaaS&nbsp;product.</h2>
+      <div class="problem-today">
+        <p class="problem-lead">How it gets tested today:</p>
+        <ul class="strike-list">
+          <li><span>Editing timestamps in the database by hand</span></li>
+          <li><span>Shortening durations with a test-only flag</span></li>
+          <li><span>Waiting real days in staging</span></li>
+          <li><span>Not at all</span></li>
+        </ul>
+        <p class="problem-close">None of these exercise the real interaction between the database's <code>now()</code>, Redis expiry, your schedulers and your services.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================ one clock: pinned, the drop floods white -->
+    <section class="stack" id="how" aria-labelledby="stack-title">
+      <div class="stack-sticky">
+        <div class="stack-flood" aria-hidden="true"></div>
+        <div class="stack-content">
+          <div class="stack-head">
+            <h2 id="stack-title">One clock for the whole stack.</h2>
+            <p>Every service reads the same virtual time. Advance it, and the jobs that depend on it actually run, at the virtual time they're due.</p>
+          </div>
+          <div class="stack-stage">
+            <div class="stack-term" aria-hidden="true">
+              <div class="term-bar"><i></i><i></i><i></i></div>
+              <pre class="term-body" id="term"></pre>
+            </div>
+            <figure class="stack-diagram">
+              <svg id="timeline" viewBox="0 0 1000 440" role="img" aria-label="Four services, postgres, redis, api and worker, advance together from day 0 to day 15. The nightly job runs at each virtual 03:00. On day 14 the trial expires and the user moves to the free plan."></svg>
+              <figcaption><span class="stack-readout" id="stack-time">+00d 00:00</span><span class="stack-note" id="stack-note">chronostack up --wait</span></figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ three mechanisms -->
+    <section class="mech" aria-labelledby="mech-title">
+      <h2 id="mech-title" class="sr-only">How it works</h2>
+
+      <article class="mech-row">
+        <div class="mech-glyph glyph-sync" aria-hidden="true">
+          <span data-hands></span><span data-hands></span><span data-hands></span><span data-hands></span>
+        </div>
+        <div class="mech-text">
+          <h3 data-reveal>One clock for every service.</h3>
+          <p data-reveal>A small C library loaded with <code>LD_PRELOAD</code> makes wall-clock reads (<code>now()</code>, <code>Date.now()</code>, <code>time.time()</code>, Redis expiry) return virtual time. It adds about 13&nbsp;ns per read. Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so locks and timeouts never hang.</p>
+        </div>
+      </article>
+
+      <article class="mech-row">
+        <div class="mech-glyph glyph-stops" aria-hidden="true">
+          <svg viewBox="-100 -100 200 200">
+            <circle r="86" class="g-ring"/>
+            <g class="g-marks"></g>
+            <g class="g-hand"><path d="M-2,8L-1,-74L1,-74L2,8Z"/><circle r="5"/></g>
+          </svg>
+        </div>
+        <div class="mech-text">
+          <h3 data-reveal>Moving the clock runs your scheduled work.</h3>
+          <p data-reveal>Changing the clock doesn't fire timers. So <code>advance</code> stops at each interesting virtual time, runs the <strong>triggers</strong> you declare (“the nightly job at 03:00”), and waits on <strong>barriers</strong> (“the queue is empty”) before moving on. pg_cron is detected and handled automatically.</p>
+        </div>
+      </article>
+
+      <article class="mech-row">
+        <div class="mech-glyph glyph-verify" aria-hidden="true">
+          <svg viewBox="0 0 220 160">
+            <g class="g-probe" transform="translate(0,22)"><text x="0" y="5">postgres</text><path d="M180,0l8,8l18,-18"/></g>
+            <g class="g-probe" transform="translate(0,60)"><text x="0" y="5">redis</text><path d="M180,0l8,8l18,-18"/></g>
+            <g class="g-probe" transform="translate(0,98)"><text x="0" y="5">api</text><path d="M180,0l8,8l18,-18"/></g>
+            <g class="g-probe" transform="translate(0,136)"><text x="0" y="5">worker</text><path d="M180,0l8,8l18,-18"/></g>
+          </svg>
+        </div>
+        <div class="mech-text">
+          <h3 data-reveal>Everything is verified.</h3>
+          <p data-reveal>After each advance, every service is probed to confirm it sees the new time, and <code>chronostack doctor</code> explains anything it can't reach.</p>
+        </div>
+      </article>
+    </section>
+
+    <!-- ================================================================ scenarios -->
+    <section class="scen" id="scenarios" aria-labelledby="scen-title">
+      <div class="scen-head">
+        <h2 id="scen-title" data-reveal>Script the outage.<br>Assert the outcome.</h2>
+        <p data-reveal>Scenarios are repeatable tests in virtual time. Take the partner's webhook receiver down on day 14 from 02:00 to 06:00, advance, and check that the webhook was retried and delivered exactly once.</p>
+      </div>
+      <div class="scen-body">
+        <pre class="code" aria-label="scenarios/trial.yml"><code><span class="c-k">steps:</span>
+  - <span class="c-k">fault:</span> { target: webhooks, from: +14d2h, for: 4h }   <span class="c-c"># partner down on day 14, 02:00–06:00</span>
+  - <span class="c-k">advance:</span> 14d
+  - <span class="c-k">advance:</span> { by: 12h, step: 1h }
+  - <span class="c-k">assert:</span>
+      <span class="c-k">redis:</span>
+        service: cache
+        command: [HGET, webhook:received, <span class="c-s">"trial.expired:${user_id}"</span>]
+        equals: <span class="c-s">"1"</span></code></pre>
+        <figure class="gif-frame" data-parallax>
+          <img src="assets/scenario.gif" width="1200" height="720" loading="lazy" decoding="async" alt="chronostack run: 15 virtual days; the webhook receiver is down on day 14, the webhook is retried and delivered exactly once at 07:00. PASSED 12/12.">
+        </figure>
+      </div>
+
+      <div class="scen-body scen-body--flip">
+        <div class="scen-copy">
+          <h3 data-reveal>Failure reports a newcomer can read.</h3>
+          <p data-reveal>When something breaks, the Markdown report says what was expected, what happened, and what the services did. JSON too, with secrets redacted.</p>
+        </div>
+        <figure class="gif-frame" data-parallax>
+          <img src="assets/failure.gif" width="1150" height="700" loading="lazy" decoding="async" alt="With a deliberate bug the scenario fails at step 10; the report shows the receiver never got the webhook and the only request was a 503 during the outage.">
+        </figure>
+      </div>
+    </section>
+
+    <!-- ================================================================ features -->
+    <section class="feat" aria-labelledby="feat-title">
+      <h2 id="feat-title" data-reveal>Built to sit on the stack you already have.</h2>
+      <dl class="feat-list">
+        <div><dt>No code changes</dt><dd>Works on your existing <code>compose.yml</code>, as a separate copy. Your containers, data and files are untouched.</dd></div>
+        <div><dt>Scheduler-aware stepping</dt><dd>Triggers run at their exact virtual times. BullMQ and Celery beat fire on their own, and pg_cron jobs are never skipped.</dd></div>
+        <div><dt>Outages in virtual time</dt><dd>A small proxy in front of HTTP dependencies makes “the payment API is down on day 3 from 09:00 to 11:00” a one-liner.</dd></div>
+        <div><dt>Scenarios and reports</dt><dd>YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports.</dd></div>
+        <div><dt>CI ready</dt><dd>Exit codes, a GitHub Action, and a strict mode.</dd></div>
+        <div><dt>AI agents</dt><dd><code>chronostack mcp</code> is an MCP server with a fixed, safe tool set.</dd></div>
+        <div><dt>Host-native Node</dt><dd><code>node -r sdk/node/register.js app.js</code> puts a Node process outside Docker on the same clock.</dd></div>
+        <div><dt>Safe by design</dt><dd>Never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.</dd></div>
+      </dl>
+    </section>
+
+    <!-- ================================================================ compatibility -->
+    <section class="compat" id="compat" aria-labelledby="compat-title">
+      <div class="compat-head">
+        <h2 id="compat-title" data-reveal>Honest compatibility.</h2>
+        <p data-reveal>Listed as tested only where an automated test covers it.</p>
+      </div>
+      <table class="compat-table">
+        <thead><tr><th scope="col">Component</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          <tr><td>PostgreSQL 16 (Debian, Alpine), including pg_cron · Redis 7 (Debian, Alpine)</td><td><span class="st st-yes">Tested in CI</span></td></tr>
+          <tr><td>Node.js 22 · Python 3.10 / 3.12 (Debian, Alpine)</td><td><span class="st st-yes">Tested in CI, plus a nightly no-hang suite</span></td></tr>
+          <tr><td>JVM 21</td><td><span class="st st-yes">No-hang suite; otherwise experimental</span></td></tr>
+          <tr><td>BullMQ, Celery beat, pg_cron</td><td><span class="st st-yes">Work without triggers (measured)</span></td></tr>
+          <tr><td>node-cron, APScheduler, <code>setTimeout</code>-style loops</td><td><span class="st st-mid">Need a trigger (measured)</span></td></tr>
+          <tr><td>Node.js 20, Python 3.13+, JVM 17, Ruby 3.x, MariaDB</td><td><span class="st st-mid">Expected to work; not covered by tests</span></td></tr>
+          <tr><td>Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop)</td><td><span class="st st-yes">CI · tested by hand</span></td></tr>
+          <tr><td>Host: macOS (Docker Desktop, OrbStack)</td><td><span class="st st-unk">Untested · <a href="https://github.com/Asmodeus14/ChronoStack/issues/5">help wanted</a></span></td></tr>
+          <tr><td>Go and other static or setuid binaries</td><td><span class="st st-no">Not supported; flagged by <code>doctor</code></span></td></tr>
+        </tbody>
+      </table>
+      <div class="limits">
+        <h3>Limitations</h3>
+        <ul>
+          <li>Time only moves forward.</li>
+          <li>App timers don't fire early; use triggers.</li>
+          <li>Postgres <code>now()</code> is fixed within a transaction.</li>
+          <li>Outage URLs must come from environment variables.</li>
+        </ul>
+        <a class="text-link" href="https://github.com/Asmodeus14/ChronoStack/blob/main/docs/RISKS_AND_LIMITATIONS.md">Full list of limitations</a>
+      </div>
+    </section>
+
+    <!-- ================================================================ install: the second drop -->
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="install-flood" aria-hidden="true"></div>
+      <div class="install-inner">
+        <h2 id="install-title" data-reveal>Install in one line.</h2>
+        <p class="install-sub" data-reveal>You need Docker with Compose v2. No admin rights needed. The installer verifies checksums and puts <code>chronostack</code> on your PATH.</p>
+
+        <div class="tabs" data-reveal>
+          <div class="tab-list" role="tablist" aria-label="Operating system">
+            <button role="tab" id="tab-unix" aria-controls="panel-unix" aria-selected="true">Linux / macOS</button>
+            <button role="tab" id="tab-win" aria-controls="panel-win" aria-selected="false" tabindex="-1">Windows (PowerShell)</button>
+          </div>
+          <div class="cmd" role="tabpanel" id="panel-unix" aria-labelledby="tab-unix">
+            <pre><code>curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.2 sh</code></pre>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <div class="cmd" role="tabpanel" id="panel-win" aria-labelledby="tab-win" hidden>
+            <pre><code>$env:CHRONOSTACK_VERSION = "0.1.0-alpha.2"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.ps1 | iex</code></pre>
+            <button class="copy" type="button">Copy</button>
+          </div>
+        </div>
+
+        <div class="demo" data-reveal>
+          <h3>Then run the demo</h3>
+          <p>A small SaaS app with a 14-day trial, a nightly job and webhooks.</p>
+          <div class="cmd">
+            <pre><code>git clone https://github.com/Asmodeus14/ChronoStack && cd ChronoStack/examples/saas-trial-demo
+chronostack up --wait
+chronostack advance 15d        # the trial expires at the nightly job
+chronostack run scenarios/trial.yml</code></pre>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <figure class="gif-frame gif-frame--light">
+            <img src="assets/quickstart.gif" width="1100" height="640" loading="lazy" decoding="async" alt="A user signs up for a 14-day trial; chronostack advance 15d runs the nightly job at each virtual 03:00, and the user ends up on the free plan.">
+          </figure>
+        </div>
+
+        <div class="install-next" data-reveal>
+          <a class="btn btn-solid-ink" href="https://github.com/Asmodeus14/ChronoStack/blob/main/docs/GETTING_STARTED.md">Read the getting started guide</a>
+          <a class="btn btn-line-ink" href="https://github.com/Asmodeus14/ChronoStack/blob/main/docs/GUIDE.md">The full guide</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ contribute + footer -->
+    <section class="contrib" aria-labelledby="contrib-title">
+      <h2 id="contrib-title" data-reveal>Try it on your own stack, and tell us what breaks.</h2>
+      <p data-reveal>Run <code>chronostack up --wait && chronostack doctor</code> on your compose project and <a href="https://github.com/Asmodeus14/ChronoStack/issues">open an issue</a> with the <code>doctor</code> output. Have a Mac? <a href="https://github.com/Asmodeus14/ChronoStack/issues/5">Issue #5</a> is a 5-minute test.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-brand">
+      <span class="foot-mark" data-hands></span>
+      <p>ChronoStack<br><span>Licensed under MIT or Apache-2.0, at your option.</span></p>
+    </div>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="https://github.com/Asmodeus14/ChronoStack">GitHub</a>
+      <a href="https://github.com/Asmodeus14/ChronoStack/releases">Releases</a>
+      <a href="https://github.com/Asmodeus14/ChronoStack/blob/main/docs/GETTING_STARTED.md">Getting started</a>
+      <a href="https://github.com/Asmodeus14/ChronoStack/blob/main/docs/GUIDE.md">Guide</a>
+      <a href="https://github.com/Asmodeus14/ChronoStack/blob/main/SECURITY.md">Security</a>
+      <button class="text-btn" id="replay" type="button">Replay intro</button>
+    </nav>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js" defer></script>
+  <script type="module" src="site/cursor.js"></script>
+  <script type="module" src="site/site.js"></script>
+  <script type="module" src="intro/intro.js"></script>
+</body>
+</html>

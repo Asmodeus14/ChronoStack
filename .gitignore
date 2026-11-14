@@ -33,3 +33,6 @@ spike/results/*.log
 spike/results/m0-results.*
 spike/results/run*
 __pycache__/
+
+# Vercel
+.vercel/
