@@ -53,7 +53,7 @@ An MCP server over stdio, for AI coding agents (Claude Code, Cursor, …).
 |---|---|---|
 | MCP unit tests: handshake, negotiation, 2026-07-28 `_meta`, errors, path checks | `cargo test` | ✅ |
 | Long-poll: wakes on change, times out, returns at once on a stale generation | clockd tests (in the image build) | ✅ |
-| Node SDK, against a fake controller: offset, `Date` semantics, live update, freeze, no session, wrong token, strict mode | `node --test`, CI on Linux, Windows and macOS × Node 20/22/24 | ✅ locally (Node 20) |
+| Node SDK, against a fake controller: offset, `Date` semantics, live update, freeze, no session, wrong token, strict mode | `node --test`, CI on Linux, Windows and macOS × Node 20/22/24 | ✅ all 9 CI combinations |
 | e2e: MCP over stdio on the demo, both protocol eras | `tests/e2e/run_m4.py` | ✅ |
 | e2e: `clock_advance 1d` ran the 03:00 trigger once; 500 days refused by the cap | same | ✅ |
 | e2e: `scenario_run` through MCP passed, with proxy traffic: 3 blocked, 1 delivered | same | ✅ (38 s) |
