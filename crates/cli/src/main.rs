@@ -11,6 +11,7 @@ mod probe;
 mod report;
 mod scenario;
 mod session;
+mod update;
 mod yaml;
 
 use std::fs;
@@ -163,6 +164,21 @@ enum Cmd {
         /// Project directory (where `chronostack up` was run). Default: current directory.
         #[arg(long)]
         project_dir: Option<std::path::PathBuf>,
+    },
+    /// Update this CLI to the newest release (checksum-verified; no admin rights needed).
+    Update {
+        /// Only say whether a newer release exists.
+        #[arg(long)]
+        check: bool,
+        /// Install this version instead of the newest (also allows going back).
+        #[arg(long)]
+        version: Option<String>,
+        /// Include pre-releases (automatic when this build is a pre-release).
+        #[arg(long)]
+        pre: bool,
+        /// Reinstall even if already up to date.
+        #[arg(long)]
+        force: bool,
     },
     /// Run a scenario file and write a report to .chronostack/reports/.
     Run {
@@ -422,6 +438,17 @@ fn run(cli: Cli) -> Result<i32> {
             };
             mcp::serve(max)
         }
+        Cmd::Update {
+            check,
+            version,
+            pre,
+            force,
+        } => update::run(&update::Options {
+            check,
+            version,
+            pre,
+            force,
+        }),
         Cmd::Run { file, json } => {
             let mut s = Session::load()?;
             let cfg = load_config(&s)?;

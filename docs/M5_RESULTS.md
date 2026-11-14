@@ -43,6 +43,12 @@ The first tag will be **`v0.1.0-alpha.1`**, not `v0.1.0`. [RELEASE_PROCESS](deve
 | `install.ps1` locally (Windows 11): installs; a wrong checksum is refused | ✅ |
 | `SHA256SUMS` covers 5 archives, 4 libraries, SBOM, 2 install scripts | ✅ |
 
+## After the dry run
+
+- **`chronostack update`** (added before publishing): finds the newest release (pre-releases for pre-release builds), downloads this platform's archive, verifies it against `SHA256SUMS`, and swaps the running binary using `self-replace`, which works on Windows. Tested locally on Windows: a debug build replaced itself with the release build and no temporary file was left; a wrong checksum was refused and the binary stayed byte-identical. The CLI now includes rustls for HTTPS; MSRV 1.85 still builds.
+- **No admin rights anywhere:** the scripts install into user directories, and `update` writes only where the binary is.
+- **Not code-signed.** The install scripts use curl or `Invoke-WebRequest`, which don't mark files as downloaded from the internet, so Gatekeeper and SmartScreen don't prompt. Browser downloads of the archives can. Signing needs an Apple Developer ID with notarization, and a Windows code-signing certificate (e.g. Azure Trusted Signing). That's an owner decision, since both cost money.
+
 ## Not done
 
 - **Tag `v0.1.0-alpha.1`.** Waiting for the owner. After the tag:

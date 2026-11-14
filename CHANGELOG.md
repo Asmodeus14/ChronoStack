@@ -9,6 +9,11 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
 
 ## [Unreleased]
 
+### Added
+
+- `chronostack update [--check] [--version X] [--pre] [--force]`: updates the CLI from GitHub Releases. It verifies `SHA256SUMS` and replaces the running binary (Windows included), with no admin rights.
+- GitHub Action (`action.yml`), MCP bundles and `server.json` for the MCP Registry, `docs/GUIDE.md`, demo GIF, launch drafts.
+
 ## [0.1.0-alpha.1] - 2026-11-14
 
 ### Added
