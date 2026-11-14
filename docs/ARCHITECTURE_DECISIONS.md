@@ -73,6 +73,7 @@ Format: Context → Decision → Consequences. Status of all ADRs: **Proposed** 
 **Context.** Agents are a strong 2026 distribution channel, but MCP must not bypass safety.
 **Decision.** `chronostack mcp` is a stdio server exposing `clock_status`, `clock_advance`, `clock_freeze`, `clock_unfreeze`, `probe`, `doctor`, `fault_set`, `fault_clear`, `scenario_run`, `events_tail`. No arbitrary command execution; only triggers declared in `chronostack.yml` can run. Delivered after clock correctness (M4).
 **Consequences.** Spec: https://modelcontextprotocol.io/specification. Revision 2025-06-18 (verified: stdio transport, JSON-RPC 2.0, `tools/list`, `tools/call`); a newer 2026-07-28 revision exists — target the current revision at M4 and pin it in docs.
+**Amendment (M4, 2026-11-14).** Pinned: 2026-07-28 (`server/discover`, per-request `_meta`) **and** 2025-11-25 / 2025-06-18 / 2025-03-26 (`initialize`), because current clients still use the older handshake. Each tool runs the CLI with `--json` as a subprocess, so behaviour is identical to the CLI and stdout stays clean. A read-only `fault_list` tool was added. Spec pages used: `2026-07-28/server/discover`, `…/basic/versioning`, `…/server/utilities/caching`, `…/basic/transports/stdio`, `2025-06-18/basic/lifecycle`, `2025-06-18/server/tools`.
 
 ## ADR-012 — Say "reproducible", not "deterministic"
 

@@ -128,12 +128,14 @@ mod linux {
             std::path::Path::new(&page).with_file_name("events.jsonl"),
         ));
         let faults = faults::Faults::load(Some(faults_path));
+        let changes = server::Changes::new();
         let ctx = server::Ctx {
             clock: &clock,
             token: &token,
             events: &events,
             faults: &faults,
             targets: &targets,
+            changes: &changes,
         };
         server::serve(&ctx, &listen)
     }

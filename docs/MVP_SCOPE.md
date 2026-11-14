@@ -32,7 +32,7 @@ Acceptance script (manual and automated):
 * Failure report JSON + human summary.
 * MCP server (stdio; calls the same engine as the CLI).
 * Automatic sub-stepping (`max_jump`, default 1 h when pg_cron is detected).
-* **Stretch goal (not required for v0.1 release):** Node `register` for host-native Node. If it slips, it moves to v0.2.
+* **Stretch goal (not required for v0.1 release):** Node `register` for host-native Node. **Delivered in M4** (`sdk/node`, used from the repository; npm publishing stays in v0.2).
 * Platforms: Linux x86_64/arm64 (Docker Engine), macOS arm64 (Docker Desktop, OrbStack), Windows x64 (Docker Desktop/WSL2) — CLI only talks to Docker.
 
 ## Compatibility matrix (target; claims gated on tests)

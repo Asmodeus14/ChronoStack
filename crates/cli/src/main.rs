@@ -6,6 +6,7 @@ mod detect;
 mod docker;
 mod engine;
 mod fault;
+mod mcp;
 mod probe;
 mod report;
 mod scenario;
@@ -148,6 +149,12 @@ enum Cmd {
         since: u64,
         #[arg(long)]
         json: bool,
+    },
+    /// Serve the Model Context Protocol on stdio, for AI agents (Claude Code, Cursor, …).
+    Mcp {
+        /// Project directory (where `chronostack up` was run). Default: current directory.
+        #[arg(long)]
+        project_dir: Option<std::path::PathBuf>,
     },
     /// Run a scenario file and write a report to .chronostack/reports/.
     Run {
@@ -390,6 +397,22 @@ fn run(cli: Cli) -> Result<i32> {
                 }
             }
             Ok(0)
+        }
+        Cmd::Mcp { project_dir } => {
+            if let Some(d) = project_dir {
+                std::env::set_current_dir(&d)
+                    .with_context(|| format!("cannot enter {}", d.display()))?;
+            }
+            // The cap comes from chronostack.yml when present; the session is
+            // optional here (tools report "run chronostack up" if it's missing).
+            let services: Vec<String> = Session::load()
+                .map(|s| s.services.iter().map(|e| e.plan.service.clone()).collect())
+                .unwrap_or_default();
+            let max = match config::find(Path::new(".")) {
+                Some(p) => config::load(&p, &services)?.mcp_max_advance_ns,
+                None => config::DEFAULT_MCP_MAX_ADVANCE_NS,
+            };
+            mcp::serve(max)
         }
         Cmd::Run { file, json } => {
             let mut s = Session::load()?;

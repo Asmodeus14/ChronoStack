@@ -40,6 +40,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets
 
+  node-sdk:
+    name: Node SDK (node ${{ matrix.node }}, ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ["20", "22", "24"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --test sdk/node/test/register.test.js
+
   e2e:
     name: End-to-end (${{ matrix.os }})
     # Real Docker on native Linux: x86_64 and arm64 (covers M0 open items 2 and 3).
@@ -62,3 +77,5 @@ jobs:
         run: python3 tests/e2e/run_m2.py --cli target/debug/chronostack
       - name: Run e2e (M3 - fault proxy, scenarios, reports)
         run: python3 tests/e2e/run_m3.py --cli target/debug/chronostack
+      - name: Run e2e (M4 - MCP server, Node register)
+        run: python3 tests/e2e/run_m4.py --cli target/debug/chronostack

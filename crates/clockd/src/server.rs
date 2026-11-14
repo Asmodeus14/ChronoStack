@@ -2,6 +2,9 @@
 //! on `127.0.0.1` only. Every endpoint except `/v1/health` needs the bearer token.
 
 use std::io::Read;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use chronostack_core::api::{
     AdvanceRequest, ApiError, ClockState, FaultList, FaultRequest, MAX_ADVANCE_NS, ProxyTarget,
@@ -27,6 +30,52 @@ pub struct Ctx<'a> {
     pub events: &'a Events,
     pub faults: &'a Faults,
     pub targets: &'a [ProxyTarget],
+    pub changes: &'a Changes,
+}
+
+/// Wakes `/v1/clock/wait` long-polls when the clock changes.
+pub struct Changes {
+    lock: Mutex<()>,
+    cv: Condvar,
+    waiters: AtomicUsize,
+}
+
+/// Concurrent long-polls served (each holds a thread).
+const MAX_WAITERS: usize = 64;
+/// Longest a long-poll is held before it returns the unchanged state.
+const MAX_WAIT: Duration = Duration::from_secs(30);
+
+impl Changes {
+    pub fn new() -> Changes {
+        Changes {
+            lock: Mutex::new(()),
+            cv: Condvar::new(),
+            waiters: AtomicUsize::new(0),
+        }
+    }
+
+    fn notify(&self) {
+        let _g = self.lock.lock().unwrap_or_else(|p| p.into_inner());
+        self.cv.notify_all();
+    }
+
+    /// Block until the clock generation differs from `after` or `timeout` passes.
+    fn wait(&self, clock: &Clock, after: u64, timeout: Duration) -> ClockState {
+        let deadline = Instant::now() + timeout.min(MAX_WAIT);
+        let mut g = self.lock.lock().unwrap_or_else(|p| p.into_inner());
+        loop {
+            let st = clock.state();
+            let left = deadline.saturating_duration_since(Instant::now());
+            if st.generation != after || left.is_zero() {
+                return st;
+            }
+            g = self
+                .cv
+                .wait_timeout(g, left)
+                .unwrap_or_else(|p| p.into_inner())
+                .0;
+        }
+    }
 }
 
 fn json<T: serde::Serialize>(code: u16, v: &T) -> Reply {
@@ -78,6 +127,7 @@ fn clock_event(ctx: &Ctx<'_>, kind: &str, extra: &str) -> Reply {
         st.virtual_ns, st.generation
     ));
     ctx.events.push(&st, event(kind));
+    ctx.changes.notify();
     ok(&st)
 }
 
@@ -217,6 +267,35 @@ pub fn serve(ctx: &Ctx<'_>, listen: &str) -> i32 {
         proxy::spawn(scope, ctx.targets, &shared);
         let json = Header::from_bytes("Content-Type", "application/json").expect("static header");
         for mut req in server.incoming_requests() {
+            // Long-polls (`GET /v1/clock/wait?after=<generation>&timeout_ms=`)
+            // run on their own thread so they never block the API.
+            let url = req.url().to_string();
+            if *req.method() == Method::Get
+                && url.split('?').next() == Some("/v1/clock/wait")
+                && authorized(&req, ctx.token)
+            {
+                if ctx.changes.waiters.fetch_add(1, Ordering::SeqCst) >= MAX_WAITERS {
+                    ctx.changes.waiters.fetch_sub(1, Ordering::SeqCst);
+                    let (code, body) = err(503, "too many clock watchers");
+                    let _ = req.respond(Response::from_string(body).with_status_code(code));
+                    continue;
+                }
+                let json = json.clone();
+                scope.spawn(move || {
+                    let after = query_u64(&url, "after").unwrap_or(u64::MAX);
+                    let timeout =
+                        Duration::from_millis(query_u64(&url, "timeout_ms").unwrap_or(25_000));
+                    let st = ctx.changes.wait(ctx.clock, after, timeout);
+                    ctx.changes.waiters.fetch_sub(1, Ordering::SeqCst);
+                    let (code, body) = ok(&st);
+                    let _ = req.respond(
+                        Response::from_string(body)
+                            .with_status_code(code)
+                            .with_header(json),
+                    );
+                });
+                continue;
+            }
             let (code, body) = handle(ctx, &mut req);
             let _ = req.respond(
                 Response::from_string(body)
@@ -230,7 +309,41 @@ pub fn serve(ctx: &Ctx<'_>, listen: &str) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{query_u64, token_matches};
+    use super::{Changes, query_u64, token_matches};
+    use crate::clock::Clock;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn long_poll_wakes_on_change_and_times_out() {
+        let clock = Clock::anonymous();
+        let changes = Changes::new();
+        let g0 = clock.state().generation;
+        // Different generation: returns at once.
+        let t = Instant::now();
+        assert_eq!(
+            changes
+                .wait(&clock, g0 + 99, Duration::from_secs(5))
+                .generation,
+            g0
+        );
+        assert!(t.elapsed() < Duration::from_millis(500));
+        // Same generation, nothing happens: returns after the timeout.
+        let t = Instant::now();
+        changes.wait(&clock, g0, Duration::from_millis(200));
+        assert!(t.elapsed() >= Duration::from_millis(190));
+        // Same generation, the clock advances meanwhile: wakes early.
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                std::thread::sleep(Duration::from_millis(100));
+                clock.advance(1_000_000_000);
+                changes.notify();
+            });
+            let t = Instant::now();
+            let st = changes.wait(&clock, g0, Duration::from_secs(10));
+            assert_eq!(st.generation, g0 + 1);
+            assert!(t.elapsed() < Duration::from_secs(5));
+        });
+    }
 
     #[test]
     fn token_comparison() {

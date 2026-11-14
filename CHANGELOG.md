@@ -82,6 +82,12 @@ No versions have been released. ChronoStack is pre-alpha and usable from source.
   - `tests/e2e/run_m3.py` in CI; nightly runs the scenario 5×.
 - After the M3 review: `https://` proxy upstreams (TLS from the proxy; rustls), scenario variables (`${run_id}`, `save:` on exec steps), and a persistent event log (`events.jsonl`, survives `clockd` restarts).
 
+- **M4 — MCP server and Node register:**
+  - `chronostack mcp [--project-dir]`: MCP over stdio supporting protocol revisions 2026-07-28 (`server/discover`, `_meta`) and 2025-11-25/06-18/03-26 (`initialize`); 11 tools (`clock_*`, `probe`, `doctor`, `fault_*`, `events_tail`, `scenario_run`); `mcp.max_advance` cap (default 400 days) in `chronostack.yml`.
+  - `sdk/node`: `node -r register` makes `Date` follow the virtual clock in host-native Node processes; `onAdvance(cb)`; fails open (strict mode for CI). Tested on Node 20/22/24 × Linux/Windows/macOS.
+  - Controller: `GET /v1/clock/wait` long-poll.
+  - `tests/e2e/run_m4.py` in CI.
+
 ### Fixed
 
 - A timed-out `exec` trigger is now stopped inside its container (TERM, then KILL), including child processes. Previously only the local `docker` CLI was killed.

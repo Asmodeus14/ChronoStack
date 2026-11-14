@@ -141,7 +141,7 @@ If no triggers or barriers are configured, the engine falls back to `--dwell` (d
 | POST | `/v1/faults` | Create a window: `{target, from_ns, to_ns, status?}` (virtual time, status default 503) |
 | DELETE | `/v1/faults/{id}` / `/v1/faults` | Remove one window / all windows |
 | GET | `/v1/events?since=<seq>` | Event log: the last 1,000 clock changes, window changes and proxied requests |
-| GET | `/v1/stream` | *(planned, M4)* Server-sent events stream of clock changes (Node SDK) |
+| GET | `/v1/clock/wait?after=<generation>&timeout_ms=` | Long-poll: returns the clock state as soon as its generation differs from `after` (at most 30 s). Used by the Node register. |
 
 Stepping, triggers, barriers, scenarios and reports are **not** controller endpoints; the CLI engine owns them.
 
@@ -163,4 +163,4 @@ spike/            # M0 feasibility spike (frozen, reference only)
 docs/
 ```
 
-Planned: `sdk/node/` (Node register, M4 stretch).
+`sdk/node/`: the Node register for host-native processes (M4).

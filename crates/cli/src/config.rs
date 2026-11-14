@@ -40,6 +40,16 @@ pub struct Config {
     pub barriers: Vec<Barrier>,
     #[serde(default)]
     pub proxies: Vec<ProxyCfg>,
+    #[serde(default)]
+    pub mcp: McpCfg,
+}
+
+/// Limits for `chronostack mcp` (AI agents).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct McpCfg {
+    /// Largest single `clock_advance` an agent may request (default 400d).
+    pub max_advance: Option<String>,
 }
 
 /// An HTTP egress target routed through the `clockd` fault proxy.
@@ -146,7 +156,11 @@ pub struct Resolved {
     pub schedules: Vec<(usize, Every)>,
     pub trigger_timeouts_ns: Vec<i64>,
     pub barrier_timeouts_ns: Vec<i64>,
+    /// `mcp.max_advance` (default 400 days).
+    pub mcp_max_advance_ns: i64,
 }
+
+pub const DEFAULT_MCP_MAX_ADVANCE_NS: i64 = 400 * 86_400_000_000_000;
 
 const DEFAULT_TIMEOUT_NS: i64 = 60_000_000_000;
 const DEFAULT_BARRIER_TIMEOUT_NS: i64 = 30_000_000_000;
@@ -165,12 +179,14 @@ impl Resolved {
                 triggers: vec![],
                 barriers: vec![],
                 proxies: vec![],
+                mcp: McpCfg::default(),
             },
             max_jump_ns: None,
             dwell_ns: None,
             schedules: vec![],
             trigger_timeouts_ns: vec![],
             barrier_timeouts_ns: vec![],
+            mcp_max_advance_ns: DEFAULT_MCP_MAX_ADVANCE_NS,
         }
     }
 }
@@ -315,8 +331,13 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
         .as_deref()
         .map(|v| dur("advance.dwell", v))
         .transpose()?;
+    let mcp_max_advance_ns = match &config.mcp.max_advance {
+        Some(v) => dur("mcp.max_advance", v)?,
+        None => DEFAULT_MCP_MAX_ADVANCE_NS,
+    };
     Ok(Resolved {
         path: None,
+        mcp_max_advance_ns,
         config,
         max_jump_ns,
         dwell_ns,

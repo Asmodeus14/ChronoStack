@@ -32,7 +32,7 @@ docker/clockd.Dockerfile   Controller image (clockd + preload libraries)
 tests/e2e/                 End-to-end tests against real Docker
 examples/saas-trial-demo/  Reference demo (Node, Postgres, Redis)
 spike/                     M0 feasibility spike (frozen, reference only)
-sdk/node/                  Planned (M4 stretch)
+sdk/node/                  Node register for host-native processes (M4)
 ```
 
 ## Development environment

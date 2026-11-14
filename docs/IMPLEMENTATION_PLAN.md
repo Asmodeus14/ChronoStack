@@ -86,6 +86,8 @@ Realistic estimate: **10–12 weeks** for one experienced engineer. The original
 
 **Objective.** Agents can drive the timeline; host-native Node apps stay in sync.
 
+> **Status (2026-11-14): implemented; automated checks pass, the manual Claude Code runs are pending.** See [M4_RESULTS.md](M4_RESULTS.md). Differences: MCP supports both the 2025 revisions and 2026-07-28; tools run the CLI with `--json` as a subprocess; the Node register uses a long-poll (`/v1/clock/wait`) instead of SSE (`/v1/stream`).
+
 **Tasks.** MCP stdio server (ADR-011 tool set, current spec revision pinned); tool schemas; Node `register` (patch `Date`, `Date.now`, `new Date()` with SSE-synced offset; `onAdvance` hook); docs for Claude Code/Cursor config.
 **Files.** `crates/cli/src/mcp/*`, `sdk/node/*`.
 **Automated tests.** MCP protocol conformance tests (initialize, tools/list, tools/call); Node SDK unit tests (offset application, reconnect).

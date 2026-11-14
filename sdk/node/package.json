@@ -1,0 +1,17 @@
+{
+  "name": "chronostack",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "ChronoStack for host-native Node processes: Date follows the stack's virtual clock",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": { "type": "git", "url": "git+https://github.com/Asmodeus14/ChronoStack.git", "directory": "sdk/node" },
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./index.js" },
+    "./register": "./register.js"
+  },
+  "files": ["index.js", "index.d.ts", "register.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test test/register.test.js" }
+}

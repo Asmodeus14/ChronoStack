@@ -275,6 +275,17 @@
           }
         }
       }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Limits for `chronostack mcp` (AI agents).",
+      "properties": {
+        "max_advance": {
+          "$ref": "#/$defs/duration",
+          "description": "Largest single clock_advance an agent may request (default 400d)."
+        }
+      }
     }
   }
 }
