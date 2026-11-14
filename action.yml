@@ -8,9 +8,9 @@ branding:
 
 inputs:
   version:
-    description: ChronoStack version to install, e.g. 0.1.0-alpha.2.
+    description: ChronoStack version to install, e.g. 0.1.0-alpha.3.
     required: false
-    default: 0.1.0-alpha.2
+    default: 0.1.0-alpha.3
 
 outputs:
   version:

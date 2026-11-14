@@ -7,7 +7,7 @@
 #   stable release exists: GitHub's "latest" link skips pre-releases)
 #
 # Options (environment variables):
-#   CHRONOSTACK_VERSION        version to install, e.g. 0.1.0-alpha.2 (default: the newest release,
+#   CHRONOSTACK_VERSION        version to install, e.g. 0.1.0-alpha.3 (default: the newest release,
 #                              including pre-releases)
 #   CHRONOSTACK_INSTALL_DIR    where to put the binary (default: $HOME/.local/bin)
 #   CHRONOSTACK_DOWNLOAD_BASE  download from here instead of GitHub Releases (testing)
