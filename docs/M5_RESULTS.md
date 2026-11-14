@@ -43,6 +43,19 @@ The first tag will be **`v0.1.0-alpha.1`**, not `v0.1.0`. [RELEASE_PROCESS](deve
 | `install.ps1` locally (Windows 11): installs; a wrong checksum is refused | ✅ |
 | `SHA256SUMS` covers 5 archives, 4 libraries, SBOM, 2 install scripts | ✅ |
 
+## Published release, checked from the outside (2026-11-14)
+
+[`v0.1.0-alpha.2`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.2), release run 43571507866: every job green, 19 files.
+
+| Check | Result |
+|---|---|
+| Linux (clean `ubuntu:24.04`): README `curl … install.sh \| sh` command | ✅ checksum ok; PATH line added to `~/.bashrc`; a new shell finds `chronostack`; `update --check` reports up to date |
+| Linux (clean `alpine:3.20`, busybox wget), no version given | ✅ picks the newest release (pre-releases included) |
+| Windows 11: README `irm … install.ps1 \| iex` command | ✅ works in the same terminal right away, and in a new one; `update --check` up to date |
+| Windows 11 + Docker Desktop: released CLI, demo from zero | ✅ pulled `ghcr.io/asmodeus14/chronostack-clockd:0.1.0-alpha.2@sha256:e4305a12…` without logging in; all 5 services see virtual time; scenario 12/12 passed; 59 s total; `doctor` shows matching versions |
+| GitHub Action (`action-test`, run 43572375602) | ✅ installs and runs the demo on ubuntu-latest and ubuntu-24.04-arm |
+| MCP bundles listed in `server.json` | ✅ all 5 URLs download and match their `fileSha256` |
+
 ## After the dry run
 
 - **`chronostack update`** (added before publishing): finds the newest release (pre-releases for pre-release builds), downloads this platform's archive, verifies it against `SHA256SUMS`, and swaps the running binary using `self-replace`, which works on Windows. Tested locally on Windows: a debug build replaced itself with the release build and no temporary file was left; a wrong checksum was refused and the binary stayed byte-identical. The CLI now includes rustls for HTTPS; MSRV 1.85 still builds.
