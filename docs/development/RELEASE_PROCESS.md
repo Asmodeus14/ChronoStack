@@ -4,7 +4,7 @@
 
 ### How to cut a release
 
-1. Set `version` in the root `Cargo.toml` (and `sdk/node/package.json`). Rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z[-pre]] - YYYY-MM-DD`.
+1. Set `version` in the root `Cargo.toml` (and `sdk/node/package.json`), and the `version` input default in `action.yml`, so `uses: Asmodeus14/ChronoStack@vX.Y.Z` installs X.Y.Z (the Action's own test runs only by hand, so this can't break CI before the release exists). Rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z[-pre]] - YYYY-MM-DD`.
 2. Run the workflow by hand (dry run) and wait for it to pass.
 3. Push an annotated tag `vX.Y.Z[-pre]`. The workflow checks the tag matches `Cargo.toml`, then:
    - builds the controller image natively on x86_64 and arm64, pushes `ghcr.io/asmodeus14/chronostack-clockd:X.Y.Z-amd64/-arm64` and the multi-arch `:X.Y.Z`;
@@ -14,6 +14,7 @@
    - creates a **draft** release (marked pre-release for `-alpha/-beta/-rc`) with all files and notes from `scripts/release_notes.py`.
 4. **First release only:** GHCR creates the `chronostack-clockd` package as **private**. Make it public in GitHub → Packages → chronostack-clockd → Package settings → Change visibility, otherwise users can't pull the image.
 5. Review the draft and publish it.
+6. Move the install links (README, `docs/`, `website/index.html`, `install/install.sh`) to the new version in a follow-up PR, once the release is published.
 
 ## Versioning
 
