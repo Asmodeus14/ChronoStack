@@ -12,7 +12,7 @@ Set TypingSpeed 45ms
 Set Theme "Catppuccin Mocha"
 
 Hide
-Type "cd examples/saas-trial-demo && export PS1='$ ' && clear"
+Type "export PATH=\"$PWD/target/debug:$PATH\" && cd examples/saas-trial-demo && export PS1='$ ' && clear"
 Enter
 Sleep 500ms
 Show
@@ -28,5 +28,5 @@ Enter
 Sleep 1s
 Type "chronostack run scenarios/trial.yml"
 Enter
-Wait+Screen@90s /PASSED|FAILED/
+Wait+Screen@180s /PASSED/
 Sleep 4s
