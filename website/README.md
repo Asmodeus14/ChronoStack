@@ -1,6 +1,6 @@
 # ChronoStack website
 
-The landing page at https://chronostack.vercel.app. Static HTML, CSS and JavaScript, no build step.
+The landing page at https://chronostack-dev.vercel.app. Static HTML, CSS and JavaScript, no build step.
 
 - `index.html`: the page and its metadata (Open Graph, Twitter card, JSON-LD).
 - `intro/`: the black-and-white WebGL intro (two Victorian clock hands; every sweep inverts the screen).

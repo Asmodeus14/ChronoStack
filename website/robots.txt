@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://chronostack.vercel.app/sitemap.xml
+Sitemap: https://chronostack-dev.vercel.app/sitemap.xml
