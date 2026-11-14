@@ -1,4 +1,4 @@
-/* The intro is an overlay above the landing page. It fades away when the hands fold. */
+/* The intro is an overlay above the landing page. It ends by opening like an iris onto the page. */
 
 .intro {
   position: fixed;
@@ -8,9 +8,14 @@
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
-  transition: opacity 0.9s var(--ease-out), visibility 0s linear 0.9s;
 }
-.intro-done .intro,
+/* the ending: the pivot opens like an iris and the page shows through the hole */
+.intro.is-iris {
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent var(--iris, 0px), #000 calc(var(--iris, 0px) + 1.5px));
+          mask-image: radial-gradient(circle at 50% 50%, transparent var(--iris, 0px), #000 calc(var(--iris, 0px) + 1.5px));
+}
+.intro-done .intro { pointer-events: none; }
+.intro-gone .intro,
 .no-intro .intro {
   opacity: 0;
   visibility: hidden;

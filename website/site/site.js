@@ -43,20 +43,90 @@ tabs.forEach((t, i) => {
     selectTab(next); next.focus();
   });
 });
-if (/Win/.test(navigator.platform)) selectTab($('#tab-win'));
+const heroCmd = $('#hero-cmd');
+const osButtons = $$('.hero-os [data-os]');
+function selectOS(os) {
+  osButtons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.os === os));
+  const panel = $(os === 'win' ? '#panel-win' : '#panel-unix');
+  heroCmd.textContent = panel.querySelector('code').textContent;
+  selectTab($(os === 'win' ? '#tab-win' : '#tab-unix'));
+}
+osButtons.forEach((b) => b.addEventListener('click', () => selectOS(b.dataset.os)));
+tabs.forEach((t) => t.addEventListener('click', () => {
+  const os = t.id === 'tab-win' ? 'win' : 'unix';
+  osButtons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.os === os));
+  heroCmd.textContent = $('#' + t.getAttribute('aria-controls')).querySelector('code').textContent;
+}));
+selectOS(/Win/.test(navigator.platform) ? 'win' : 'unix');
 
+// ------------------------------------------------------------ mobile menu
+const menuButton = $('#menu-button');
+const menu = $('#menu');
+function setMenu(open) {
+  menuButton.setAttribute('aria-expanded', open);
+  menuButton.textContent = open ? 'Close' : 'Menu';
+  root.classList.toggle('menu-open', open);
+  window.__lenis?.[open ? 'stop' : 'start']();
+  if (open) {
+    menu.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add('is-open')));
+    menu.querySelector('a').focus({ preventScroll: true });
+  } else {
+    menu.classList.remove('is-open');
+    setTimeout(() => { if (!menu.classList.contains('is-open')) menu.hidden = true; }, 600);
+  }
+}
+menuButton.addEventListener('click', () => setMenu(menuButton.getAttribute('aria-expanded') !== 'true'));
+menu.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') { setMenu(false); menuButton.focus(); }
+});
+
+// ------------------------------------------------------------ recordings play only while on screen
+$$('video.demo-video').forEach((v) => {
+  if (REDUCED) return;                      // reduced motion: keep the controls, never autoplay
+  v.removeAttribute('controls');
+  new IntersectionObserver(([entry]) => {
+    if (entry.isIntersecting) { v.preload = 'auto'; v.play().catch(() => {}); } else v.pause();
+  }, { threshold: 0.35 }).observe(v);
+});
+
+// ------------------------------------------------------------ the scroll clock steps aside while you type in the terminal
+const scrollClock = $('.scroll-clock');
+new IntersectionObserver(([entry]) => scrollClock.classList.toggle('is-hidden', entry.isIntersecting), { threshold: 0.25 })
+  .observe($('.try-stage'));
+
+// ------------------------------------------------------------ the hero keeps the intro's hands turning
+// They start where the intro left them (03:00), run a virtual minute per second, and spin with the scroll.
+const heroHands = $('.hero-hands .hands');
+let heroStart = null;
+const heroClock = (now) => {
+  if (heroStart === null && (root.classList.contains('intro-done') || root.classList.contains('no-intro'))) heroStart = now;
+  if (scrollY < innerHeight * 1.3) {
+    const since = heroStart === null ? 0 : (now - heroStart) / 1000;
+    setHands(heroHands, 180 + (REDUCED ? 0 : since + scrollY * 0.25));
+  }
+  requestAnimationFrame(heroClock);
+};
+requestAnimationFrame(heroClock);
+addEventListener('chronostack:intro-start', () => { heroStart = null; });
+
+const copyStatus = $('#copy-status');
 $$('.copy').forEach((btn) => {
   btn.addEventListener('click', async () => {
     const text = btn.parentElement.querySelector('code').textContent;
-    try {
-      await navigator.clipboard.writeText(text);
-      btn.textContent = 'Copied';
-    } catch {
-      btn.textContent = 'Select and copy';
-    }
-    btn.classList.add('is-copied');
+    let ok = true;
+    try { await navigator.clipboard.writeText(text); } catch { ok = false; }
+    btn.classList.toggle('is-copied', ok);
+    btn.classList.toggle('is-failed', !ok);
+    btn.setAttribute('aria-label', ok ? 'Copied' : 'Copy failed; select the command and copy it');
+    copyStatus.textContent = ok ? 'Command copied to the clipboard' : 'Copying failed; select the command and copy it';
     clearTimeout(btn._t);
-    btn._t = setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('is-copied'); }, 1600);
+    btn._t = setTimeout(() => {
+      btn.classList.remove('is-copied', 'is-failed');
+      btn.setAttribute('aria-label', 'Copy command');
+      copyStatus.textContent = '';
+    }, 1600);
   });
 });
 
@@ -75,7 +145,7 @@ const ROW_Y = [70, 160, 250, 340];
 const NIGHTLY = Array.from({ length: 15 }, (_, d) => d + 0.125);   // 03:00 every day
 const EVENTS = [
   { row: 2, day: 0.02, text: 'trial starts' },
-  { row: 1, day: 1.0, text: 'session expires' },
+  { row: 1, day: 14.15, text: 'webhook recorded' },
   { row: 0, day: 14.125, text: 'trial_ends_at < now()' },
   { row: 2, day: 14.13, text: 'plan → free' },
 ];
@@ -103,7 +173,7 @@ const T = { rows: [], nightly: [], events: [] };
   // the worker's nightly job at every virtual 03:00
   NIGHTLY.forEach((day) => {
     const x = dayX(day), y = ROW_Y[3];
-    const pulse = svgEl('circle', { cx: x, cy: y, r: 6, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, opacity: 0 }, tl);
+    const pulse = svgEl('circle', { cx: x, cy: y, r: 6, fill: 'none', stroke: 'var(--amber)', 'stroke-width': 2, opacity: 0 }, tl);
     const dot = svgEl('circle', { cx: x, cy: y, r: 6, fill: 'var(--paper)', stroke: 'currentColor', 'stroke-width': 1.5 }, tl);
     T.nightly.push({ day, dot, pulse });
   });
@@ -178,7 +248,7 @@ function drawTimeline(day, termIn) {
 const gsap = window.gsap;
 const ScrollTrigger = window.ScrollTrigger;
 function showEverything() {
-  $$('[data-reveal], [data-hero]').forEach((el) => { el.style.opacity = 1; });
+  $$('[data-reveal], [data-hero]').forEach((el) => { el.style.opacity = el.classList.contains('hero-hands') ? 0.07 : 1; });
   drawTimeline(DAYS, 1);
   $('.stack-flood').style.clipPath = 'none';
   $('.install-flood').style.clipPath = 'none';
@@ -208,6 +278,7 @@ function animate() {
   let lenis = null;
   if (window.Lenis) {
     lenis = new window.Lenis({ lerp: 0.1, wheelMultiplier: 0.95 });
+    window.__lenis = lenis;
     lenis.on('scroll', ScrollTrigger.update);
     gsap.ticker.add((t) => lenis.raf(t * 1000));
     gsap.ticker.lagSmoothing(0);
@@ -221,16 +292,20 @@ function animate() {
   }
 
   // ---- intro hand-off: the hero arrives where the hands folded
-  const heroEls = $$('[data-hero]');
+  const heroEls = $$('[data-hero]:not(.hero-hands)');
+  const heroHandsEl = $('.hero-hands');
   gsap.set(heroEls, { opacity: 0, y: 28, filter: 'blur(10px)' });
+  gsap.set(heroHandsEl, { opacity: 0 });
   function heroIn() {
     gsap.to(heroEls, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.5, ease: 'expo.out', stagger: 0.09, delay: 0.15 });
+    gsap.to(heroHandsEl, { opacity: 0.07, duration: 2.2, ease: 'power2.out' });
     lenis?.start();
     ScrollTrigger.refresh();
   }
   function heroOut() {
     gsap.killTweensOf(heroEls);
     gsap.set(heroEls, { opacity: 0, y: 28, filter: 'blur(10px)' });
+    gsap.set(heroHandsEl, { opacity: 0 });
     lenis?.scrollTo(0, { immediate: true });
     lenis?.stop();
   }

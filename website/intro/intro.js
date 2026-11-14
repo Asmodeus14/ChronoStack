@@ -15,15 +15,18 @@ const canvas = $('#gl');
 const status = $('#intro-status');
 
 // ---------------------------------------------------------------- timeline (seconds)
-const GROW0 = 0.35, GROW1 = 1.15;   // the hands unfold from the pivot
-const DROP0 = 1.3, DROP1 = 2.2;     // a drop of white floods the screen
-const RUN0 = 2.15, RUN = 3.6;       // the advance: three sweeps, each one inverts the screen
+// Phases overlap so each motion hands off to the next without a dead frame.
+const GROW0 = 0.25, GROW1 = 1.0;    // the hands unfold from the pivot
+const DROP0 = 0.75, DROP1 = 1.6;    // a drop of white floods the screen (starts while the hands settle)
+const RUN0 = 1.35, RUN = 3.0;       // the advance: three sweeps, each one inverts the screen
 const SWEEPS = 3;
+const FOLD0 = 0.05, FOLD = 0.45;    // after the last sweep: the hands fold into the pivot
+const IRIS0 = 0.42, IRIS = 0.95;    // then the pivot opens like an iris onto the page
 const TOTAL = 14 * 1440 + 180;      // +14d 03:00 in minutes; the hour hand ends on III
 
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * clamp(x)));
-const cubicIn = (x) => clamp(x) ** 3;
+const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
 const cubicOut = (x) => 1 - (1 - clamp(x)) ** 3;
 const cubicInOut = (x) => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
 const fract = (x) => ((x % 1) + 1) % 1;
@@ -102,6 +105,8 @@ function drawHour(x) {
 }
 
 // ---------------------------------------------------------------- shader
+const MIN_TEX_W = 192, HOUR_TEX_W = 256;
+
 const VS = `#version 300 es
 in vec2 aPos;
 void main(){ gl_Position = vec4(aPos, 0., 1.); }`;
@@ -112,36 +117,44 @@ out vec4 o;
 uniform vec2 uRes;
 uniform float uTime;
 uniform sampler2D uMinTex, uHourTex;
-uniform vec4 uHands;   // minute rev, hour rev, minute delta, hour delta
-uniform vec4 uHandK;   // length (0..1), size in scene units, pivot radius, -
-uniform vec4 uDrop;    // cx, cy, radius, wobble
-uniform vec3 uWipe;    // sweep fraction, base parity, wipe on
-uniform vec3 uCursor;  // x, y, radius
+uniform vec4 uHands;     // minute rev, hour rev, minute span this frame, hour span this frame
+uniform vec4 uHandK;     // length (0..1), size in scene units, pivot radius, -
+uniform vec4 uDrop;      // cx, cy, radius, wobble
+uniform float uDropBlur; // how far the drop edge moved this frame
+uniform vec4 uWipe;      // sweep fraction, base parity, wipe on, sweep span this frame
+uniform vec2 uIris;      // iris radius, ring width (scene units)
 const float TAU = 6.28318530718;
 const vec3 INK = vec3(.043, .047, .055);
 const vec3 PAPER = vec3(.957, .949, .925);
+const vec3 AMBER = vec3(.949, .639, .227);
 const float ML=${MINUTE.len}, MT=${MINUTE.tail}, MW=${MINUTE.halfW};
 const float HL=${HOUR.len}, HT=${HOUR.tail}, HW=${HOUR.halfW};
+const float MTEXEL = ${(2 * MINUTE.halfW / MIN_TEX_W).toFixed(6)};
+const float HTEXEL = ${(2 * HOUR.halfW / HOUR_TEX_W).toFixed(6)};
 
 float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
 // soft XOR of two coverages: keeps the antialiased edges
 float xr(float a, float b){ return a + b - 2.*a*b; }
 
-float hand(sampler2D t, vec2 q, float a, float g, float L, float T, float W){
+float hand(sampler2D t, vec2 q, float a, float g, float L, float T, float W, float lod){
   vec2 d = vec2(sin(a), cos(a));
   vec2 uv = vec2(dot(q, vec2(d.y,-d.x))/(2.*W) + .5, (dot(q,d)/g + T)/(L+T));
   if (uv.x<0. || uv.x>1. || uv.y<0. || uv.y>1.) return 0.;
-  return texture(t, uv).a;
+  return textureLod(t, uv, lod).a;
 }
-float handBlur(sampler2D t, vec2 q, float rev, float drev, float g, float L, float T, float W, float jit){
-  float span = clamp(drev, -1., 1.);
-  int n = int(clamp(ceil(abs(span)*160.), 1., 28.));
+// Motion blur: evenly spaced copies along the arc swept this frame, each one softened
+// (via the mip chain) just enough to close the gap to its neighbour, so it reads as a smear.
+float handBlur(sampler2D t, vec2 q, float rev, float span, float g, float L, float T, float W, float texel){
+  span = clamp(span, -.5, .5);
+  int n = int(clamp(ceil(abs(span)*260.), 1., 40.));
+  float gap = abs(span)*TAU*max(length(q), .04)/float(n);
+  float lod = n > 1 ? clamp(log2(gap/texel), 0., 6.) : 0.;
   float acc = 0.;
-  for (int i=0; i<28; i++){
+  for (int i=0; i<40; i++){
     if (i>=n) break;
-    acc += hand(t, q, (rev - span*(float(i)+jit)/float(n))*TAU, g, L, T, W);
+    acc += hand(t, q, (rev - span*(float(i)+.5)/float(n))*TAU, g, L, T, W, lod);
   }
-  return min(1., acc/float(n)*(1. + 2.5*min(abs(span), 1.)));
+  return acc/float(n);
 }
 
 void main(){
@@ -150,43 +163,47 @@ void main(){
   float r = length(p);
   float v = uWipe.y;
 
-  // the drop: a circle of the opposite colour with a liquid edge
+  // the drop: a circle of the opposite colour with a liquid edge, blurred by its own speed
   if (uDrop.z > 0.){
     vec2 d = p - uDrop.xy;
     float a = atan(d.y, d.x);
     float edge = uDrop.z + uDrop.w*(.6*sin(a*5. + uTime*3.1) + .4*sin(a*9. - uTime*4.3));
-    v = xr(v, 1. - smoothstep(edge - px, edge + px, length(d)));
+    float soft = max(px, uDropBlur*.5);
+    v = xr(v, 1. - smoothstep(edge - soft, edge + soft, length(d)));
   }
 
-  // the sweep: everything the minute hand has passed this turn is inverted
+  // the sweep: everything the minute hand has passed this turn is inverted.
+  // The leading edge is smeared over the angle it covered this frame.
   if (uWipe.z > 0.){
     float ang = fract(atan(p.x, p.y)/TAU);
-    float w = smoothstep(-px, px, (uWipe.x - ang)*TAU*r) * smoothstep(-px, px, ang*TAU*r);
-    v = xr(v, w);
+    float pxRev = px/(TAU*max(r, 1e-3));
+    float ew = max(abs(uWipe.w), pxRev*2.);
+    float lead = clamp((uWipe.x - ang)/ew + .5, 0., 1.);
+    float trail = smoothstep(-px, px, ang*TAU*r);
+    v = xr(v, lead*trail);
   }
 
-  // the hands and the pivot
+  // the hands
   if (uHandK.x > .001){
     vec2 q = p/uHandK.y;
-    float jit = hash(gl_FragCoord.xy);
-    float hh = handBlur(uHourTex, q, uHands.y, uHands.w, uHandK.x, HL, HT, HW, jit);
-    float mm = handBlur(uMinTex,  q, uHands.x, uHands.z, uHandK.x, ML, MT, MW, jit);
+    float hh = handBlur(uHourTex, q, uHands.y, uHands.w, uHandK.x, HL, HT, HW, HTEXEL);
+    float mm = handBlur(uMinTex,  q, uHands.x, uHands.z, uHandK.x, ML, MT, MW, MTEXEL);
     v = xr(v, max(hh, mm));
   }
-  if (uHandK.z > 0.){
-    float pr = uHandK.z;
-    float pv = 1. - smoothstep(pr - px, pr + px, r);
-    float hole = 1. - smoothstep(pr*.38 - px, pr*.38 + px, r);
-    v = xr(v, pv - hole);
+
+  // the pivot, which at the end opens like an iris (the page shows through the hole via a CSS mask)
+  float hole = uIris.x > 0. ? uIris.x : uHandK.z*.38;
+  float outer = uIris.x > 0. ? uIris.x + uIris.y : uHandK.z;
+  float amber = 0.;
+  if (outer > 0.){
+    float ring = max((1. - smoothstep(outer - px, outer + px, r)) - (1. - smoothstep(hole - px, hole + px, r)), 0.);
+    if (uIris.x > 0.) amber = ring;   // the opening iris is the one amber moment, like the arc in the logo
+    else v = xr(v, ring);
   }
 
-  // the cursor inverts too
-  if (uCursor.z > 0.){
-    v = xr(v, 1. - smoothstep(uCursor.z - px, uCursor.z + px, length(p - uCursor.xy)));
-  }
-
-  vec3 col = mix(INK, PAPER, v);
-  col += (hash(gl_FragCoord.xy + fract(uTime*7.31)*91.7) - .5)*.035;
+  vec3 col = mix(mix(INK, PAPER, v), AMBER, amber);
+  // film grain, refreshed 24 times a second like film, not every frame
+  col += (hash(gl_FragCoord.xy + floor(uTime*24.)*17.31) - .5)*.022;
   o = vec4(col, 1.);
 }`;
 
@@ -235,12 +252,14 @@ async function start() {
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-  const minTex = texture(drawHand(MINUTE, 192, drawMinute));
-  const hourTex = texture(drawHand(HOUR, 256, drawHour));
+  const minTex = texture(drawHand(MINUTE, MIN_TEX_W, drawMinute));
+  const hourTex = texture(drawHand(HOUR, HOUR_TEX_W, drawHour));
 
-  let W = 0, H = 0;
+  // ---- resolution: device pixels, scaled down automatically if frames run long
+  let W = 0, H = 0, quality = 1, lastQualityChange = 0;
+  const maxDpr = Math.min(window.devicePixelRatio || 1, 2);
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.max(0.75, maxDpr * quality);
     const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
     if (w === W && h === H) return;
     W = canvas.width = w; H = canvas.height = h;
@@ -251,26 +270,31 @@ async function start() {
 
   // ---- state
   let S;
-  const cursor = { x: 99, y: 99, r: 0, on: false };
   function reset() {
     S = {
-      T: 0, rate: 1, holding: false, p: 0, done: false, Te: 0, revealed: false,
-      prevMin: 0, prevHour: 0, first: true,
-      hands: [0, 0, 0, 0], handK: [0, 0.5, 0, 0], drop: [0, 0, 0, 0], wipe: [0, 0, 0], v: 0,
+      T: 0, rate: 1, holding: false, p: 0, done: false, Te: 0,
+      revealed: false, gone: false,
+      prevMin: 0, prevHour: 0, prevRev: 0, prevDrop: 0, first: true,
+      spanMin: 0, spanHour: 0, spanWipe: 0, dropBlur: 0,
+      hands: [0, 0, 0, 0], handK: [0, 0.5, 0, 0], drop: [0, 0, 0, 0], wipe: [0, 0, 0, 0], iris: [0, 0],
     };
-    intro.classList.remove('is-revealed', 'is-holding', 'is-running');
-    root.classList.remove('intro-done');
+    intro.classList.remove('is-revealed', 'is-holding', 'is-running', 'is-iris');
+    intro.style.removeProperty('--iris');
+    root.classList.remove('intro-done', 'intro-gone');
     root.classList.add('is-locked');
     status.textContent = 'Loading ChronoStack…';
     announce('chronostack:intro-start');
   }
   reset();
 
+  // per-frame movement, smoothed so uneven frame pacing doesn't make the blur flicker
+  const ease = (prev, next) => prev + (next - prev) * 0.5;
+
   function step(dt) {
     S.T += dt;
     const t = S.T;
     const aspect = innerWidth / innerHeight;
-    const size = Math.min(0.92, aspect * 0.8);          // hand scale, in half-screen-heights
+    const size = Math.min(0.92, aspect * 0.8);           // hand scale, in half-screen-heights
     const cover = Math.hypot(aspect, 1) * 1.08;            // radius that covers the screen
     intro.classList.toggle('is-running', t > DROP0);
 
@@ -278,52 +302,59 @@ async function start() {
     if (t > RUN0 && !S.done) S.p = Math.min(1, S.p + dt / RUN);
     const rev = SWEEPS * cubicInOut(S.p);
     const minRev = rev, hourRev = rev / 12;              // ends on 12 and III
-    const dMin = S.first ? 0 : minRev - S.prevMin;
-    const dHour = S.first ? 0 : hourRev - S.prevHour;
-    S.prevMin = minRev; S.prevHour = hourRev; S.first = false;
-    S.v = TOTAL * cubicInOut(S.p);
-
     if (!S.done && S.p >= 1) { S.done = true; S.Te = t; }
     const e = S.done ? t - S.Te : 0;
 
-    // unfold, then fold away at the end
+    const moved = !S.first && dt > 0;
+    S.spanMin = moved ? ease(S.spanMin, minRev - S.prevMin) : 0;
+    S.spanHour = moved ? ease(S.spanHour, hourRev - S.prevHour) : 0;
+    S.prevMin = minRev; S.prevHour = hourRev;
+
+    // unfold, then fold away as the hands come to rest
     let g = expoOut((t - GROW0) / (GROW1 - GROW0));
-    if (S.done) g *= 1 - cubicIn((e - 0.15) / 0.55);
-    let pivot = 0.032 * cubicOut((t - GROW0) / 0.5);
-    if (S.done) pivot *= 1 - cubicIn((e - 0.55) / 0.45);
-    S.hands = [fract(minRev), fract(hourRev), dMin, dHour];
+    if (S.done) g *= 1 - cubicInOut((e - FOLD0) / FOLD);
+    const pivot = 0.032 * cubicOut((t - GROW0) / 0.45);
+    S.hands = [fract(minRev), fract(hourRev), S.spanMin, S.spanHour];
     S.handK = [g, size, pivot, 0];
 
-    // the drop: grows from the pivot to cover the screen, then becomes the new background
+    // the drop: eases in from the pivot, floods the screen, then becomes the new background
     const k = (t - DROP0) / (DROP1 - DROP0);
-    let parity = 0;
+    let parity = 0, rad = 0;
     if (k >= 1) { parity = 1; S.drop = [0, 0, 0, 0]; }
     else if (k > 0) {
-      const rad = cover * Math.pow(cubicOut(k), 1.15);
+      rad = cover * cubicOut(smooth(k));
       S.drop = [0, 0, Math.max(rad, 0.0001), 0.012 * (1 - k) * Math.min(1, k * 6)];
     } else S.drop = [0, 0, 0, 0];
+    S.dropBlur = moved && k > 0 && k < 1 ? ease(S.dropBlur, Math.min(Math.abs(rad - S.prevDrop), 0.05)) : 0;
+    S.prevDrop = rad;
 
     // each full sweep flips the background; the current sweep is drawn as a wedge
     const turns = Math.floor(rev + 1e-6);
-    S.wipe = [fract(rev), (parity + turns) % 2, k >= 1 && !S.done ? 1 : 0];
+    S.spanWipe = moved ? ease(S.spanWipe, rev - S.prevRev) : 0;
+    S.prevRev = rev;
+    S.wipe = [fract(rev), (parity + turns) % 2, t > RUN0 && !S.done ? 1 : 0, S.spanWipe];
 
-    if (S.done && !S.revealed && e > 0.9) {
-      S.revealed = true;
-      intro.classList.add('is-revealed');
-      root.classList.add('intro-done');
-      root.classList.remove('is-locked');
-      status.textContent = 'ChronoStack loaded.';
-      announce('chronostack:intro-done');
-    }
+    // the iris: the pivot's hole opens onto the page
+    const ik = S.done ? (e - IRIS0) / IRIS : 0;
+    if (ik > 0) {
+      const irisR = 0.032 * 0.38 + cubicInOut(ik) * cover;
+      const ring = 0.02 * (1 - smooth(ik * 1.6));
+      S.iris = [irisR, Math.max(ring, 0)];
+      intro.classList.add('is-iris');
+      intro.style.setProperty('--iris', `${(irisR * innerHeight) / 2}px`);
+      if (!S.revealed && ik > 0.08) {
+        S.revealed = true;
+        intro.classList.add('is-revealed');
+        root.classList.add('intro-done');
+        root.classList.remove('is-locked');
+        status.textContent = 'ChronoStack loaded.';
+        announce('chronostack:intro-done');
+      }
+      if (!S.gone && ik >= 1) { S.gone = true; root.classList.add('intro-gone'); }
+    } else S.iris = [0, 0];
 
+    S.first = false;
   }
-
-  function fmtTime(v) {
-    const m = Math.max(0, Math.floor(v + 1e-6));
-    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
-    return `+${String(d).padStart(2, '0')}d ${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-  }
-  function updateDom() {}
 
   function render() {
     resize();
@@ -333,22 +364,37 @@ async function start() {
     gl.uniform4fv(prog.u.uHands, S.hands);
     gl.uniform4fv(prog.u.uHandK, S.handK);
     gl.uniform4fv(prog.u.uDrop, S.drop);
-    gl.uniform3fv(prog.u.uWipe, S.wipe);
-    gl.uniform3f(prog.u.uCursor, cursor.x, cursor.y, cursor.r);
+    gl.uniform1f(prog.u.uDropBlur, S.dropBlur);
+    gl.uniform4fv(prog.u.uWipe, S.wipe);
+    gl.uniform2fv(prog.u.uIris, S.iris);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, minTex); gl.uniform1i(prog.u.uMinTex, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, hourTex); gl.uniform1i(prog.u.uHourTex, 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  // Warm-up: run every shader path once on a single pixel so the first visible frame
+  // doesn't pay for shader compilation and texture upload.
+  function warmUp() {
+    const keep = S;
+    S = { ...keep, hands: [0.1, 0.02, 0.05, 0.004], handK: [1, 0.6, 0.03, 0], drop: [0, 0, 0.5, 0.01],
+      dropBlur: 0.01, wipe: [0.3, 0, 1, 0.02], iris: [0.1, 0.01] };
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, 0, 1, 1);
+    render();
+    gl.disable(gl.SCISSOR_TEST);
+    gl.finish();
+    S = keep;
+  }
+  warmUp();
+
   // ---- input: hold to fast-forward
-  const toScene = (e) => [((e.clientX - innerWidth / 2) / innerHeight) * 2, (-(e.clientY - innerHeight / 2) / innerHeight) * 2];
   const isControl = (e) => e.target.closest && e.target.closest('a, button');
   function setHolding(on) {
     S.holding = on && !S.done;
     intro.classList.toggle('is-holding', S.holding);
   }
   intro.addEventListener('pointerdown', (e) => {
-    if (isControl(e)) return;
+    if (isControl(e) || S.revealed) return;
     setHolding(true);
     intro.setPointerCapture?.(e.pointerId);
   });
@@ -365,37 +411,52 @@ async function start() {
   function skip() {
     if (S.revealed) return;
     while (!S.done) step(1 / 30);
-    S.T = Math.max(S.T, S.Te + 0.5);
+    S.T = Math.max(S.T, S.Te + FOLD0 + FOLD);
     S.first = true;
   }
-  $('#replay').addEventListener('click', () => {
-    scrollTo(0, 0);
-    reset();
-    if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
-  });
 
   // ---- run
-  intro.classList.add('is-started');
-  if (FREEZE != null) {
-    while (S.T < FREEZE) step(1 / 60);
-    const still = () => { step(0); updateDom(); render(); requestAnimationFrame(still); };
-    still();
-    return;
-  }
-  let last = performance.now();
-  let running = true;
+  let running = false, last = 0, frameAvg = 1 / 60, started = false;
   function frame(now) {
-    // once the overlay has faded, stop drawing
-    if (S.revealed && S.T - S.Te > 2.5) { running = false; return; }
-    const dt = Math.min((now - last) / 1000, 1 / 20);
+    if (S.gone) { running = false; return; }
+    // the clock starts on the first real frame, never with a catch-up jump
+    if (!started) { started = true; last = now; }
+    const real = (now - last) / 1000;
     last = now;
+    const dt = Math.min(real, 1 / 30);
+
+    // adaptive resolution: step down when frames run long, back up when there is headroom
+    if (real > 0 && real < 0.1) frameAvg += (real - frameAvg) * 0.1;
+    if (S.T - lastQualityChange > 0.4) {
+      if (frameAvg > 1 / 45 && quality > 0.5) { quality = Math.max(0.5, quality * 0.85); lastQualityChange = S.T; }
+      else if (frameAvg < 1 / 70 && quality < 1) { quality = Math.min(1, quality / 0.85); lastQualityChange = S.T; }
+    }
+
     S.rate += ((S.holding ? 4 : 1) - S.rate) * (1 - Math.exp(-dt * 6));
     step(dt * S.rate);
-    updateDom();
     render();
     requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  function run() {
+    if (running) return;
+    running = true; started = false;
+    requestAnimationFrame(frame);
+  }
+
+  $('#replay').addEventListener('click', () => {
+    scrollTo(0, 0);
+    reset();
+    run();
+  });
+
+  intro.classList.add('is-started');
+  if (FREEZE != null) {
+    while (S.T < FREEZE) step(1 / 60);
+    const still = () => { render(); requestAnimationFrame(still); };
+    still();
+    return;
+  }
+  run();
 }
 
 if (!gl) goStatic();
