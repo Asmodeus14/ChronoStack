@@ -205,7 +205,7 @@ Keep `.chronostack/reports/` as a build artifact, so a failed run can be read la
 | A pg_cron job like `*/5 * * * *` ran fewer times than expected | It runs once per clock stop | `advance --pg-cron-all`, or `--step` |
 | `doctor` warns the CLI and controller versions differ | An old stack from another CLI version | `chronostack down`, then `up` |
 | Data looks "from the future" | It was written in virtual time | It's in the copy's own volumes; `chronostack down -v` removes them |
-| `chronostack: command not found` after installing | The install folder isn't on PATH | Add `~/.local/bin` to PATH (Linux/macOS), or open a new terminal (Windows) |
+| `chronostack: command not found` / "not recognized" right after installing | The terminal was opened before the install (on Linux and macOS, `curl … \| sh` can't change the shell that ran it) | Run the `export PATH=…` line the installer printed, or open a new terminal. On Windows the installer updates the current session itself. |
 | macOS: "cannot be opened because the developer cannot be verified" | The archive was downloaded in a browser (binaries aren't notarized yet) | Install with the script, or run `xattr -d com.apple.quarantine ~/.local/bin/chronostack` |
 
 Still stuck? Open an issue with your compose snippet, `chronostack.yml`, and the output of `chronostack doctor`.

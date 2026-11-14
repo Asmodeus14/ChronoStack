@@ -84,7 +84,7 @@ curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-al
 $env:CHRONOSTACK_VERSION = "0.1.0-alpha.2"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.2/install.ps1 | iex
 ```
 
-**No admin rights needed.** The CLI goes into your user directory (`~/.local/bin`, or `%LOCALAPPDATA%\chronostack\bin` on Windows). **Update** any time with `chronostack update` (`--check` only checks); it verifies the release checksum and replaces itself.
+**No admin rights needed.** The CLI goes into your user directory (`~/.local/bin`, or `%LOCALAPPDATA%\chronostack\bin` on Windows) and is put on your PATH. On Windows it works in the same terminal right away. On Linux and macOS the installer adds one marked line to your shell's startup file and prints the command for the current terminal. `CHRONOSTACK_NO_MODIFY_PATH=1` skips both. **Update** any time with `chronostack update` (`--check` only checks); it verifies the release checksum and replaces itself.
 
 Binaries are built for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64), with checksums and an SBOM on each [release](https://github.com/Asmodeus14/ChronoStack/releases). They are not code-signed yet. The install scripts don't trigger macOS Gatekeeper or Windows SmartScreen, but downloading an archive in a browser and opening it may show an "unidentified developer" or SmartScreen warning. Releases are pre-releases (so the commands name the version) until macOS has been tested ([#5](https://github.com/Asmodeus14/ChronoStack/issues/5)). On first `chronostack up`, the CLI pulls the matching controller image from `ghcr.io/asmodeus14/chronostack-clockd`, pinned by digest.
 

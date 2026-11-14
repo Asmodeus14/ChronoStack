@@ -16,6 +16,7 @@ The first published pre-release. It includes everything listed under 0.1.0-alpha
 ### Added
 
 - `chronostack update [--check] [--version X] [--pre] [--force]`: updates the CLI from GitHub Releases. It verifies `SHA256SUMS` and replaces the running binary (Windows included), with no admin rights.
+- Installers put `chronostack` on PATH. `install.ps1` also updates the current PowerShell session, so it works immediately. `install.sh` adds one marked line to the shell's startup file (zsh, bash, fish or `~/.profile`) and prints the command for the current terminal. `CHRONOSTACK_NO_MODIFY_PATH=1` opts out.
 - GitHub Action (`action.yml`), MCP bundles and `server.json` for the MCP Registry, `docs/GUIDE.md`, demo GIF, launch drafts.
 
 ## [0.1.0-alpha.1] - 2026-11-14 (not published)
