@@ -12,7 +12,7 @@ Set TypingSpeed 45ms
 Set Theme "Catppuccin Mocha"
 
 Hide
-Type "export PATH=\"$PWD/target/debug:$PATH\" && cd examples/saas-trial-demo && export PS1='$ ' && clear"
+Type `export PATH="$PWD/target/debug:$PATH" && cd examples/saas-trial-demo && export PS1='$ ' && clear`
 Enter
 Sleep 500ms
 Show
