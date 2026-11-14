@@ -1,7 +1,7 @@
 # Terminal recording for the README (charmbracelet/vhs).
 # Rendered by .github/workflows/demo-gif.yml against a running demo stack;
 # the stack is started before recording so the GIF shows only ChronoStack.
-Output docs/assets/demo.gif
+Output docs/assets/scenario.gif
 
 Set Shell "bash"
 Set FontSize 15

@@ -1,6 +1,6 @@
 name: demo-gif
 
-# Renders docs/assets/demo.gif from docs/assets/demo.tape against a real demo
+# Renders docs/assets/{quickstart,scenario,failure}.gif from docs/assets/tapes/ against a real demo
 # stack, and uploads it as an artifact. Commit the GIF by hand after checking it.
 
 on:
@@ -26,7 +26,18 @@ jobs:
         run: chronostack up --wait --wait-timeout 240s
       - uses: charmbracelet/vhs-action@v2
         with:
-          path: docs/assets/demo.tape
+          path: docs/assets/tapes/quickstart.tape
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/assets/tapes/scenario.tape
+      - name: Restart the demo with the deliberate bug (not recorded)
+        working-directory: examples/saas-trial-demo
+        run: |
+          chronostack down -v
+          chronostack -f compose.yml -f compose.bug.yml up --wait --wait-timeout 240s
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/assets/tapes/failure.tape
       - name: What the recording shell printed
         if: always()
         run: cat /tmp/demo-run.log || echo "(no log)"
@@ -37,4 +48,4 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: demo-gif
-          path: docs/assets/demo.gif
+          path: docs/assets/*.gif
