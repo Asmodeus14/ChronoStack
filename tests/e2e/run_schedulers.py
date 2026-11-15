@@ -37,7 +37,7 @@ EXPECT = {
     "celery beat (beat_max_loop_interval=1)": "fires",
     "node-cron": "trigger",
     "APScheduler 3 (BlockingScheduler, cron)": "trigger",  # measured 2026-11-13: no run within 20 s
-    "BullMQ job scheduler (cron)": "fires",  # measured 2026-11-13: ~1 s after advance
+    "BullMQ job scheduler (cron)": "fires",  # measured 2026-11-13: ~1 s after advance; worst case ~10 s (BullMQ maximumBlockTimeout), see GUIDE section 5
     "BullMQ delayed job (2h)": "fires",  # measured 2026-11-13: immediately
 }
 

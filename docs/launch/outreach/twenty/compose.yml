@@ -1,0 +1,57 @@
+# Twenty's self-hosted stack (packages/twenty-docker/docker-compose.yml), trimmed
+# to what the background jobs need: published twentycrm/twenty image, unmodified.
+# The server runs migrations and registers the BullMQ cron jobs on start; the
+# worker runs them.
+x-env: &env
+  PG_DATABASE_URL: postgres://postgres:postgres@db:5432/default
+  SERVER_URL: http://localhost:3000
+  REDIS_URL: redis://redis:6379
+  APP_SECRET: chronostack-test-app-secret-0123456789abcdef
+  STORAGE_TYPE: local
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: default
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: pg_isready -U postgres -h localhost -d postgres
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4
+    command: ["--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    image: twentycrm/twenty:v2.58.0
+    environment:
+      <<: *env
+      NODE_PORT: 3000
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: curl --fail http://localhost:3000/healthz
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  worker:
+    image: twentycrm/twenty:v2.58.0
+    command: ["yarn", "worker:prod"]
+    environment:
+      <<: *env
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+    depends_on:
+      db: { condition: service_healthy }
+      server: { condition: service_healthy }

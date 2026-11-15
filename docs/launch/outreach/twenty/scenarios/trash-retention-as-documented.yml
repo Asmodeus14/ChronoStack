@@ -1,0 +1,84 @@
+version: 1
+name: Trash retention, as documented
+description: >-
+  Twenty's legal FAQ says soft-deleted records "are kept for 14 days, after
+  which they are permanently removed", and the retention setting is a number
+  of days. The cleanup runs once a day (00:10 UTC), so a record may stay up to
+  a day longer than the setting, but it must never be removed before it. This
+  checks both sides: still in the trash just before the retention period ends,
+  gone within a day after it. Default retention (14 days), then 1 day.
+
+steps:
+  - name: day 0, 23:50 UTC
+    advance: { to: next 23:50 }
+
+  - name: move Terry (B) to the trash at 23:50
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update workspace_1wgvd1injqtife6y4rvfbu3h5.person set \"deletedAt\" = now() where id = '20202020-b003-415a-9051-133248495f7f' returning to_char(\"deletedAt\" at time zone 'UTC', 'YYYY-MM-DD HH24:MI')"]
+    save: b_deleted_at
+
+  - name: to day 1, 00:15 (after the 00:10 cleanup)
+    advance: { to: next 00:15 }
+
+  - name: 13 more days, one day at a time
+    advance: { by: 13d, step: 1d }
+
+  - name: day 14, 00:15 — B has been in the trash 13 d 0 h 25 min, so it must still be there
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select coalesce((select case when \"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person where id = '20202020-b003-415a-9051-133248495f7f'), 'gone')"
+        equals: trash
+
+  - name: one more day
+    advance: { by: 1d }
+
+  - name: day 15, 00:15 — B (14 d 0 h 25 min) is gone
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select coalesce((select case when \"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person where id = '20202020-b003-415a-9051-133248495f7f'), 'gone')"
+        equals: gone
+
+  - name: set the workspace's retention to 1 day
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update core.workspace set \"trashRetentionDays\" = 1 where id = '20202020-1c25-4d02-bf25-6aeccf7ea419' returning \"trashRetentionDays\""]
+
+  - name: day 15, 23:59
+    advance: { to: next 23:59 }
+
+  - name: move Lee (C) to the trash at 23:59
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update workspace_1wgvd1injqtife6y4rvfbu3h5.person set \"deletedAt\" = now() where id = '20202020-b00e-4bc1-87c8-00aeb49c10f8' returning to_char(\"deletedAt\" at time zone 'UTC', 'YYYY-MM-DD HH24:MI')"]
+    save: c_deleted_at
+
+  - name: day 16, 00:15 (after the 00:10 cleanup)
+    advance: { to: next 00:15 }
+
+  - name: day 16, 00:15 — C has been in the trash 16 min with retention 1 day, so it must still be there
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select coalesce((select case when \"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person where id = '20202020-b00e-4bc1-87c8-00aeb49c10f8'), 'gone')"
+        equals: trash
+
+  - name: one more day
+    advance: { by: 1d }
+
+  - name: day 17, 00:15 — C (1 d 0 h 16 min) is gone
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select coalesce((select case when \"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person where id = '20202020-b00e-4bc1-87c8-00aeb49c10f8'), 'gone')"
+        equals: gone

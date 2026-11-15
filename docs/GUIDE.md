@@ -77,7 +77,7 @@ After each advance, every service is probed.
 
 | Scheduler | After an advance | What to do |
 |---|---|---|
-| **BullMQ** (delayed jobs, job schedulers) | Fires within about 1 s | Nothing |
+| **BullMQ** (delayed jobs, job schedulers) | Fires within up to about 10 s (BullMQ's longest wait between checks) | A barrier that waits for the queue to drain (section 5), or `dwell` of 12 s or more |
 | **Celery beat** with `beat_max_loop_interval ≤ 1` (or `celery beat --max-interval 1`) | Fires within about 2 s | Set that option in test/dev |
 | **pg_cron** | Detected automatically; ChronoStack stops the clock on each job's minute | Nothing. Jobs like `*/5 * * * *` run once per stop; `advance --pg-cron-all` runs every occurrence. |
 | A worker that polls the database (`WHERE run_at <= now()`) | Runs at its next poll | A barrier (section 5) so ChronoStack waits for it |
@@ -116,6 +116,28 @@ barriers:
       service: db
       query: "select count(*) = 0 from outbox where sent_at is null and next_attempt_at <= now()"
 ```
+
+For BullMQ, a job that is due but not yet picked up stays in the `delayed` sorted set, so `LLEN` on `wait` alone can pass too early. Count due delayed jobs as well, using Redis's own (virtual) clock. BullMQ scores delayed jobs as `timestamp_ms * 4096 + counter`:
+
+```yaml
+barriers:
+  - name: bullmq-drained
+    redis:
+      service: redis
+      command:
+        - EVAL
+        - >-
+          local t = redis.call('TIME')
+          local now = (tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)) * 4096
+          return redis.call('ZCOUNT', KEYS[1], 0, now) + redis.call('LLEN', KEYS[2]) + redis.call('LLEN', KEYS[3])
+        - "3"
+        - bull:emails:delayed
+        - bull:emails:wait
+        - bull:emails:active
+      equals: "0"
+```
+
+A barrier also covers slow jobs. A queue that runs one job at a time is held up in *real* time, so a job that takes a minute would otherwise span several virtual days of short stops.
 
 Barriers are checked at every clock stop, with a timeout (default 30 s; `advance.barrier_timeout` changes it). A barrier that never becomes true stops the advance with exit code 5. `exec` and `http` barriers work too. See the [schema](schema/chronostack.schema.json) for every field.
 

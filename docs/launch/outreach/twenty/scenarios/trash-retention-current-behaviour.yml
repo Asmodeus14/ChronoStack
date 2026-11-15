@@ -1,0 +1,93 @@
+version: 1
+name: Trash retention, as Twenty v2.58.0 behaves today
+description: >-
+  The seeded Apple workspace keeps the default trashRetentionDays of 14. Three
+  people are moved to the trash (deletedAt set to the virtual now, as a soft
+  delete does) at chosen times. BullMQ runs TrashCleanupCronJob every day at
+  00:10 UTC on its own, with no triggers. Each daily step lands at 00:15, after
+  that run. This file pins what the code computes: cutoff = today 00:00 UTC
+  minus (retention - 1) days.
+
+steps:
+  - name: day 0, 00:05 UTC
+    advance: { to: next 00:05 }
+
+  - name: move Jeffery (A) to the trash at 00:05
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update workspace_1wgvd1injqtife6y4rvfbu3h5.person set \"deletedAt\" = now() where id = '20202020-b000-4485-94de-70c2a98daef2' returning to_char(\"deletedAt\" at time zone 'UTC', 'YYYY-MM-DD HH24:MI')"]
+    save: a_deleted_at
+
+  - name: day 0, 23:50 UTC
+    advance: { to: next 23:50 }
+
+  - name: move Terry (B) to the trash at 23:50
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update workspace_1wgvd1injqtife6y4rvfbu3h5.person set \"deletedAt\" = now() where id = '20202020-b003-415a-9051-133248495f7f' returning to_char(\"deletedAt\" at time zone 'UTC', 'YYYY-MM-DD HH24:MI')"]
+    save: b_deleted_at
+
+  - name: to day 1, 00:15 (after the 00:10 cleanup)
+    advance: { to: next 00:15 }
+
+  - name: 12 more days, one day at a time
+    advance: { by: 12d, step: 1d }
+
+  - name: day 13, 00:15 — both still in the trash
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select string_agg(coalesce((select case when p.\"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person p where p.id = x.id::uuid), 'gone'), ',' order by x.n) from (values (1, '20202020-b000-4485-94de-70c2a98daef2'), (2, '20202020-b003-415a-9051-133248495f7f')) x(n, id)"
+        equals: "trash,trash"
+
+  - name: day 13, 23:59
+    advance: { to: next 23:59 }
+
+  - name: day 13, 23:59 — both still in the trash
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select string_agg(coalesce((select case when p.\"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person p where p.id = x.id::uuid), 'gone'), ',' order by x.n) from (values (1, '20202020-b000-4485-94de-70c2a98daef2'), (2, '20202020-b003-415a-9051-133248495f7f')) x(n, id)"
+        equals: "trash,trash"
+
+  - name: day 14, 00:15 (after the 00:10 cleanup)
+    advance: { to: next 00:15 }
+
+  - name: day 14, 00:15 — A (14 d 0 h 10 min in the trash) and B (13 d 0 h 25 min) are both permanently deleted
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select string_agg(coalesce((select case when p.\"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person p where p.id = x.id::uuid), 'gone'), ',' order by x.n) from (values (1, '20202020-b000-4485-94de-70c2a98daef2'), (2, '20202020-b003-415a-9051-133248495f7f')) x(n, id)"
+        equals: "gone,gone"
+
+  - name: set the workspace's retention to 1 day
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update core.workspace set \"trashRetentionDays\" = 1 where id = '20202020-1c25-4d02-bf25-6aeccf7ea419' returning \"trashRetentionDays\""]
+
+  - name: day 14, 23:59
+    advance: { to: next 23:59 }
+
+  - name: move Lee (C) to the trash at 23:59
+    exec:
+      service: db
+      command: [psql, -U, postgres, -d, default, -Atc, "update workspace_1wgvd1injqtife6y4rvfbu3h5.person set \"deletedAt\" = now() where id = '20202020-b00e-4bc1-87c8-00aeb49c10f8' returning to_char(\"deletedAt\" at time zone 'UTC', 'YYYY-MM-DD HH24:MI')"]
+    save: c_deleted_at
+
+  - name: day 15, 00:15 (after the 00:10 cleanup)
+    advance: { to: next 00:15 }
+
+  - name: day 15, 00:15 — C is permanently deleted 16 minutes after going to the trash, with retention set to 1 day
+    assert:
+      sql:
+        service: db
+        user: postgres
+        database: default
+        query: "select coalesce((select case when \"deletedAt\" is null then 'active' else 'trash' end from workspace_1wgvd1injqtife6y4rvfbu3h5.person where id = '20202020-b00e-4bc1-87c8-00aeb49c10f8'), 'gone')"
+        equals: gone

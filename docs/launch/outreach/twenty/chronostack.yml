@@ -1,0 +1,34 @@
+version: 1
+
+advance:
+  # Twenty's first marketplace catalog sync makes a network call that can take
+  # about a minute of real time; the cron queue runs one job at a time.
+  barrier_timeout: 180s
+
+barriers:
+  # BullMQ keeps jobs that are due but not yet picked up in the delayed set
+  # (score = timestamp_ms * 4096 + counter). Wait at every clock stop until both
+  # queues the trash cleanup uses have nothing due, waiting or running. TIME is
+  # Redis's own (virtual) clock.
+  - name: twenty-queues-drained
+    redis:
+      service: redis
+      command:
+        - EVAL
+        - >-
+          local t = redis.call('TIME')
+          local now = (tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)) * 4096
+          local n = 0
+          for i = 1, #KEYS, 3 do
+            n = n + redis.call('ZCOUNT', KEYS[i], 0, now)
+              + redis.call('LLEN', KEYS[i + 1]) + redis.call('LLEN', KEYS[i + 2])
+          end
+          return n
+        - "6"
+        - bull:cron-queue:delayed
+        - bull:cron-queue:wait
+        - bull:cron-queue:active
+        - bull:workspace-queue:delayed
+        - bull:workspace-queue:wait
+        - bull:workspace-queue:active
+      equals: "0"
