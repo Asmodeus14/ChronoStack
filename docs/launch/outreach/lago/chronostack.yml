@@ -1,0 +1,12 @@
+version: 1
+
+advance:
+  barrier_timeout: 180s
+
+barriers:
+  # At every clock stop: give Clockwork (it ticks every second) time to enqueue
+  # the hourly jobs, then wait until Sidekiq has nothing queued, due or running.
+  - name: sidekiq-idle
+    exec:
+      service: redis
+      command: [sh, -c, "sleep 3; [ \"$(redis-cli --eval /seed/sidekiq-busy.lua)\" = 0 ]"]

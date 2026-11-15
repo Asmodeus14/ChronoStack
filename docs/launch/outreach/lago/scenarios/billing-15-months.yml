@@ -1,0 +1,62 @@
+version: 1
+name: Fifteen months of Lago billing, checked for gaps, overlaps and wrong amounts
+description: >-
+  Six subscriptions in arrears (10.00 USD per period) on Lago v1.57.0: monthly
+  anniversaries on the 31st, 30th and 29th, a calendar monthly plan, a quarterly
+  anniversary on the 30th and a yearly anniversary on the 31st, all starting in
+  December 2026 (the quarterly one on 30 November). Lago's own Clockwork runs
+  the hourly billing jobs; the clock lands every day at 12:10 UTC, just after the
+  *:10 billing run, until 5 March 2028 (through February 2027 and the leap
+  February 2028). Customer time zones are a premium feature, so all customers
+  bill in UTC.
+
+steps:
+  - name: create plans, customers and subscriptions through the API
+    exec: { service: api, command: [sh, /seed/seed.sh] }
+
+  - name: first landing, 12:10 UTC
+    advance: { to: next 12:10 }
+
+  - name: every day at 12:10 UTC until 5 March 2028
+    advance: { to: "2028-03-05T12:10:00Z", step: 1d }
+
+  - name: every subscription's billing periods join up (no gaps, overlaps or duplicates)
+    assert:
+      sql:
+        service: db
+        user: lago
+        database: lago
+        query: >-
+          with p as (
+            select s.external_id,
+                   (f.properties->>'from_datetime')::timestamptz as from_dt,
+                   (f.properties->>'to_datetime')::timestamptz as to_dt
+            from fees f join subscriptions s on s.id = f.subscription_id
+            where f.fee_type = 2
+          ), q as (
+            select external_id, from_dt, to_dt,
+                   lead(from_dt) over (partition by external_id order by from_dt) as next_from
+            from p
+          )
+          select count(*) filter (where next_from is not null and next_from <> to_dt + interval '1 millisecond')
+               + (select count(*) - count(distinct (external_id, from_dt)) from p)
+          from q
+        equals: "0"
+
+  - name: every anniversary period is billed in full
+    assert:
+      sql:
+        service: db
+        user: lago
+        database: lago
+        query: "select count(*) from fees f join subscriptions s on s.id = f.subscription_id where f.fee_type = 2 and s.billing_time = 1 and f.amount_cents <> 1000"
+        equals: "0"
+
+  - name: one invoice per period (14 per monthly anniversary, 15 calendar months, 5 quarters, 1 year)
+    assert:
+      sql:
+        service: db
+        user: lago
+        database: lago
+        query: "select string_agg(external_id || '=' || n, ' ' order by external_id) from (select s.external_id, count(*) as n from fees f join subscriptions s on s.id = f.subscription_id where f.fee_type = 2 group by 1) t"
+        equals: "cal-ny=15 m29-syd=14 m30-ny=14 m31-utc=14 q30-utc=5 y31-utc=1"

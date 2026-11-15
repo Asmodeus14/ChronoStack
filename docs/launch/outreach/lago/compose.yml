@@ -1,0 +1,76 @@
+# Lago's self-hosted stack (docker-compose.yml), trimmed to what billing needs:
+# published getlago/api image, unmodified. Clockwork (api-clock) schedules the
+# billing jobs hourly; Sidekiq (api-worker) runs them. No frontend, no PDFs.
+# LAGO_RSA_PRIVATE_KEY comes from .env (run seed/make-env.sh once).
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql://lago:lago@db:5432/lago?search_path=public
+  REDIS_URL: redis://redis:6379
+  LAGO_REDIS_CACHE_URL: redis://redis:6379
+  SECRET_KEY_BASE: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  RAILS_ENV: production
+  RAILS_LOG_TO_STDOUT: "true"
+  LAGO_RSA_PRIVATE_KEY: ${LAGO_RSA_PRIVATE_KEY:?run seed/make-env.sh first}
+  LAGO_ENCRYPTION_PRIMARY_KEY: chronostack-test-encryption-primary-key
+  LAGO_ENCRYPTION_DETERMINISTIC_KEY: chronostack-test-encryption-deterministic-key
+  LAGO_ENCRYPTION_KEY_DERIVATION_SALT: chronostack-test-encryption-salt
+  LAGO_DISABLE_PDF_GENERATION: "true"
+  LAGO_PDF_URL: http://pdf:3000
+  LAGO_API_URL: http://localhost:3000
+  API_URL: http://localhost:3000
+  LAGO_FRONT_URL: http://localhost
+  APP_ENV: production
+  LAGO_CREATE_ORG: "true"
+  LAGO_ORG_NAME: Test Organization
+  LAGO_ORG_USER_EMAIL: owner@example.com
+  LAGO_ORG_USER_PASSWORD: chronostack-test-password
+  LAGO_ORG_API_KEY: chronostack-test-api-key
+
+services:
+  db:
+    image: getlago/postgres-partman:15.0-alpine
+    environment:
+      POSTGRES_DB: lago
+      POSTGRES_USER: lago
+      POSTGRES_PASSWORD: lago
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lago -d lago -h localhost"]
+      interval: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - ./seed:/seed:ro
+
+  migrate:
+    image: getlago/api:v1.57.0
+    command: ["./scripts/migrate.sh"]
+    environment: *backend-env
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    image: getlago/api:v1.57.0
+    command: ["./scripts/start.api.sh"]
+    environment: *backend-env
+    volumes:
+      - ./seed:/seed:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+
+  api-worker:
+    image: getlago/api:v1.57.0
+    command: ["./scripts/start.worker.sh"]
+    environment: *backend-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+
+  api-clock:
+    image: getlago/api:v1.57.0
+    command: ["./scripts/start.clock.sh"]
+    environment: *backend-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
