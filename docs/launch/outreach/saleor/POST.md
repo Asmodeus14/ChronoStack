@@ -1,4 +1,4 @@
-<!-- Draft GitHub issue for https://github.com/saleor/saleor/issues (bug report template). Not posted yet. -->
+<!-- Posted as https://github.com/saleor/saleor/issues/20019 on 2026-11-15. -->
 
 **Title:** Bug: unpaid orders expire far too late when expireOrdersAfter is 24 hours or more
 
