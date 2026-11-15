@@ -1,0 +1,40 @@
+version: 1
+name: Monthly recurring tasks for a New York user, as tududi 2.1.0 behaves today
+description: >-
+  A user in America/New_York has two recurring tasks, created through the API
+  as the web app creates them: "Pay rent", monthly on the 1st (from 1 December
+  2026), and "Team retro", the last Friday of every month (from 29 January
+  2027). Time moves to each due date (noon in New York) and the user completes
+  the task that day; tududi then moves it to its next due date. This pins what
+  happens today.
+
+steps:
+  - name: create the user's tasks (time zone America/New_York)
+    exec: { service: tududi, command: [node, /seed/api.mjs, setup] }
+
+  - name: 1 December 2026, noon in New York
+    advance: { to: "2026-12-01T17:00:00Z" }
+
+  - name: complete "Pay rent" on its due date; it moves to 31 December, not 1 January
+    exec: { service: tududi, command: [node, /seed/api.mjs, complete, rent] }
+
+  - name: rent is next due on 31 December
+    assert: { exec: { service: tududi, command: [sh, -c, "test \"$(node /seed/api.mjs due rent)\" = 2026-12-31"] } }
+
+  - name: 31 December 2026, noon in New York
+    advance: { to: "2026-12-31T17:00:00Z" }
+
+  - name: complete "Pay rent" again
+    exec: { service: tududi, command: [node, /seed/api.mjs, complete, rent] }
+
+  - name: rent is next due on 31 January, the last day of the month instead of the 1st
+    assert: { exec: { service: tududi, command: [sh, -c, "test \"$(node /seed/api.mjs due rent)\" = 2027-01-31"] } }
+
+  - name: 29 January 2027, noon in New York (last Friday of January)
+    advance: { to: "2027-01-29T17:00:00Z" }
+
+  - name: complete "Team retro"
+    exec: { service: tududi, command: [node, /seed/api.mjs, complete, retro] }
+
+  - name: the retro is next due on 26 March; February's last Friday (26 Feb) is skipped
+    assert: { exec: { service: tududi, command: [sh, -c, "test \"$(node /seed/api.mjs due retro)\" = 2027-03-26"] } }

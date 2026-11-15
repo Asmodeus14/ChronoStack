@@ -1,0 +1,27 @@
+# tududi's self-hosted stack (docker-compose.yml): published chrisvel/tududi
+# image, unmodified, with Postgres. TUDUDI_USER_EMAIL/PASSWORD create the first
+# user on start. The recurrence logic runs when a task is completed through the API.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tududi
+      POSTGRES_USER: tududi
+      POSTGRES_PASSWORD: tududi
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tududi -d tududi"]
+      interval: 5s
+      retries: 20
+
+  tududi:
+    image: chrisvel/tududi:2.1.0
+    environment:
+      DATABASE_URL: postgres://tududi:tududi@db:5432/tududi
+      TUDUDI_USER_EMAIL: owner@example.com
+      TUDUDI_USER_PASSWORD: chronostack-test-password
+      TUDUDI_SESSION_SECRET: chronostack-test-session-secret-0123456789abcdef
+      TUDUDI_ALLOWED_ORIGINS: http://localhost:3002
+    volumes:
+      - ./seed:/seed:ro
+    depends_on:
+      db: { condition: service_healthy }

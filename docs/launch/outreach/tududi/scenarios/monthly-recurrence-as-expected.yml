@@ -1,0 +1,29 @@
+version: 1
+name: Monthly recurring tasks for a New York user, as expected
+description: >-
+  The same two tasks for a user in America/New_York: "Pay rent", monthly on
+  the 1st (from 1 December 2026), and "Team retro", the last Friday of every
+  month (from 29 January 2027). Expected: completing each on its due date
+  moves it to the next month's occurrence, 1 January and 26 February.
+
+steps:
+  - name: create the user's tasks (time zone America/New_York)
+    exec: { service: tududi, command: [node, /seed/api.mjs, setup] }
+
+  - name: 1 December 2026, noon in New York
+    advance: { to: "2026-12-01T17:00:00Z" }
+
+  - name: complete "Pay rent" on its due date
+    exec: { service: tududi, command: [node, /seed/api.mjs, complete, rent] }
+
+  - name: rent is next due on 1 January
+    assert: { exec: { service: tududi, command: [sh, -c, "test \"$(node /seed/api.mjs due rent)\" = 2027-01-01"] } }
+
+  - name: 29 January 2027, noon in New York (last Friday of January)
+    advance: { to: "2027-01-29T17:00:00Z" }
+
+  - name: complete "Team retro"
+    exec: { service: tududi, command: [node, /seed/api.mjs, complete, retro] }
+
+  - name: the retro is next due on 26 February, the last Friday of February
+    assert: { exec: { service: tududi, command: [sh, -c, "test \"$(node /seed/api.mjs due retro)\" = 2027-02-26"] } }
