@@ -1,0 +1,112 @@
+# Formbricks' self-hosted stack (docker/docker-compose.yml), trimmed to what
+# survey scheduling needs: published ghcr.io/formbricks/formbricks image,
+# unmodified. The app runs the BullMQ job worker in-process (instrumentation).
+# v6 requires SpiceDB (bundled here as in upstream; SpiceDB is a static Go
+# binary, so it stays on real time). Hub, cube and taxonomy are not needed for
+# scheduling.
+x-app-env: &app-env
+  WEBAPP_URL: http://localhost:3000
+  NEXTAUTH_URL: http://localhost:3000
+  BETTER_AUTH_URL: http://localhost:3000
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/formbricks?schema=public
+  REDIS_URL: redis://redis:6379
+  BETTER_AUTH_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  NEXTAUTH_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  ENCRYPTION_KEY: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+  CRON_SECRET: chronostack-test-cron-secret-0123456789
+  EMAIL_VERIFICATION_DISABLED: "1"
+  PASSWORD_RESET_DISABLED: "1"
+  AUTHZED_ENABLED: "true"
+  AUTHZED_ENDPOINT: spicedb:50051
+  AUTHZED_TOKEN: chronostack-test-spicedb-token
+  AUTHZED_SYSTEM_KEY: formbricks
+  AUTHZED_INSECURE: "true"
+  AUTHZED_CONSISTENCY: fully_consistent
+  TELEMETRY_DISABLED: "1"
+  # Required by the env check; the analytics services aren't used here.
+  HUB_API_URL: http://hub:8080
+  HUB_API_KEY: chronostack-test-hub-key
+  CUBEJS_API_URL: http://cube:4000
+  CUBEJS_API_SECRET: chronostack-test-cube-secret
+  # The setting under test: a self-hosted instance in New Zealand.
+  SURVEY_SCHEDULING_TIME_ZONE: Pacific/Auckland
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: formbricks
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
+      interval: 5s
+      retries: 30
+
+  authzed-db-bootstrap:
+    image: pgvector/pgvector:pg18
+    entrypoint: ["/bin/sh", "-ec", "exec /usr/local/bin/authzed-postgres-bootstrap.sh"]
+    environment:
+      POSTGRES_ADMIN_URL: postgresql://postgres:postgres@postgres:5432/postgres?sslmode=disable
+      AUTHZED_DATABASE_NAME: spicedb
+      AUTHZED_DATABASE_USERNAME: spicedb
+      AUTHZED_DATABASE_PASSWORD: spicedb
+    volumes:
+      - ./authzed-postgres-bootstrap.sh:/usr/local/bin/authzed-postgres-bootstrap.sh:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  spicedb-migrate:
+    image: authzed/spicedb:v1.57.0
+    command: datastore migrate head
+    environment:
+      SPICEDB_DATASTORE_ENGINE: postgres
+      SPICEDB_DATASTORE_CONN_URI: postgresql://spicedb:spicedb@postgres:5432/spicedb?sslmode=disable
+    depends_on:
+      authzed-db-bootstrap: { condition: service_completed_successfully }
+
+  spicedb:
+    image: authzed/spicedb:v1.57.0
+    command: serve
+    environment:
+      SPICEDB_DATASTORE_ENGINE: postgres
+      SPICEDB_DATASTORE_CONN_URI: postgresql://spicedb:spicedb@postgres:5432/spicedb?sslmode=disable
+      SPICEDB_GRPC_PRESHARED_KEY: chronostack-test-spicedb-token
+      SPICEDB_TELEMETRY_ENDPOINT: ""
+    depends_on:
+      spicedb-migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:50051"]
+      interval: 5s
+      retries: 24
+
+  redis:
+    image: valkey/valkey:8.1-alpine
+    command: valkey-server --appendonly yes --maxmemory-policy noeviction
+
+  formbricks-migrate:
+    image: ghcr.io/formbricks/formbricks:6.2.0
+    entrypoint: ["sh", "-c"]
+    command: ["node /home/nextjs/validate-env.mjs && node packages/database/dist/scripts/apply-migrations.js"]
+    environment: *app-env
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  authzed-initialize:
+    image: ghcr.io/formbricks/formbricks:6.2.0
+    entrypoint: ["formbricks-authzed"]
+    command: ["upgrade", "prepare"]
+    environment: *app-env
+    depends_on:
+      formbricks-migrate: { condition: service_completed_successfully }
+      spicedb: { condition: service_healthy }
+
+  formbricks:
+    image: ghcr.io/formbricks/formbricks:6.2.0
+    environment:
+      <<: *app-env
+      SKIP_STARTUP_MIGRATION: "true"
+    volumes:
+      - ./seed:/seed:ro
+    depends_on:
+      authzed-initialize: { condition: service_completed_successfully }
+      redis: { condition: service_started }

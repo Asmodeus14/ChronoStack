@@ -1,0 +1,53 @@
+version: 1
+name: Survey close date in Pacific/Auckland, as Formbricks 6.2.0 behaves today
+description: >-
+  SURVEY_SCHEDULING_TIME_ZONE is Pacific/Auckland, so the daily scheduling job
+  runs at 00:00 New Zealand time (11:00 UTC in November). A live survey is
+  created through the management API with a close date picked 3 days ahead,
+  sent as the editor sends it (noon UTC of the picked day). This pins what
+  happens: the close date is stored as 00:00 on the day AFTER the picked one,
+  so the survey is still open on the picked day and closes a day later.
+
+steps:
+  - name: seed an organization, workspace and API key
+    exec: { service: formbricks, command: [node, /seed/seed.mjs] }
+    save: workspace
+
+  - name: create a live survey, picking a close date 3 days ahead
+    exec: { service: formbricks, command: [node, /seed/create-survey.mjs] }
+    save: picked
+
+  - name: 00:05 New Zealand time on the picked day, in UTC
+    exec:
+      service: postgres
+      command: [psql, -U, postgres, -d, formbricks, -Atc, "select to_char((date '${picked}' + time '00:05') at time zone 'Pacific/Auckland' at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"]
+    save: picked_day
+
+  - name: 00:05 New Zealand time on the day after, in UTC
+    exec:
+      service: postgres
+      command: [psql, -U, postgres, -d, formbricks, -Atc, "select to_char((date '${picked}' + 1 + time '00:05') at time zone 'Pacific/Auckland' at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')"]
+    save: day_after
+
+  - name: the stored close date is 00:00 New Zealand time, one day after the picked date
+    assert:
+      sql:
+        service: postgres
+        user: postgres
+        database: formbricks
+        query: "select ((\"closeOn\" at time zone 'UTC') at time zone 'Pacific/Auckland')::date - date '${picked}' || ' day(s) after, at ' || to_char((\"closeOn\" at time zone 'UTC') at time zone 'Pacific/Auckland', 'HH24:MI') from \"Survey\" where name = 'Closes on ${picked}'"
+        equals: "1 day(s) after, at 00:00"
+
+  - name: to the picked day, 00:05 New Zealand time (the job ran at 00:00)
+    advance: { to: "${picked_day}" }
+
+  - name: on the picked day the survey is still open
+    assert:
+      sql: { service: postgres, user: postgres, database: formbricks, query: "select status from \"Survey\" where name = 'Closes on ${picked}'", equals: inProgress }
+
+  - name: to the day after, 00:05 New Zealand time
+    advance: { to: "${day_after}" }
+
+  - name: a day late, the survey is closed
+    assert:
+      sql: { service: postgres, user: postgres, database: formbricks, query: "select status from \"Survey\" where name = 'Closes on ${picked}'", equals: completed }

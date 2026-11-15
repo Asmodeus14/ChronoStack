@@ -1,0 +1,24 @@
+version: 1
+
+advance:
+  barrier_timeout: 120s
+
+barriers:
+  # Formbricks runs BullMQ with the prefix "{formbricks:jobs}". Wait at every
+  # clock stop until the background-jobs queue (survey scheduling runs there)
+  # has nothing due, waiting or running. BullMQ scores delayed jobs as
+  # timestamp_ms * 4096 + counter; TIME is Redis's own (virtual) clock.
+  - name: background-jobs-drained
+    redis:
+      service: redis
+      command:
+        - EVAL
+        - >-
+          local t = redis.call('TIME')
+          local now = (tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)) * 4096
+          return redis.call('ZCOUNT', KEYS[1], 0, now) + redis.call('LLEN', KEYS[2]) + redis.call('LLEN', KEYS[3])
+        - "3"
+        - "{formbricks:jobs}:background-jobs:delayed"
+        - "{formbricks:jobs}:background-jobs:wait"
+        - "{formbricks:jobs}:background-jobs:active"
+      equals: "0"
