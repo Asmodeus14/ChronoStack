@@ -1,0 +1,42 @@
+version: 1
+name: When unpaid orders actually expire
+description: >-
+  Pins the current behaviour. The order age is computed as DATE_PART('day')*24 + DATE_PART('hour')*60 + DATE_PART('minute') (saleor/order/tasks.py, _expire_orders), which equals the age in minutes only for ages under one day. Predicted: 60 min -> 1 h; 1440 min -> 47 h 36 min; 2880 min -> 61 d 23 h 36 min.
+
+steps:
+  - name: create three channels (orders expire after 60 min, 24 h, 48 h) with one unpaid order each
+    exec: { service: worker, command: [python3, /seed/seed.py, "${run_id}"] }
+  - name: 1 h 5 min later
+    advance: { by: 1h5m, dwell: 8s }
+  - name: the 60-minute order expired on time
+    wait_for:
+      sql: { service: db, user: saleor, database: saleor, query: "select (select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-60') = 'expired'" }
+      timeout: 30s
+  - name: 24 h 5 min after creation
+    advance: { by: 23h, dwell: 8s }
+  - name: the 24-hour order has NOT expired
+    assert: { sql: { service: db, user: saleor, database: saleor, query: "select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-1440'", equals: unconfirmed } }
+  - name: 47 h 30 min after creation
+    advance: { by: 23h25m, dwell: 8s }
+  - name: the 24-hour order still has not expired
+    assert: { sql: { service: db, user: saleor, database: saleor, query: "select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-1440'", equals: unconfirmed } }
+  - name: 47 h 40 min after creation
+    advance: { by: 10m, dwell: 8s }
+  - name: the 24-hour order expires now (predicted 47 h 36 min)
+    wait_for:
+      sql: { service: db, user: saleor, database: saleor, query: "select (select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-1440') = 'expired'" }
+      timeout: 30s
+  - name: 48 h 5 min after creation
+    advance: { by: 25m, dwell: 8s }
+  - name: the 48-hour order has NOT expired
+    assert: { sql: { service: db, user: saleor, database: saleor, query: "select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-2880'", equals: unconfirmed } }
+  - name: 61 d 23 h 30 min after creation
+    advance: { by: 59d23h25m, dwell: 8s }
+  - name: the 48-hour order still has not expired
+    assert: { sql: { service: db, user: saleor, database: saleor, query: "select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-2880'", equals: unconfirmed } }
+  - name: 61 d 23 h 40 min after creation
+    advance: { by: 10m, dwell: 8s }
+  - name: the 48-hour order expires now (predicted 61 d 23 h 36 min)
+    wait_for:
+      sql: { service: db, user: saleor, database: saleor, query: "select (select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-2880') = 'expired'" }
+      timeout: 30s

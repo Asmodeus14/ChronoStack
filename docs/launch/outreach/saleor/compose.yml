@@ -1,0 +1,49 @@
+# Saleor as published (ghcr.io/saleor/saleor), with the Celery worker and beat
+# commands from Saleor's pyproject.toml, Postgres and Redis.
+x-env: &env
+  DATABASE_URL: postgres://saleor:saleor@db/saleor
+  CELERY_BROKER_URL: redis://redis:6379/1
+  SECRET_KEY: chronostack-test-secret
+  ALLOWED_HOSTS: "*"
+
+services:
+  db:
+    image: postgres:15.7-alpine
+    environment:
+      POSTGRES_USER: saleor
+      POSTGRES_PASSWORD: saleor
+      POSTGRES_DB: saleor
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saleor"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+
+  migrate:
+    image: ghcr.io/saleor/saleor:latest
+    command: ["python3", "manage.py", "migrate", "--no-input"]
+    environment: *env
+    depends_on:
+      db: { condition: service_healthy }
+
+  worker:
+    image: ghcr.io/saleor/saleor:latest
+    command: ["celery", "--app", "saleor.celeryconf:app", "worker", "-E", "--loglevel", "info"]
+    environment: *env
+    volumes:
+      - ./seed:/seed:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }
+
+  beat:
+    image: ghcr.io/saleor/saleor:latest
+    # Saleor's scheduler command, plus --max-interval 1 so beat notices clock
+    # jumps within a second (ChronoStack guide, section 4).
+    command: ["celery", "--app", "saleor.celeryconf:app", "beat", "--scheduler", "saleor.schedulers.schedulers.DatabaseScheduler", "--max-interval", "1", "--loglevel", "info"]
+    environment: *env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_started }

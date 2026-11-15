@@ -1,0 +1,28 @@
+version: 1
+name: Unpaid orders expire when the channel setting says
+description: >-
+  Channels set expireOrdersAfter to 60, 1440 (24 h) and 2880 (48 h) minutes. Each unconfirmed order should expire 60 min, 24 h and 48 h after it was created. Saleor's Celery beat runs expire_orders_task every 5 minutes on its own (no triggers).
+
+steps:
+  - name: create three channels (orders expire after 60 min, 24 h, 48 h) with one unpaid order each
+    exec: { service: worker, command: [python3, /seed/seed.py, "${run_id}"] }
+  - name: all three orders are unconfirmed
+    assert: { sql: { service: db, user: saleor, database: saleor, query: "select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-2880'", equals: unconfirmed } }
+  - name: 1 h 5 min later
+    advance: { by: 1h5m, dwell: 8s }
+  - name: the 60-minute order has expired
+    wait_for:
+      sql: { service: db, user: saleor, database: saleor, query: "select (select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-60') = 'expired'" }
+      timeout: 30s
+  - name: 24 h 5 min after creation
+    advance: { by: 23h, dwell: 8s }
+  - name: the 24-hour order has expired
+    wait_for:
+      sql: { service: db, user: saleor, database: saleor, query: "select (select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-1440') = 'expired'" }
+      timeout: 30s
+  - name: 48 h 5 min after creation
+    advance: { by: 24h, dwell: 8s }
+  - name: the 48-hour order has expired
+    wait_for:
+      sql: { service: db, user: saleor, database: saleor, query: "select (select o.status from order_order o join channel_channel c on c.id = o.channel_id where c.slug = 'cs-${run_id}-2880') = 'expired'" }
+      timeout: 30s
