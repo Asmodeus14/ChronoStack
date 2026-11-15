@@ -200,8 +200,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Asmodeus14/ChronoStack@v0.1.0-alpha.3    # installs the CLI (checksum-verified)
-        with: { version: 0.1.0-alpha.3 }
+      - uses: Asmodeus14/ChronoStack@v0.1.0-alpha.4    # installs the CLI (checksum-verified)
+        with: { version: 0.1.0-alpha.4 }
       - run: chronostack up --wait
       - run: chronostack run scenarios/trial.yml
       - if: always()
@@ -212,7 +212,7 @@ jobs:
 Any other CI with Docker:
 
 ```sh
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.3/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.3 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.4/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.4 sh
 export PATH="$HOME/.local/bin:$PATH"
 chronostack up --wait && chronostack run scenarios/trial.yml
 ```
