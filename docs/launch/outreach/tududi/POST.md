@@ -1,4 +1,4 @@
-<!-- Draft GitHub issue for https://github.com/chrisvel/tududi/issues (bug_report.yml). Not posted yet. Plain report: no tool description, one link to the reproduction. -->
+<!-- Posted as https://github.com/chrisvel/tududi/issues/2100 on 2026-11-15. -->
 
 **Title:** Monthly recurring tasks move to the wrong day: "on the 1st" becomes the last day of the previous month west of UTC, and "last Friday" skips months
 
