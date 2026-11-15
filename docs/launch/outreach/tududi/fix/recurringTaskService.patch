@@ -1,7 +1,7 @@
-diff --git a/backend/modules/tasks/recurringTaskService.js b/C:/Users/singh/AppData/Local/Temp/claude/22a9536310504d7e/5c75c8dc-82ef-4a0f-abd7-89d8ff7acd61/scratchpad/rts_fixed.js
+diff --git a/backend/modules/tasks/recurringTaskService.js b/backend/modules/tasks/recurringTaskService.js
 index b032a4d..105f70d 100644
 --- a/backend/modules/tasks/recurringTaskService.js
-+++ b/C:/Users/singh/AppData/Local/Temp/claude/22a9536310504d7e/5c75c8dc-82ef-4a0f-abd7-89d8ff7acd61/scratchpad/rts_fixed.js
++++ b/backend/modules/tasks/recurringTaskService.js
 @@ -1,3 +1,4 @@
 +const moment = require('moment-timezone');
  const { getWeekdayInTimezone } = require('../../utils/timezone-utils');
