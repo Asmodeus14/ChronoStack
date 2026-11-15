@@ -551,7 +551,11 @@ fn resolve_files(given: &[String]) -> Result<Vec<String>> {
 fn probe_spec(svc: &compose::Service, image: &str) -> ProbeSpec {
     let env = |k: &str| svc.environment.get(k).cloned().flatten();
     let img = image.to_ascii_lowercase();
-    if img.contains("postgres")
+    // App containers often set POSTGRES_* too (to connect); probe_one falls
+    // back to `date` when psql has no server to talk to.
+    if ["postgres", "pgvector", "postgis", "timescale"]
+        .iter()
+        .any(|name| img.contains(name))
         || env("POSTGRES_PASSWORD").is_some()
         || env("POSTGRES_USER").is_some()
     {

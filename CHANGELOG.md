@@ -13,6 +13,15 @@ ChronoStack is pre-alpha. Pre-releases are published on GitHub Releases.
 
 - Scenarios: `advance: { to: "${var}" }` accepts a value saved by an earlier step, so a test can advance to a time read from the data (for example a subscription's period end). Found while testing Polar.
 
+### Fixed
+
+- App containers that set `POSTGRES_PASSWORD` or `POSTGRES_USER` (to connect to a database) no longer fail every probe, and `up --wait`, with "unavailable". When the Postgres probe gets no answer, ChronoStack checks the container's own clock instead. Images named pgvector, postgis or timescale are also recognised as Postgres servers. Found while testing Chatwoot.
+
+### Documentation
+
+- Guide: BullMQ can take up to about 10 s to pick up a due job, and a slow job holds up a one-at-a-time queue in real time; a barrier that counts due delayed jobs, with an example. Found while testing Twenty.
+- Guide: sidekiq-cron skips a run it notices more than 60 s late; how to land steps for it. Found while testing Chatwoot.
+
 ## [0.1.0-alpha.3] - 2026-11-14
 
 ### Fixed

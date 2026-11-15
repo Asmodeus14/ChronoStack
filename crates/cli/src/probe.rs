@@ -72,6 +72,20 @@ pub fn probe_one(
     spec: &ProbeSpec,
     client: &Client,
 ) -> ProbeResult {
+    let result = probe_with(compose, service, spec, client);
+    // A service picked for the Postgres probe may only be a Postgres *client*
+    // (an app with POSTGRES_PASSWORD set, and psql installed or not). When
+    // psql can't answer, check the container's own clock instead.
+    if matches!(spec, ProbeSpec::Postgres { .. }) && result.status == "unavailable" {
+        let fallback = probe_with(compose, service, &ProbeSpec::Date, client);
+        if fallback.status != "unavailable" {
+            return fallback;
+        }
+    }
+    result
+}
+
+fn probe_with(compose: &Compose, service: &str, spec: &ProbeSpec, client: &Client) -> ProbeResult {
     let (method, cmd) = command(spec);
     let unavailable = |detail: String| ProbeResult {
         service: service.into(),
