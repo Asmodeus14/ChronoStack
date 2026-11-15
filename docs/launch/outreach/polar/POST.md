@@ -26,10 +26,7 @@ enqueue_timestamp: int | None = message.options.pop(
 
 (`after_skip_message` already pops with `None`.) The existing test at `tests/worker/test_debounce.py:251` passes the option explicitly as `None`, so the "key expired, option never set" path isn't covered.
 
-**How I found it.** I was running Polar's worker under [ChronoStack](https://github.com/Asmodeus14/ChronoStack), an open-source tool that moves a Docker Compose stack forward in time (Postgres, Redis TTLs and Python's clock together). I was testing subscription period ends. A 31-day jump expired the debounce keys of messages already in the queue. The test itself passed, and Polar's own APScheduler job store handled the jump well:
-
-- A subscription canceled "at period end" was ended by the scheduler within about 10 s (real time) of the clock passing `ends_at`, without any triggers.
-- A free monthly subscription was renewed into its next period.
+**How I found it.** I was testing subscription period ends with the whole stack's clock moved forward. A 31-day jump expired the debounce keys of messages already in the queue.
 
 The test setup (a minimal image built from `server/`, a seed script using your own `tests/fixtures` factories, and the scenario) is here: https://github.com/Asmodeus14/ChronoStack/tree/main/docs/launch/outreach/polar
 
