@@ -21,7 +21,7 @@
 >
 > The demo: 15 virtual days, a webhook outage on day 14 and retries, checked in about 15 s of real time.
 >
-> Before posting this I ran it against a few open-source projects' published images, testing their real time-based features, and found four date bugs: Saleor's unpaid-order expiry fired far too late for settings of a day or more, Twenty's trash cleanup deleted records up to a day early, Chatwoot never reopened snoozed conversations after a background-job outage of more than 3 days, and Formbricks scheduled surveys a day late in UTC+12 zones. All are reported upstream (links on the site), two with fixes proposed.
+> Before posting this I ran it against a few open-source projects' published images, testing their real time-based features, and found five date bugs: Saleor's unpaid-order expiry fired far too late for settings of a day or more, Twenty's trash cleanup deleted records up to a day early, Chatwoot never reopened snoozed conversations after a background-job outage of more than 3 days, Formbricks scheduled surveys a day late in UTC+12 zones, and tududi moved monthly recurring tasks to the wrong day. All are reported upstream (links on the site), two with fixes proposed.
 >
 > Limits: Go binaries aren't covered (no libc), time only moves forward, and **macOS is untested**. If you have a Mac, issue #5 is a 5-minute test. Pre-alpha, MIT/Apache-2.0.
 >

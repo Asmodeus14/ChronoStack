@@ -156,6 +156,7 @@ Each bug was reproduced on the project's own published image, with the whole sta
 | Twenty | The trash cleanup permanently deleted records up to a day before the retention period ended. | Fix proposed · [issue](https://github.com/twentyhq/twenty/issues/30460) · [PR](https://github.com/twentyhq/twenty/pull/30461) |
 | Chatwoot | Conversations whose snooze ended while background jobs were down for more than 3 days were never reopened. | Reported · [issue](https://github.com/chatwoot/chatwoot/issues/16667) |
 | Formbricks | With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late. | Reported · [issue](https://github.com/formbricks/formbricks/issues/10021) |
+| tududi | Monthly recurring tasks moved to the wrong day: for users in the Americas, "on the 1st" became the last day of the previous month, and "last Friday" skipped months. | Reported · [issue](https://github.com/chrisvel/tududi/issues/2100) |
 
 The setups, scenarios and run reports are in [docs/launch/outreach](docs/launch/outreach/).
 
