@@ -1,4 +1,4 @@
-<!-- Draft GitHub issue for https://github.com/formbricks/formbricks/issues (bug_report.yml). Not posted yet. Plain report: no tool description, one link to the reproduction. -->
+<!-- Posted as https://github.com/formbricks/formbricks/issues/10021 on 2026-11-15. -->
 
 **Title:** Scheduled surveys open and close a day late when SURVEY_SCHEDULING_TIME_ZONE is UTC+12 or later (e.g. Pacific/Auckland)
 
