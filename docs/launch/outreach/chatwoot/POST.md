@@ -1,4 +1,4 @@
-<!-- Draft GitHub issue for https://github.com/chatwoot/chatwoot/issues (bug_report.yml). Not posted yet. Plain report: no tool description, one link to the reproduction. -->
+<!-- Posted as https://github.com/chatwoot/chatwoot/issues/16667 on 2026-11-15. -->
 
 **Title:** Snoozed conversations are never reopened if the snooze ended more than 3 days before the job runs
 
