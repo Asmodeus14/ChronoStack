@@ -146,6 +146,19 @@ Listed as tested only where an automated test covers it.
 
 Faking the time isn't new; the orchestration, safety and lifecycle workflow are what ChronoStack adds. [Full analysis](docs/COMPETITIVE_ANALYSIS.md).
 
+## Found in real projects
+
+Each bug was reproduced on the project's own published image, with the whole stack's clock moved forward, and reported upstream. Thanks to the maintainers for their work and their time.
+
+| Project | What was wrong | Status |
+|---|---|---|
+| Saleor | Unpaid orders set to expire after a day or more expired far too late: 24 h became about 47.6 h, and 48 h about 62 days. | Fix proposed · [issue](https://github.com/saleor/saleor/issues/20019) · [PR](https://github.com/saleor/saleor/pull/20020) |
+| Twenty | The trash cleanup permanently deleted records up to a day before the retention period ended. | Fix proposed · [issue](https://github.com/twentyhq/twenty/issues/30460) · [PR](https://github.com/twentyhq/twenty/pull/30461) |
+| Chatwoot | Conversations whose snooze ended while background jobs were down for more than 3 days were never reopened. | Reported · [issue](https://github.com/chatwoot/chatwoot/issues/16667) |
+| Formbricks | With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late. | Reported · [issue](https://github.com/formbricks/formbricks/issues/10021) |
+
+The setups, scenarios and run reports are in [docs/launch/outreach](docs/launch/outreach/).
+
 ## Documentation
 
 | | |
