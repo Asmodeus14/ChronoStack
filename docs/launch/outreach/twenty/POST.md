@@ -1,4 +1,4 @@
-<!-- Draft GitHub issue for https://github.com/twentyhq/twenty/issues (report-bug template). Not posted yet. -->
+<!-- Posted as https://github.com/twentyhq/twenty/issues/30460 on 2026-11-15. -->
 
 **Title:** Trash cleanup permanently deletes records up to a day before the retention period ends
 
