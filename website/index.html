@@ -437,6 +437,23 @@
       </table>
     </section>
 
+    <!-- ================================================================ found in real projects -->
+    <section class="compare" id="found" aria-labelledby="found-title">
+      <div class="compare-head">
+        <h2 id="found-title" data-reveal>Found in real projects.</h2>
+        <p data-reveal>Each bug was reproduced on the project's own published image, with the whole stack's clock moved forward, and reported upstream. Thanks to the maintainers for their work and their time.</p>
+      </div>
+      <table class="compare-table">
+        <thead><tr><th scope="col">Project</th><th scope="col">What was wrong</th><th scope="col">Status</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Saleor</th><td>Unpaid orders set to expire after a day or more expired far too late: 24&nbsp;h became about 47.6&nbsp;h, and 48&nbsp;h about 62&nbsp;days.</td><td>Fix proposed · <a href="https://github.com/saleor/saleor/issues/20019">issue</a> · <a href="https://github.com/saleor/saleor/pull/20020">PR</a></td></tr>
+          <tr><th scope="row">Twenty</th><td>The trash cleanup permanently deleted records up to a day before the retention period ended.</td><td>Fix proposed · <a href="https://github.com/twentyhq/twenty/issues/30460">issue</a> · <a href="https://github.com/twentyhq/twenty/pull/30461">PR</a></td></tr>
+          <tr><th scope="row">Chatwoot</th><td>Conversations whose snooze ended while background jobs were down for more than 3&nbsp;days were never reopened.</td><td>Reported · <a href="https://github.com/chatwoot/chatwoot/issues/16667">issue</a></td></tr>
+          <tr><th scope="row">Formbricks</th><td>With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late.</td><td>Reported · <a href="https://github.com/formbricks/formbricks/issues/10021">issue</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+
     <!-- ================================================================ compatibility -->
     <section class="compat" id="compat" aria-labelledby="compat-title">
       <div class="compat-head">

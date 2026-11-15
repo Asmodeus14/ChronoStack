@@ -21,11 +21,17 @@
 >
 > The demo: 15 virtual days, a webhook outage on day 14 and retries, checked in about 15 s of real time.
 >
+> Before posting this I ran it against a few open-source projects' published images, testing their real time-based features, and found four date bugs: Saleor's unpaid-order expiry fired far too late for settings of a day or more, Twenty's trash cleanup deleted records up to a day early, Chatwoot never reopened snoozed conversations after a background-job outage of more than 3 days, and Formbricks scheduled surveys a day late in UTC+12 zones. All are reported upstream (links on the site), two with fixes proposed.
+>
 > Limits: Go binaries aren't covered (no libc), time only moves forward, and **macOS is untested**. If you have a Mac, issue #5 is a 5-minute test. Pre-alpha, MIT/Apache-2.0.
 >
 > Write-up of the problems above: <link>. I'd especially like to hear what breaks on your stack (`chronostack doctor` output helps).
 
+**Before posting:** update the bug paragraph with each item's current status (merged, fixed, open) and match the site's "Found in real projects" table. State facts only: no project's logo, no implied endorsement, and Twenty's "critical" label came from their triage bot, so don't quote it as their verdict.
+
 **Answers to have ready:**
+
+- *"Did you find those bugs with the tool, or by reading code?"* Both: reading the time-related code points to a likely bug; the tool is what proves it on the real published image (for example, a 4-day outage or two weeks of daily jobs, checked in a few minutes), and checks the fix the same way.
 
 - *"Why not inject a clock in the app?"* That works for unit tests. This is for integration: the database's `now()`, Redis expiry and every service agreeing, with no code changes.
 - *"How is this different from libfaketime?"* libfaketime provides the mechanism (and inspired this). ChronoStack adds live control across containers, deadline translation, scheduler-aware stepping, verification probes, outages and scenarios.
