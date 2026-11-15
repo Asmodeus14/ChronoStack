@@ -1,0 +1,82 @@
+version: 1
+name: Snoozed conversations after an outage, as Chatwoot v4.19.1 behaves today
+description: >-
+  sidekiq-cron runs TriggerScheduledItemsJob every 5 minutes, which runs
+  Conversations::ReopenSnoozedConversationsJob: it reopens snoozed conversations
+  whose snoozed_until is between 3 days ago and now. sidekiq-cron polls every
+  30 s and skips a run it notices more than 60 s late, so each check lands just
+  after a 5-minute mark and waits 45 s. A jump with no landing near a 5-minute
+  mark is an outage: the job doesn't run. Status 0 = open, 3 = snoozed.
+
+steps:
+  - name: day 0, 02:00 UTC
+    advance: { to: next 02:00 }
+
+  - name: snooze conversation A for 10 minutes
+    exec:
+      service: sidekiq
+      command: [sh, -c, "bundle exec rails runner /seed/snooze.rb 10 2>/dev/null | tail -n 1"]
+    save: a
+
+  - name: day 0, 02:15 (the job runs normally)
+    advance: { to: next 02:15, dwell: 45s }
+
+  - name: A reopened on time
+    assert: { sql: { service: postgres, user: postgres, database: chatwoot, query: "select status from conversations where display_id = ${a}", equals: "0" } }
+
+  - name: snooze conversation B for 10 minutes
+    exec:
+      service: sidekiq
+      command: [sh, -c, "bundle exec rails runner /seed/snooze.rb 10 2>/dev/null | tail -n 1"]
+    save: b
+
+  - name: a 2-day outage (B's snooze ends during it)
+    advance: { by: 2d }
+
+  - name: day 2, 02:20 — the job runs again
+    advance: { to: next 02:20, dwell: 45s }
+
+  - name: B (snooze ended 1 d 23 h 54 min ago) is reopened
+    assert: { sql: { service: postgres, user: postgres, database: chatwoot, query: "select status from conversations where display_id = ${b}", equals: "0" } }
+
+  - name: snooze conversation C for 10 minutes
+    exec:
+      service: sidekiq
+      command: [sh, -c, "bundle exec rails runner /seed/snooze.rb 10 2>/dev/null | tail -n 1"]
+    save: c
+
+  - name: a 4-day outage (C's snooze ends during it)
+    advance: { by: 4d }
+
+  - name: day 6, 02:25 — the job runs again
+    advance: { to: next 02:25, dwell: 45s }
+
+  - name: C (snooze ended 3 d 23 h 54 min ago) is still snoozed
+    assert: { sql: { service: postgres, user: postgres, database: chatwoot, query: "select status from conversations where display_id = ${c}", equals: "3" } }
+
+  - name: day 6, 02:30 — then a week with the job running every 5 minutes (checked at 02:30 each day)
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 7
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 8
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 9
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 10
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 11
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 12
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 13
+    advance: { to: next 02:30, dwell: 45s }
+
+  - name: day 13, 02:30 — C is still snoozed, and stays snoozed
+    assert: { sql: { service: postgres, user: postgres, database: chatwoot, query: "select status from conversations where display_id = ${c}", equals: "3" } }

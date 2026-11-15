@@ -79,6 +79,7 @@ After each advance, every service is probed.
 |---|---|---|
 | **BullMQ** (delayed jobs, job schedulers) | Fires within up to about 10 s (BullMQ's longest wait between checks) | A barrier that waits for the queue to drain (section 5), or `dwell` of 12 s or more |
 | **Celery beat** with `beat_max_loop_interval ≤ 1` (or `celery beat --max-interval 1`) | Fires within about 2 s | Set that option in test/dev |
+| **sidekiq-cron** (Ruby) | Fires if its 30 s poll lands within 60 s after the job's time (`reschedule_grace_period`); otherwise that run is skipped | Land each stop just after the job's minute (`advance: { to: next 02:15 }`) with `dwell` of 35 s or more, or declare a trigger |
 | **pg_cron** | Detected automatically; ChronoStack stops the clock on each job's minute | Nothing. Jobs like `*/5 * * * *` run once per stop; `advance --pg-cron-all` runs every occurrence. |
 | A worker that polls the database (`WHERE run_at <= now()`) | Runs at its next poll | A barrier (section 5) so ChronoStack waits for it |
 | **node-cron**, **APScheduler**, `setTimeout`-based loops, Spring `@Scheduled` | Does not fire | Declare a **trigger** |

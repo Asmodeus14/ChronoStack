@@ -1,0 +1,48 @@
+# Chatwoot's production stack (docker-compose.production.yaml), trimmed to what
+# the background jobs need: published chatwoot/chatwoot image, unmodified.
+# Sidekiq runs the jobs; sidekiq-cron (config/schedule.yml) schedules them.
+x-env: &env
+  RAILS_ENV: production
+  NODE_ENV: production
+  INSTALLATION_ENV: docker
+  SECRET_KEY_BASE: chronostack-test-secret-key-base-0123456789abcdef0123456789abcdef
+  FRONTEND_URL: http://localhost:3000
+  POSTGRES_HOST: postgres
+  POSTGRES_USERNAME: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_DATABASE: chatwoot
+  REDIS_URL: redis://redis:6379
+  ENABLE_ACCOUNT_SIGNUP: "false"
+  RAILS_LOG_TO_STDOUT: "true"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+
+  migrate:
+    image: chatwoot/chatwoot:v4.19.1
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    environment: *env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  sidekiq:
+    image: chatwoot/chatwoot:v4.19.1
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    environment: *env
+    volumes:
+      - ./seed:/seed:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
