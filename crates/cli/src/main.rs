@@ -8,6 +8,7 @@ mod engine;
 mod fault;
 mod mcp;
 mod probe;
+mod queues;
 mod report;
 mod scenario;
 mod session;

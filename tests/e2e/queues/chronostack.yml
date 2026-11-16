@@ -1,0 +1,7 @@
+version: 1
+advance: { barrier_timeout: 90s }
+barriers:
+  - name: bullmq-idle
+    bullmq: { service: redis, queues: [emails] }
+  - name: sidekiq-idle
+    sidekiq: { service: redis }

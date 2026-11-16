@@ -11,6 +11,8 @@
 //!     schedule: { every: 1d, at: "03:00" }      # UTC; omit `schedule` to run after every --step
 //!     exec: { service: worker, command: [node, src/jobs/expire-trials.js] }
 //! barriers:
+//!   - name: jobs-done
+//!     bullmq: { service: cache, queues: [emails] }   # or sidekiq: { service: cache }
 //!   - name: queue-drained
 //!     redis: { service: cache, command: [LLEN, jobs], equals: "0" }
 //! proxies:                                     # HTTP fault proxy (outage windows)
@@ -124,6 +126,34 @@ pub struct RedisSpec {
     pub equals: String,
 }
 
+/// Satisfied when these BullMQ (or Bull) queues have nothing waiting, running,
+/// prioritized, or delayed and already due.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BullmqSpec {
+    /// The Redis service the queues live in.
+    pub service: String,
+    pub queues: Vec<String>,
+    /// The queues' key prefix (BullMQ's `prefix` option).
+    #[serde(default = "default_bullmq_prefix")]
+    pub prefix: String,
+}
+
+fn default_bullmq_prefix() -> String {
+    "bull".into()
+}
+
+/// Satisfied when Sidekiq has nothing queued, no scheduled or retry job that is
+/// already due, and no job running.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SidekiqSpec {
+    /// The Redis service Sidekiq uses.
+    pub service: String,
+    /// A `redis-namespace` prefix, if the app uses one (keys look like `<namespace>:queue:default`).
+    pub namespace: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Trigger {
@@ -142,7 +172,14 @@ pub struct Barrier {
     pub redis: Option<RedisSpec>,
     pub exec: Option<ExecSpec>,
     pub http: Option<HttpSpec>,
+    #[serde(default)]
+    pub bullmq: Option<BullmqSpec>,
+    #[serde(default)]
+    pub sidekiq: Option<SidekiqSpec>,
     pub timeout: Option<String>,
+    /// Wait this long at each stop before the first check, for schedulers that
+    /// only enqueue work when they next poll (sidekiq-cron, Clockwork, …).
+    pub settle: Option<String>,
 }
 
 /// Validated, ready-to-use settings.
@@ -272,9 +309,11 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
             b.redis.is_some(),
             b.exec.is_some(),
             b.http.is_some(),
+            b.bullmq.is_some(),
+            b.sidekiq.is_some(),
         ];
         if set.iter().filter(|x| **x).count() != 1 {
-            bail!("{what}: set exactly one of `sql`, `redis`, `exec`, `http`");
+            bail!("{what}: set exactly one of `sql`, `redis`, `exec`, `http`, `bullmq`, `sidekiq`");
         }
         if let Some(s) = &b.sql {
             check_service(&what, &s.service)?;
@@ -284,6 +323,21 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
         }
         if let Some(s) = &b.exec {
             check_service(&what, &s.service)?;
+        }
+        if let Some(q) = &b.bullmq {
+            check_service(&what, &q.service)?;
+            if q.queues.is_empty() || q.queues.iter().any(|n| n.trim().is_empty()) {
+                bail!("{what}: `bullmq.queues` needs at least one non-empty queue name");
+            }
+            if q.prefix.trim().is_empty() {
+                bail!("{what}: `bullmq.prefix` can't be empty");
+            }
+        }
+        if let Some(s) = &b.sidekiq {
+            check_service(&what, &s.service)?;
+        }
+        if let Some(v) = &b.settle {
+            dur(&format!("{what}: settle"), v)?;
         }
         barrier_timeouts_ns.push(match &b.timeout {
             Some(v) => dur(&format!("{what}: timeout"), v)?,
@@ -384,6 +438,34 @@ barriers:
     }
 
     #[test]
+    fn queue_barriers() {
+        let r = parse(
+            r#"
+version: 1
+barriers:
+  - name: jobs
+    bullmq: { service: cache, queues: [emails, cron-queue] }
+  - name: custom-prefix
+    bullmq: { service: cache, queues: [background-jobs], prefix: "{app:jobs}" }
+  - name: sidekiq
+    sidekiq: { service: cache }
+    settle: 3s
+  - name: namespaced
+    sidekiq: { service: cache, namespace: myapp }
+"#,
+        )
+        .unwrap();
+        let b = &r.config.barriers;
+        assert_eq!(b[0].bullmq.as_ref().unwrap().prefix, "bull");
+        assert_eq!(b[1].bullmq.as_ref().unwrap().prefix, "{app:jobs}");
+        assert_eq!(b[2].settle.as_deref(), Some("3s"));
+        assert_eq!(
+            b[3].sidekiq.as_ref().unwrap().namespace.as_deref(),
+            Some("myapp")
+        );
+    }
+
+    #[test]
     fn proxies() {
         let r = parse(
             "version: 1\nproxies:\n  - name: hooks\n    upstream: http://receiver:4000\n    env: { worker: WEBHOOK_URL }\n",
@@ -444,6 +526,22 @@ barriers:
                 "exactly one",
             ),
             ("version: 1\nadvance: {max_jump: 0s}", "greater than zero"),
+            (
+                "version: 1\nbarriers: [{name: b, bullmq: {service: cache, queues: []}}]",
+                "at least one",
+            ),
+            (
+                "version: 1\nbarriers: [{name: b, bullmq: {service: nope, queues: [q]}}]",
+                "unknown service",
+            ),
+            (
+                "version: 1\nbarriers: [{name: b, sidekiq: {service: cache}, settle: soon}]",
+                "settle",
+            ),
+            (
+                "version: 1\nbarriers: [{name: b, sidekiq: {service: cache}, bullmq: {service: cache, queues: [q]}}]",
+                "exactly one",
+            ),
         ];
         for (y, want) in cases {
             let err = format!("{:#}", parse(y).unwrap_err());

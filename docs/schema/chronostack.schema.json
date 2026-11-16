@@ -112,6 +112,53 @@
           "type": "string"
         }
       }
+    },
+    "bullmq": {
+      "type": "object",
+      "required": [
+        "service",
+        "queues"
+      ],
+      "additionalProperties": false,
+      "description": "Satisfied when these BullMQ (or Bull) queues have nothing waiting, paused, running, prioritized, or delayed and already due.",
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "The Redis service the queues live in."
+        },
+        "queues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "prefix": {
+          "type": "string",
+          "minLength": 1,
+          "default": "bull",
+          "description": "The queues' key prefix (BullMQ's `prefix` option)."
+        }
+      }
+    },
+    "sidekiq": {
+      "type": "object",
+      "required": [
+        "service"
+      ],
+      "additionalProperties": false,
+      "description": "Satisfied when Sidekiq has nothing queued, no scheduled or retry job already due, and no job running (confirmed by a heartbeat after the queues look empty).",
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "The Redis service Sidekiq uses."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "A redis-namespace prefix, if the app uses one."
+        }
+      }
     }
   },
   "properties": {
@@ -220,6 +267,16 @@
             "required": [
               "http"
             ]
+          },
+          {
+            "required": [
+              "bullmq"
+            ]
+          },
+          {
+            "required": [
+              "sidekiq"
+            ]
           }
         ],
         "properties": {
@@ -241,6 +298,16 @@
           },
           "timeout": {
             "$ref": "#/$defs/duration"
+          },
+          "bullmq": {
+            "$ref": "#/$defs/bullmq"
+          },
+          "sidekiq": {
+            "$ref": "#/$defs/sidekiq"
+          },
+          "settle": {
+            "$ref": "#/$defs/duration",
+            "description": "Wait this long at each stop before the first check (for schedulers that enqueue on their next poll, such as sidekiq-cron or Clockwork)."
           }
         }
       }

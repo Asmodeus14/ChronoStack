@@ -9,15 +9,16 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use chronostack_core::cron::Cron;
-use chronostack_core::duration::{format_span, format_utc};
+use chronostack_core::duration::{format_span, format_utc, parse_duration};
 use chronostack_core::schedule::{self, Boundary};
 use serde::Serialize;
 use serde_json::json;
 
 use crate::client::Client;
-use crate::config::{Barrier, ExecSpec, HttpSpec, Resolved, Trigger};
+use crate::config::{Barrier, ExecSpec, HttpSpec, Resolved, SidekiqSpec, Trigger};
 use crate::docker::{self, Compose};
 use crate::probe;
+use crate::queues;
 use crate::session::{ProbeSpec, Session};
 
 pub const EXIT_TRIGGER_FAILED: i32 = 4;
@@ -497,7 +498,94 @@ pub(crate) fn barrier_once(
     if let Some(h) = &b.http {
         return run_http(h, quick);
     }
+    if let Some(q) = &b.bullmq {
+        return queue_pending(compose, &q.service, queues::bullmq_args(q), quick);
+    }
+    if let Some(s) = &b.sidekiq {
+        return match sidekiq_once(compose, s, quick) {
+            Ok(st) if st.pending == 0 => (true, None),
+            Ok(st) => (false, Some(format!("{} job(s) pending", st.pending))),
+            Err(e) => (false, Some(e)),
+        };
+    }
     (false, Some("no condition".into()))
+}
+
+fn sidekiq_once(
+    compose: &Compose,
+    spec: &SidekiqSpec,
+    timeout: Duration,
+) -> std::result::Result<queues::SidekiqState, String> {
+    let mut args = compose.args(&["exec", "-T", &spec.service, "redis-cli"]);
+    args.extend(queues::sidekiq_args(spec));
+    match docker::output_timeout(&args, timeout) {
+        Ok(t) if t.code == Some(0) => {
+            queues::sidekiq_state(&t.stdout).ok_or_else(|| tail(&t.stdout, 200))
+        }
+        Ok(t) => Err(tail(&t.stderr, 200)),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Wait until Sidekiq is idle. Sidekiq only reports running jobs on its
+/// heartbeat, so "nothing queued, nothing busy" is trusted only once every
+/// process has sent a heartbeat after the moment it was first seen.
+fn wait_sidekiq(
+    compose: &Compose,
+    spec: &SidekiqSpec,
+    deadline: Duration,
+    start: Instant,
+) -> (bool, Option<String>) {
+    let quick = Duration::from_secs(20);
+    let mut idle_since_ms: Option<i64> = None;
+    // Whether this wait has seen work. Jobs that leave the queues while no
+    // Sidekiq process is registered were taken by a worker that is still
+    // starting up (it registers on its first heartbeat), so "no process" then
+    // doesn't mean "nothing running".
+    let mut saw_work = false;
+    loop {
+        let detail = match sidekiq_once(compose, spec, quick) {
+            Ok(st) if st.pending > 0 => {
+                idle_since_ms = None;
+                saw_work = true;
+                format!("{} job(s) pending", st.pending)
+            }
+            Ok(st) => {
+                let since = *idle_since_ms.get_or_insert(st.now_ms);
+                match st.oldest_heartbeat_ms {
+                    None if !saw_work => return (true, None),
+                    None => "queues empty, waiting for a Sidekiq process to register".to_string(),
+                    Some(beat) if beat > since => return (true, None),
+                    Some(_) => "queues empty, waiting for a Sidekiq heartbeat".to_string(),
+                }
+            }
+            Err(e) => e,
+        };
+        if start.elapsed() >= deadline {
+            return (false, Some(detail));
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
+/// Run a built-in queue check: satisfied when the script reports 0 pending jobs.
+fn queue_pending(
+    compose: &Compose,
+    service: &str,
+    eval: Vec<String>,
+    timeout: Duration,
+) -> (bool, Option<String>) {
+    let mut args = compose.args(&["exec", "-T", service, "redis-cli"]);
+    args.extend(eval);
+    match docker::output_timeout(&args, timeout) {
+        Ok(t) if t.code == Some(0) => match queues::pending(&t.stdout) {
+            Some(0) => (true, None),
+            Some(n) => (false, Some(format!("{n} job(s) pending"))),
+            None => (false, Some(tail(&t.stdout, 200))),
+        },
+        Ok(t) => (false, Some(tail(&t.stderr, 200))),
+        Err(e) => (false, Some(e.to_string())),
+    }
 }
 
 pub(crate) fn wait_barrier(
@@ -508,6 +596,24 @@ pub(crate) fn wait_barrier(
 ) -> ActionResult {
     let start = Instant::now();
     let deadline = Duration::from_nanos(timeout_ns as u64);
+    // Validated when the config was loaded.
+    if let Some(ns) = b.settle.as_deref().and_then(|v| parse_duration(v).ok()) {
+        std::thread::sleep(Duration::from_nanos(ns.max(0) as u64));
+    }
+    if let Some(s) = &b.sidekiq {
+        let (ok, detail) = wait_sidekiq(compose, s, deadline, start);
+        return ActionResult {
+            name: b.name.clone(),
+            ok,
+            elapsed_ms: start.elapsed().as_millis(),
+            detail: (!ok).then(|| {
+                format!(
+                    "not satisfied after {deadline:?} (last: {})",
+                    detail.unwrap_or_default()
+                )
+            }),
+        };
+    }
     loop {
         let (ok, detail) = barrier_once(session, compose, b);
         if ok {
@@ -704,7 +810,44 @@ pub fn advance_full(
     let mut results: Vec<StopResult> = Vec::with_capacity(stops.len());
     let mut code = 0;
 
-    'stops: for b in &stops {
+    // Let work that is already running finish before the clock moves. A job in
+    // flight during a jump can see its lock expire with Redis's clock (BullMQ
+    // then runs it again as "stalled") or time out against the new time. Later
+    // stops are covered by the barriers checked after each stop. `settle` is
+    // for pollers after a jump, so it doesn't apply here.
+    let mut drain: Vec<ActionResult> = Vec::new();
+    if !barriers.is_empty() && !stops.is_empty() {
+        for (i, bar) in barriers.iter().enumerate() {
+            let before = Barrier {
+                settle: None,
+                ..bar.clone()
+            };
+            let a = wait_barrier(session, &compose, &before, cfg.barrier_timeouts_ns[i]);
+            let failed = !a.ok;
+            drain.push(a);
+            if failed {
+                code = EXIT_BARRIER_TIMEOUT;
+                break;
+            }
+        }
+        if !opts.json {
+            print_stop(
+                &StopResult {
+                    at: format!("{} (before the jump)", format_utc(from)),
+                    at_ns: from,
+                    step_end: false,
+                    sub_step: false,
+                    pinned: false,
+                    triggers: vec![],
+                    barriers: drain.clone(),
+                    dwell_ms: 0,
+                },
+                false,
+            );
+        }
+    }
+
+    'stops: for b in stops.iter().take_while(|_| code == 0) {
         let current = client.clock()?.virtual_ns;
         if b.at_ns > current {
             client.advance_to(b.at_ns)?;
@@ -768,7 +911,7 @@ pub fn advance_full(
     let summary = json!({
         "ok": code == 0, "exit_code": code, "from_ns": from, "to_ns": to,
         "elapsed_ms": run_start.elapsed().as_millis(), "max_jump_ns": max_jump, "pg_cron": pg_cron, "pg_cron_mode": pg.mode, "pg_cron_wildcards": wildcards,
-        "trigger_runs": trigger_runs, "stops": results, "clock": end_state, "probes": probes,
+        "trigger_runs": trigger_runs, "drain": drain, "stops": results, "clock": end_state, "probes": probes,
     });
     if opts.json {
         println!("{summary}");

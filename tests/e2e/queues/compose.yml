@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Fixture for run_queues.py: real BullMQ and Sidekiq workers whose jobs take
+# 4 s and count completions in Redis (done:bullmq, done:sidekiq).
+services:
+  redis:
+    image: redis:7.4-alpine
+  sidekiq:
+    image: ruby:3.3
+    working_dir: /app
+    command: [bash, -c, "gem install -q --no-document sidekiq -v 8.1.7 >/dev/null && touch /tmp/ready && exec sidekiq -r ./worker.rb -c 5"]
+    environment: { REDIS_URL: "redis://redis:6379/0" }
+    volumes: ["./:/app:ro"]
+  bullmq:
+    image: node:22
+    working_dir: /work
+    command: [bash, -c, "cp /app/bull-worker.mjs /app/bull-enqueue.mjs . && npm i -q --no-audit --no-fund bullmq@5.78.0 ioredis@5.8.2 >/dev/null && touch /tmp/ready && exec node bull-worker.mjs"]
+    volumes: ["./:/app:ro"]
