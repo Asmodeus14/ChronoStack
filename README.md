@@ -24,7 +24,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Pre-alpha.** The latest pre-release, [`v0.1.0-alpha.5`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.5), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest pre-release, [`v0.1.0-alpha.5`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.5), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 

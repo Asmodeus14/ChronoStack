@@ -50,6 +50,7 @@ try {
 }
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($null -eq $userPath) { $userPath = '' }  # accounts can have no user-level PATH at all
 if ($env:CHRONOSTACK_NO_MODIFY_PATH -ne '1') {
   # New terminals: the user PATH (no admin needed).
   if (-not (($userPath -split ';') -contains $dest)) {
