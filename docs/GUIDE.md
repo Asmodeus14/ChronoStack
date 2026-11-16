@@ -186,7 +186,7 @@ chronostack run scenarios/trial.yml      # exit 0 = passed, 6 = a step failed
 
 ## 8. In CI
 
-On GitHub Actions (a Linux runner; GitHub's macOS and Windows runners can't run Linux containers):
+On GitHub Actions, use a Linux runner. GitHub's macOS and Windows runners don't come with Docker; ChronoStack's own macOS CI starts Docker in a Linux VM with Colima on the Intel runners, which works but is slow.
 
 ```yaml
 jobs:
