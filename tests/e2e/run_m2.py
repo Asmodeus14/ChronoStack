@@ -23,6 +23,9 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Real-time limits are scaled by this factor on slow hosts (for example a CI
+# runner without hardware virtualization, where Docker's VM is emulated).
+TIME_FACTOR = float(os.environ.get("CHRONOSTACK_E2E_TIME_FACTOR") or 1)
 DEMO = os.path.join(ROOT, "examples", "saas-trial-demo")
 PGCRON = os.path.join(ROOT, "tests", "e2e", "pgcron")
 TRIGGER = os.path.join(ROOT, "tests", "e2e", "trigger")
@@ -145,7 +148,8 @@ def demo_once(cli, run_no):
         took = time.monotonic() - t0
         check("advance 14d: 14 daily runs (no --step needed)", rc == 0 and r["trigger_runs"] == 14,
               f"rc={rc} runs={r.get('trigger_runs')}")
-        check("advance 14d: under 60 s real time", took < 60, f"{took:.1f}s")
+        limit = 60 * TIME_FACTOR
+        check(f"advance 14d: under {limit:.0f} s real time", took < limit, f"{took:.1f}s")
         bad = [s for s in r.get("stops", []) if any(not t["ok"] for t in s["triggers"] + s["barriers"])]
         check("advance 14d: every trigger and barrier succeeded", not bad, json.dumps(bad)[:300])
 
@@ -283,7 +287,8 @@ def pgcron(cli):
         n = int(psql("select count(*) from daily")[1].strip() or -1)
         check("pg_cron: advance 3d (schedule-aware) runs the daily job 3 times",
               rc == 0 and n == 3 and r.get("pg_cron_mode") == "schedule-aware", f"{n} runs, {len(r.get('stops', []))} stops")
-        check("pg_cron: schedule-aware advance 3d is fast (< 30 s)", took < 30, f"{took:.1f}s (hourly mode took ~92s)")
+        limit = 30 * TIME_FACTOR
+        check(f"pg_cron: schedule-aware advance 3d is fast (< {limit:.0f} s)", took < limit, f"{took:.1f}s (hourly mode took ~92s)")
 
         psql("select cron.schedule('every30s', '30 seconds', 'select 1')")
         rc, plan = st.js("advance", "3d", "--dry-run")
