@@ -15,7 +15,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 [![Release](https://img.shields.io/github/v/release/Asmodeus14/ChronoStack?include_prereleases&label=release)](https://github.com/Asmodeus14/ChronoStack/releases)
 [![CI](https://github.com/Asmodeus14/ChronoStack/actions/workflows/ci.yml/badge.svg)](https://github.com/Asmodeus14/ChronoStack/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
-![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20(untested)-lightgrey)
+![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
 
 [Getting started](docs/GETTING_STARTED.md) · [Guide](docs/GUIDE.md) · [Demo](examples/saas-trial-demo/README.md) · [Docs](docs/README.md)
 
@@ -24,7 +24,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Pre-alpha.** The latest pre-release, [`v0.1.0-alpha.4`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.4), is tested in CI on Linux (x86_64 and arm64) and by hand on Windows. **macOS is untested:** if you have a Mac, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Pre-alpha.** The latest pre-release, [`v0.1.0-alpha.4`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.4), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 
@@ -104,6 +104,7 @@ When something breaks, the Markdown report says what was expected, what happened
 
 - **No code changes:** works on your existing `compose.yml`, as a separate copy. Your containers, data and files are untouched.
 - **Scheduler-aware stepping:** triggers run at their exact virtual times. BullMQ and Celery beat fire on their own, and pg_cron jobs are never skipped.
+- **Waits for your jobs:** built-in `bullmq` and `sidekiq` barriers hold each step until the queues are drained, and running jobs finish before the clock moves.
 - **Outages in virtual time:** a small proxy in front of HTTP dependencies (`http` or `https`) makes "the payment API is down on day 3 from 09:00 to 11:00" a one-liner.
 - **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports, with secrets redacted.
 - **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#8-in-ci), and a strict mode.
@@ -122,10 +123,12 @@ Listed as tested only where an automated test covers it.
 | JVM 21 | ✅ No-hang suite; otherwise experimental |
 | Node.js 20, Python 3.13+, JVM 17, Ruby 3.x, MariaDB | Expected to work; not covered by tests |
 | BullMQ, Celery beat (`beat_max_loop_interval ≤ 1`), pg_cron | ✅ Work without triggers (measured) |
+| BullMQ and Sidekiq barriers | ✅ Nightly, with real workers |
 | node-cron, APScheduler, `setTimeout`-style loops | Need a trigger (measured) |
 | Go and other static or setuid binaries | ❌ Not supported (`LD_PRELOAD` can't reach them); flagged by `doctor` |
 | Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop) | ✅ CI · tested by hand |
-| Host: macOS (Docker Desktop, OrbStack) | ❓ Untested ([help wanted](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
+| Host: macOS Intel (native CLI, Docker in a Linux VM) | ✅ CI (nightly, Colima) |
+| Host: macOS Apple silicon (Docker Desktop, OrbStack) | ❓ Untested ([help wanted](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
 
 **Limitations:**
 - Time only moves forward.

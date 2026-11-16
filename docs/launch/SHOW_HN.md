@@ -23,7 +23,7 @@
 >
 > Before posting this I ran it against a few open-source projects' published images, testing their real time-based features, and found six date bugs: Saleor's unpaid-order expiry fired far too late for settings of a day or more, Twenty's trash cleanup deleted records up to a day early, Chatwoot never reopened snoozed conversations after a background-job outage of more than 3 days, Formbricks scheduled surveys a day late in UTC+12 zones, tududi moved monthly recurring tasks to the wrong day, and Worklenz's "1st Monday" recurring tasks moved into the previous month and then stopped recurring. All are reported upstream (links on the site), two with fixes proposed.
 >
-> Limits: Go binaries aren't covered (no libc), time only moves forward, and **macOS is untested**. If you have a Mac, issue #5 is a 5-minute test. Pre-alpha, MIT/Apache-2.0.
+> Limits: Go binaries aren't covered (no libc), time only moves forward, and Apple-silicon Macs are untested (Intel macOS runs in CI). If you have an M-series Mac, issue #5 is a 5-minute test. Pre-alpha, MIT/Apache-2.0.
 >
 > Write-up of the problems above: <link>. I'd especially like to hear what breaks on your stack (`chronostack doctor` output helps).
 
