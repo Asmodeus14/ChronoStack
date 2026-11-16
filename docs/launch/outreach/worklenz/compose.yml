@@ -1,0 +1,62 @@
+# Worklenz's self-hosted stack (docker-compose.yml at v3.3.1), trimmed to what
+# recurring tasks need: published chamikajaycey/worklenz-backend image,
+# unmodified, and Postgres initialised with Worklenz's own schema files (run
+# seed/fetch-schema.sh once). No frontend, file storage or nginx.
+# RECURRING_JOBS_INTERVAL runs the recurring-task job every minute (default:
+# daily at 11:00), so each clock stop gets a run within a minute of real time.
+x-env: &env
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_NAME: worklenz_db
+  DB_USER: postgres
+  DB_PASSWORD: postgres
+  DB_MAX_CLIENTS: "20"
+  USE_PG_NATIVE: "false"
+  SESSION_SECRET: 0123456789abcdef0123456789abcdef
+  COOKIE_SECRET: 0123456789abcdef0123456789abcdef
+  JWT_SECRET: 0123456789abcdef0123456789abcdef
+  SESSION_NAME: worklenz.sid
+  WORKLENZ_DEPLOYMENT_MODE: self_hosted
+  DEPLOYMENT_MODE: express
+  FRONTEND_URL: http://localhost
+  SERVER_CORS: "*"
+  SOCKET_IO_CORS: http://localhost
+  STORAGE_PROVIDER: s3
+  S3_BUCKET: worklenz-bucket
+  S3_ACCESS_KEY_ID: worklenz
+  S3_SECRET_ACCESS_KEY: unused
+  S3_ENDPOINT: http://seaweedfs:8333
+  S3_PUBLIC_URL: http://localhost:8333/worklenz-bucket
+  EMAIL_PROVIDER: smtp
+  SMTP_HOST: localhost
+  ENABLE_EMAIL_CRONJOBS: "false"
+  GOOGLE_CLIENT_ID: disabled
+  GOOGLE_CLIENT_SECRET: disabled
+  GOOGLE_CALLBACK_URL: https://localhost/api/auth/google/verify
+  TZ: UTC
+  PORT: "3000"
+  NODE_ENV: production
+  ENABLE_RECURRING_JOBS: "true"
+  RECURRING_JOBS_INTERVAL: "* * * * *"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: worklenz_db
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./database/sql:/docker-entrypoint-initdb.d/sql:ro
+      - ./database/00_init.sh:/docker-entrypoint-initdb.d/00_init.sh:ro
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d worklenz_db -U postgres"]
+      interval: 5s
+      retries: 60
+
+  backend:
+    image: chamikajaycey/worklenz-backend:3.3.1
+    environment: *env
+    depends_on:
+      db: { condition: service_healthy }

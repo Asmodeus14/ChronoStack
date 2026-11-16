@@ -1,0 +1,23 @@
+version: 1
+name: Monthly "Nth weekday" recurring tasks, as expected
+description: >-
+  The same two recurring tasks: "Team sync" on the 1st Monday (first due 7
+  December 2026) and "Release review" on the 2nd Tuesday (first due 8 December
+  2026). Expected: each next task is due on that weekday of the next month -
+  4 January and 1 February 2027 for Team sync, 12 January for Release review.
+
+steps:
+  - name: 8 December 2026, noon UTC
+    advance: { to: "2026-12-08T12:00:00Z", dwell: 75s }
+
+  - name: 9 December 2026, noon UTC
+    advance: { to: "2026-12-09T12:00:00Z", dwell: 75s }
+
+  - name: the next "1st Monday" task is due 4 January and the next "2nd Tuesday" one 12 January
+    assert: { sql: { service: db, user: postgres, database: worklenz_db, query: "select string_agg(name || '=' || to_char(end_date, 'YYYY-MM-DD'), ' ' order by name) from tasks where end_date > date '2026-12-09'", equals: "Release review (2nd Tuesday)=2027-01-12 Team sync (1st Monday)=2027-01-04" } }
+
+  - name: 5 January 2027, noon UTC (the 4 January task is past)
+    advance: { to: "2027-01-05T12:00:00Z", dwell: 75s }
+
+  - name: Team sync moves on to 1 February, the 1st Monday of February
+    assert: { sql: { service: db, user: postgres, database: worklenz_db, query: "select string_agg(to_char(end_date, 'YYYY-MM-DD'), ',' order by end_date) from tasks where name = 'Team sync (1st Monday)'", equals: "2026-12-07,2027-01-04,2027-02-01" } }
