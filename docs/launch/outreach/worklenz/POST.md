@@ -1,4 +1,4 @@
-<!-- Draft GitHub issue for https://github.com/Worklenz/worklenz/issues (02_bug.yml). Not posted yet. Plain report: no tool description, one link to the reproduction. -->
+<!-- Posted as https://github.com/Worklenz/worklenz/issues/959 on 2026-11-16. -->
 
 **Title:** [BUG] Monthly "Nth weekday" recurring tasks land on the wrong date, and "1st <weekday>" schedules can stop recurring
 
