@@ -24,7 +24,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Pre-alpha.** The latest pre-release, [`v0.1.0-alpha.5`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.5), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest pre-release, [`v0.1.0-alpha.5`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.5), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 
@@ -156,7 +156,7 @@ Each bug was reproduced on the project's own published image, with the whole sta
 | Project | What was wrong | Status |
 |---|---|---|
 | Saleor | Unpaid orders set to expire after a day or more expired far too late: 24 h became about 47.6 h, and 48 h about 62 days. | Fix proposed · [issue](https://github.com/saleor/saleor/issues/20019) · [PR](https://github.com/saleor/saleor/pull/20020) |
-| Twenty | The trash cleanup permanently deleted records up to a day before the retention period ended. | Fix proposed · [issue](https://github.com/twentyhq/twenty/issues/30460) · [PR](https://github.com/twentyhq/twenty/pull/30461) |
+| Twenty | The trash cleanup permanently deleted records up to a day before the retention period ended. | Fixed · [issue](https://github.com/twentyhq/twenty/issues/30460) · [PR](https://github.com/twentyhq/twenty/pull/30461) |
 | Chatwoot | Conversations whose snooze ended while background jobs were down for more than 3 days were never reopened. | Reported · [issue](https://github.com/chatwoot/chatwoot/issues/16667) |
 | Formbricks | With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late. | Reported · [issue](https://github.com/formbricks/formbricks/issues/10021) |
 | tududi | Monthly recurring tasks moved to the wrong day: for users in the Americas, "on the 1st" became the last day of the previous month, and "last Friday" skipped months. | Fix proposed · [issue](https://github.com/chrisvel/tududi/issues/2100) · [PR](https://github.com/chrisvel/tududi/pull/2101) |

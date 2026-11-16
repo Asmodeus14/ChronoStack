@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project will adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once the first release is tagged.
 
-ChronoStack is pre-alpha. Pre-releases are published on GitHub Releases.
+ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
+
+### Fixed
+
+- Windows installer: an account with no user-level PATH made `install.ps1` fail after copying the binary. It now treats a missing PATH as empty.
 
 ## [0.1.0-alpha.5] - 2026-11-16
 
