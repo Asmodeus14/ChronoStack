@@ -48,6 +48,7 @@ jobs:
       - run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
       - run: cargo build -p chronostack
       - run: python3 tests/e2e/run_schedulers.py --cli target/debug/chronostack
+      - run: python3 tests/e2e/run_queues.py --cli target/debug/chronostack
 
   nohang:
     name: No-hang suite (${{ matrix.os }})

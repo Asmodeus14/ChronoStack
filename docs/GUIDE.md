@@ -77,9 +77,9 @@ After each advance, every service is probed.
 
 | Scheduler | After an advance | What to do |
 |---|---|---|
-| **BullMQ** (delayed jobs, job schedulers) | Fires within up to about 10 s (BullMQ's longest wait between checks) | A barrier that waits for the queue to drain (section 5), or `dwell` of 12 s or more |
+| **BullMQ** (delayed jobs, job schedulers) | Fires within up to about 10 s (BullMQ's longest wait between checks) | A `bullmq` barrier (section 5) |
 | **Celery beat** with `beat_max_loop_interval ≤ 1` (or `celery beat --max-interval 1`) | Fires within about 2 s | Set that option in test/dev |
-| **sidekiq-cron** (Ruby) | Fires if its 30 s poll lands within 60 s after the job's time (`reschedule_grace_period`); otherwise that run is skipped | Land each stop just after the job's minute (`advance: { to: next 02:15 }`) with `dwell` of 35 s or more, or declare a trigger |
+| **sidekiq-cron** (Ruby) | Fires if its 30 s poll lands within 60 s after the job's time (`reschedule_grace_period`); otherwise that run is skipped | Land each stop just after the job's minute (`advance: { to: next 02:15 }`) with a `sidekiq` barrier and `settle: 35s`, or declare a trigger |
 | **pg_cron** | Detected automatically; ChronoStack stops the clock on each job's minute | Nothing. Jobs like `*/5 * * * *` run once per stop; `advance --pg-cron-all` runs every occurrence. |
 | A worker that polls the database (`WHERE run_at <= now()`) | Runs at its next poll | A barrier (section 5) so ChronoStack waits for it |
 | **node-cron**, **APScheduler**, `setTimeout`-based loops, Spring `@Scheduled` | Does not fire | Declare a **trigger** |
@@ -106,41 +106,35 @@ To find the command for a job, look for how your scheduler calls it. Most projec
 
 ## 5. Wait for the work to finish: barriers
 
-Without barriers, ChronoStack moves on as soon as a trigger's command returns. If the job only *enqueues* work for a worker, wait for that work too:
+Without barriers, ChronoStack moves on as soon as a trigger's command returns. If the job only *enqueues* work for a worker, wait for that work too. For BullMQ and Sidekiq there are built-in barriers:
+
+```yaml
+barriers:
+  - name: jobs-done
+    bullmq: { service: redis, queues: [emails, reports] }    # prefix: "bull" by default
+  - name: sidekiq-idle
+    sidekiq: { service: redis }                               # namespace: myapp, if you use redis-namespace
+```
+
+- **`bullmq`** (also Bull) waits until the queues have nothing waiting, paused, running or prioritized, and no delayed job that is already due. It reads Redis's own clock, so jobs that became due with the jump count until a worker has finished them. Set `prefix` if your queues use BullMQ's `prefix` option.
+- **`sidekiq`** waits until every queue is empty, no scheduled or retry job is due, and no job is running. Sidekiq only reports running jobs on its heartbeat (every 10 s), so once the queues look empty the barrier waits for one more heartbeat before it trusts "nothing running". Expect up to about 10 s per stop.
+- **`settle: 3s`** on any barrier waits that long at each stop before the first check, for schedulers that only enqueue work when they next poll (sidekiq-cron, Clockwork).
+
+For anything else, use a query:
 
 ```yaml
 barriers:
   - name: queue-drained
-    redis: { service: cache, command: [LLEN, "bull:emails:wait"], equals: "0" }
+    redis: { service: cache, command: [LLEN, "jobs"], equals: "0" }
   - name: outbox-settled
     sql:
       service: db
       query: "select count(*) = 0 from outbox where sent_at is null and next_attempt_at <= now()"
 ```
 
-For BullMQ, a job that is due but not yet picked up stays in the `delayed` sorted set, so `LLEN` on `wait` alone can pass too early. Count due delayed jobs as well, using Redis's own (virtual) clock. BullMQ scores delayed jobs as `timestamp_ms * 4096 + counter`:
-
-```yaml
-barriers:
-  - name: bullmq-drained
-    redis:
-      service: redis
-      command:
-        - EVAL
-        - >-
-          local t = redis.call('TIME')
-          local now = (tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)) * 4096
-          return redis.call('ZCOUNT', KEYS[1], 0, now) + redis.call('LLEN', KEYS[2]) + redis.call('LLEN', KEYS[3])
-        - "3"
-        - bull:emails:delayed
-        - bull:emails:wait
-        - bull:emails:active
-      equals: "0"
-```
-
 A barrier also covers slow jobs. A queue that runs one job at a time is held up in *real* time, so a job that takes a minute would otherwise span several virtual days of short stops.
 
-Barriers are checked at every clock stop, with a timeout (default 30 s; `advance.barrier_timeout` changes it). A barrier that never becomes true stops the advance with exit code 5. `exec` and `http` barriers work too. See the [schema](schema/chronostack.schema.json) for every field.
+Barriers are checked at every clock stop, and also **before the first jump** of each `advance`, so no job is running when the clock moves. That matters: a job in flight during a jump can see its Redis lock expire with the jump (BullMQ then treats it as stalled and runs it again) or time out against the new time. Each check has a timeout (default 30 s; `advance.barrier_timeout` changes it, or `timeout` on one barrier). A barrier that never becomes true stops the advance with exit code 5. `exec` and `http` barriers work too. See the [schema](schema/chronostack.schema.json) for every field.
 
 ## 6. Outages for HTTP dependencies
 

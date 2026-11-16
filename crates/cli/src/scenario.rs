@@ -188,7 +188,10 @@ impl Check {
             redis: self.redis.clone(),
             exec: self.exec.clone(),
             http: self.http.clone(),
+            bullmq: None,
+            sidekiq: None,
             timeout: self.timeout.clone(),
+            settle: None,
         }
     }
 

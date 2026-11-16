@@ -9,6 +9,15 @@ ChronoStack is pre-alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Added
+
+- Built-in queue barriers: `bullmq: { service, queues, prefix }` (also works with Bull) and `sidekiq: { service, namespace }`. They wait until nothing is queued, running, or delayed and already due, read with Redis's own (virtual) clock. The Sidekiq barrier also waits for a Sidekiq heartbeat after the queues look empty, because Sidekiq only reports running jobs on its heartbeat.
+- `settle` on any barrier: wait that long at each stop before the first check, for schedulers that enqueue work on their next poll (sidekiq-cron, Clockwork).
+
+### Changed
+
+- `advance` checks the barriers before its first jump too, so no job is running when the clock moves. A job in flight during a jump could see its Redis lock expire with the jump; BullMQ then ran it a second time as "stalled".
+
 ## [0.1.0-alpha.4] - 2026-11-15
 
 ### Added
