@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# macOS: the native macOS CLI against Docker in a Linux VM (Colima), the same
+# setup as Docker Desktop or OrbStack on a Mac. GitHub's Apple-silicon runners
+# can't start a VM, so this uses the Intel runners.
+name: macOS
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/macos.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E on macOS (${{ matrix.os }}, Colima)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Docker (Colima)
+        run: |
+          brew install colima docker docker-compose
+          mkdir -p ~/.docker/cli-plugins
+          ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose
+          colima start --cpu 3 --memory 6 --disk 40
+          docker version
+          docker compose version
+      - name: Build clockd image
+        run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+      - name: Build CLI (native macOS)
+        run: cargo build -p chronostack
+      - name: Run e2e (M1 - controller, CLI, doctor)
+        run: python3 tests/e2e/run_m1.py --skip-image-build --cli target/debug/chronostack
+      - name: Run e2e (M2 - demo lifecycle, pg_cron sub-stepping)
+        run: python3 tests/e2e/run_m2.py --cli target/debug/chronostack
