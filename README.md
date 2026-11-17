@@ -183,7 +183,7 @@ The most useful help right now:
 - Run the macOS test in [#5](https://github.com/Asmodeus14/ChronoStack/issues/5).
 - Share how you test time-dependent code today.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through [SECURITY.md](SECURITY.md), not public issues.
+See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through [SECURITY.md](SECURITY.md), not public issues. Accessibility barriers are bugs: see [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## License
 
