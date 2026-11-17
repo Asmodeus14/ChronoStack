@@ -123,6 +123,7 @@ Listed as tested only where an automated test covers it.
 | JVM 21 | ✅ No-hang suite; otherwise experimental |
 | Node.js 20, Python 3.13+, JVM 17, Ruby 3.x, MariaDB | Expected to work; not covered by tests |
 | BullMQ, Celery beat (`beat_max_loop_interval ≤ 1`), pg_cron | ✅ Work without triggers (measured) |
+| Celery beat crontab tasks under django-celery-beat's `DatabaseScheduler` | ⚠️ May not fire after a jump; use triggers ([#9](https://github.com/Asmodeus14/ChronoStack/issues/9)) |
 | BullMQ and Sidekiq barriers | ✅ Nightly, with real workers |
 | node-cron, APScheduler, `setTimeout`-style loops | Need a trigger (measured) |
 | Go and other static or setuid binaries | ❌ Not supported (`LD_PRELOAD` can't reach them); flagged by `doctor` |
