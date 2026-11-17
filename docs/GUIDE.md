@@ -79,6 +79,7 @@ After each advance, every service is probed.
 |---|---|---|
 | **BullMQ** (delayed jobs, job schedulers) | Fires within up to about 10 s (BullMQ's longest wait between checks) | A `bullmq` barrier (section 5) |
 | **Celery beat** with `beat_max_loop_interval ≤ 1` (or `celery beat --max-interval 1`) | Fires within about 2 s | Set that option in test/dev |
+| **Celery beat** with django-celery-beat's `DatabaseScheduler` (or a subclass), crontab tasks | Interval tasks fire as above, but crontab tasks may never be sent after a jump, even when the scheduler reports them due. Restarting beat sends them once. ([#9](https://github.com/Asmodeus14/ChronoStack/issues/9)) | Declare a **trigger** for each crontab task |
 | **sidekiq-cron** (Ruby) | Fires if its 30 s poll lands within 60 s after the job's time (`reschedule_grace_period`); otherwise that run is skipped | Land each stop just after the job's minute (`advance: { to: next 02:15 }`) with a `sidekiq` barrier and `settle: 35s`, or declare a trigger |
 | **pg_cron** | Detected automatically; ChronoStack stops the clock on each job's minute | Nothing. Jobs like `*/5 * * * *` run once per stop; `advance --pg-cron-all` runs every occurrence. |
 | A worker that polls the database (`WHERE run_at <= now()`) | Runs at its next poll | A barrier (section 5) so ChronoStack waits for it |
