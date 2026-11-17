@@ -157,8 +157,8 @@ Each bug was reproduced on the project's own published image, with the whole sta
 |---|---|---|
 | Saleor | Unpaid orders set to expire after a day or more expired far too late: 24 h became about 47.6 h, and 48 h about 62 days. | Fix proposed · [issue](https://github.com/saleor/saleor/issues/20019) · [PR](https://github.com/saleor/saleor/pull/20020) |
 | Twenty | The trash cleanup permanently deleted records up to a day before the retention period ended. | Fixed · [issue](https://github.com/twentyhq/twenty/issues/30460) · [PR](https://github.com/twentyhq/twenty/pull/30461) |
-| Chatwoot | Conversations whose snooze ended while background jobs were down for more than 3 days were never reopened. | Reported · [issue](https://github.com/chatwoot/chatwoot/issues/16667) |
-| Formbricks | With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late. | Reported · [issue](https://github.com/formbricks/formbricks/issues/10021) |
+| Chatwoot | Conversations whose snooze ended while background jobs were down for more than 3 days were never reopened. | Confirmed by maintainers · [issue](https://github.com/chatwoot/chatwoot/issues/16667) · [community fix PR](https://github.com/chatwoot/chatwoot/pull/16679) |
+| Formbricks | With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late. | Confirmed by maintainers · [issue](https://github.com/formbricks/formbricks/issues/10021) |
 | tududi | Monthly recurring tasks moved to the wrong day: for users in the Americas, "on the 1st" became the last day of the previous month, and "last Friday" skipped months. | Fix proposed · [issue](https://github.com/chrisvel/tududi/issues/2100) · [PR](https://github.com/chrisvel/tududi/pull/2101) |
 | Worklenz | Monthly "Nth weekday" recurring tasks landed on the wrong date: "1st Monday" moved back into the previous month and then stopped recurring, and "2nd Tuesday" came a week early. | Fix proposed · [issue](https://github.com/Worklenz/worklenz/issues/959) · [PR](https://github.com/Worklenz/worklenz/pull/960) |
 
