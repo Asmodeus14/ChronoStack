@@ -24,7 +24,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Alpha.** The latest pre-release, [`v0.1.0-alpha.6`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.6), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest pre-release, [`v0.1.0-alpha.6`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.6), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 
@@ -129,7 +129,8 @@ Listed as tested only where an automated test covers it.
 | Go and other static or setuid binaries | ❌ Not supported (`LD_PRELOAD` can't reach them); flagged by `doctor` |
 | Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop) | ✅ CI · tested by hand |
 | Host: macOS Intel (native CLI, Docker in a Linux VM) | ✅ CI (nightly, Colima) |
-| Host: macOS Apple silicon (Docker Desktop, OrbStack) | ❓ Untested ([help wanted](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
+| Host: macOS Apple silicon: installer and native CLI | ✅ CI (release install test) |
+| Host: macOS Apple silicon: running containers (Docker Desktop, OrbStack) | ❓ Untested ([help wanted](https://github.com/Asmodeus14/ChronoStack/issues/5)) |
 
 **Limitations:**
 - Time only moves forward.

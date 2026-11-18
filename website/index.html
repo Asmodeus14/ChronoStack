@@ -93,7 +93,7 @@
       "name": "Does it work on macOS or Kubernetes?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "macOS on Intel is tested in CI (the native CLI with Docker in a Linux VM). Apple-silicon Macs (Docker Desktop, OrbStack) are untested; issue #5 has a 5-minute test if you can help. Kubernetes is out of scope for the 0.x releases; ChronoStack targets Docker Compose."
+        "text": "macOS on Intel is tested in CI (the native CLI with Docker in a Linux VM). On Apple-silicon Macs the installer and the native CLI are tested in CI, but running containers there (Docker Desktop, OrbStack) is untested; issue #5 has a 5-minute test if you can help. Kubernetes is out of scope for the 0.x releases; ChronoStack targets Docker Compose."
       }
     },
     {
@@ -474,7 +474,8 @@
           <tr><td>Node.js 20, Python 3.13+, JVM 17, Ruby 3.x, MariaDB</td><td><span class="st st-mid">Expected to work; not covered by tests</span></td></tr>
           <tr><td>Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop)</td><td><span class="st st-yes">CI · tested by hand</span></td></tr>
           <tr><td>Host: macOS Intel (native CLI, Docker in a Linux VM)</td><td><span class="st st-yes">CI (nightly)</span></td></tr>
-          <tr><td>Host: macOS Apple silicon (Docker Desktop, OrbStack)</td><td><span class="st st-unk">Untested · <a href="https://github.com/Asmodeus14/ChronoStack/issues/5">help wanted</a></span></td></tr>
+          <tr><td>Host: macOS Apple silicon: installer and native CLI</td><td><span class="st st-yes">CI (release)</span></td></tr>
+          <tr><td>Host: macOS Apple silicon: running containers (Docker Desktop, OrbStack)</td><td><span class="st st-unk">Untested · <a href="https://github.com/Asmodeus14/ChronoStack/issues/5">help wanted</a></span></td></tr>
           <tr><td>Go and other static or setuid binaries</td><td><span class="st st-no">Not supported; flagged by <code>doctor</code></span></td></tr>
         </tbody>
       </table>
@@ -524,7 +525,7 @@
         </details>
         <details class="faq-item">
           <summary><h3>Does it work on macOS or Kubernetes?</h3></summary>
-          <p>macOS on Intel is tested in CI (the native CLI with Docker in a Linux VM). Apple-silicon Macs (Docker Desktop, OrbStack) are untested; <a href="https://github.com/Asmodeus14/ChronoStack/issues/5">issue #5</a> has a 5-minute test if you can help. Kubernetes is out of scope for the 0.x releases; ChronoStack targets Docker Compose.</p>
+          <p>macOS on Intel is tested in CI (the native CLI with Docker in a Linux VM). On Apple-silicon Macs the installer and the native CLI are tested in CI, but running containers there (Docker Desktop, OrbStack) is untested; <a href="https://github.com/Asmodeus14/ChronoStack/issues/5">issue #5</a> has a 5-minute test if you can help. Kubernetes is out of scope for the 0.x releases; ChronoStack targets Docker Compose.</p>
         </details>
         <details class="faq-item">
           <summary><h3>Is it free?</h3></summary>
