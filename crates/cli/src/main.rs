@@ -6,6 +6,7 @@ mod detect;
 mod docker;
 mod engine;
 mod fault;
+mod init;
 mod mcp;
 mod probe;
 mod queues;
@@ -51,7 +52,7 @@ use crate::session::{ProbeSpec, ServiceEntry, Session};
                   Guide: https://github.com/Asmodeus14/ChronoStack/blob/main/docs/GUIDE.md"
 )]
 struct Cli {
-    /// Compose file(s), as with `docker compose -f` (only used by `up`).
+    /// Compose file(s), as with `docker compose -f` (used by `up` and `init`).
     #[arg(short = 'f', long = "file", global = true)]
     files: Vec<String>,
     /// Compose project name for the ChronoStack stack (default: `<project>-chronostack`).
@@ -143,6 +144,18 @@ enum Cmd {
     Probe {
         #[arg(long)]
         json: bool,
+    },
+    /// Write a starter chronostack.yml for this Compose project.
+    ///
+    /// Detects Postgres (and pg_cron), Redis, Sidekiq, Celery and Node workers
+    /// from the Compose file and suggests triggers and barriers. Starts nothing.
+    Init {
+        /// Print the file instead of writing it.
+        #[arg(long)]
+        print: bool,
+        /// Overwrite an existing chronostack.yml.
+        #[arg(long)]
+        force: bool,
     },
     /// Explain which services are virtualized, and why not.
     Doctor {
@@ -356,6 +369,7 @@ fn run(cli: Cli) -> Result<i32> {
                 0
             })
         }
+        Cmd::Init { print, force } => init_cmd(&cli, print, force),
         Cmd::Doctor { json } => doctor(json),
         Cmd::Fault { cmd } => {
             let mut s = Session::load()?;
@@ -549,24 +563,91 @@ fn resolve_files(given: &[String]) -> Result<Vec<String>> {
     Ok(files)
 }
 
+/// Resolve the Compose files and load the project as Compose itself sees it.
+fn load_project(given: &[String]) -> Result<(Vec<String>, compose::Project)> {
+    let files = resolve_files(given)?;
+    let mut cfg_args = vec!["compose".to_string()];
+    for f in &files {
+        cfg_args.push("-f".into());
+        cfg_args.push(f.clone());
+    }
+    cfg_args.extend(docker::s(&["config", "--format", "json"]));
+    let project = compose::parse_config(&docker::run(&cfg_args)?).map_err(anyhow::Error::msg)?;
+    Ok((files, project))
+}
+
+fn init_cmd(cli: &Cli, print: bool, force: bool) -> Result<i32> {
+    if !print
+        && !force
+        && let Some(existing) = config::find(Path::new("."))
+    {
+        bail!(
+            "{} already exists; use --force to overwrite it, or --print to see the suggestion",
+            existing.file_name().unwrap_or_default().to_string_lossy()
+        );
+    }
+    let (files, project) = load_project(&cli.files)?;
+    let g = init::generate(&project, &files);
+    init::check(&g.yaml, &project)?;
+    if print {
+        print!("{}", g.yaml);
+    } else {
+        fs::write(config::FILE_NAMES[0], &g.yaml)
+            .with_context(|| format!("writing {}", config::FILE_NAMES[0]))?;
+    }
+    // With --print the YAML is on stdout, so the summary goes to stderr.
+    let mut out = String::new();
+    if !print {
+        out.push_str(&format!(
+            "wrote {}
+",
+            config::FILE_NAMES[0]
+        ));
+    }
+    out.push_str(
+        "detected:
+",
+    );
+    for d in &g.detected {
+        out.push_str(&format!(
+            "  {d}
+"
+        ));
+    }
+    if !g.warnings.is_empty() {
+        out.push_str(
+            "to change in your compose setup:
+",
+        );
+        for w in &g.warnings {
+            out.push_str(&format!(
+                "  ! {w}
+"
+            ));
+        }
+    }
+    out.push_str("next: fill in the commented suggestions you need, then run\n");
+    out.push_str("  chronostack up --wait && chronostack doctor && chronostack advance 1d\n");
+    if print {
+        eprint!("{out}");
+    } else {
+        print!("{out}");
+    }
+    Ok(0)
+}
+
 fn probe_spec(svc: &compose::Service, image: &str) -> ProbeSpec {
     let env = |k: &str| svc.environment.get(k).cloned().flatten();
-    let img = image.to_ascii_lowercase();
     // App containers often set POSTGRES_* too (to connect); probe_one falls
     // back to `date` when psql has no server to talk to.
-    if ["postgres", "pgvector", "postgis", "timescale"]
-        .iter()
-        .any(|name| img.contains(name))
-        || env("POSTGRES_PASSWORD").is_some()
-        || env("POSTGRES_USER").is_some()
-    {
-        let user = env("POSTGRES_USER").unwrap_or_else(|| "postgres".into());
-        let db = env("POSTGRES_DB").unwrap_or_else(|| user.clone());
-        ProbeSpec::Postgres { user, db }
-    } else if img.contains("redis") || img.contains("valkey") {
-        ProbeSpec::Redis
-    } else {
-        ProbeSpec::Date
+    match compose::store_kind(svc, image) {
+        compose::StoreKind::Postgres => {
+            let user = env("POSTGRES_USER").unwrap_or_else(|| "postgres".into());
+            let db = env("POSTGRES_DB").unwrap_or_else(|| user.clone());
+            ProbeSpec::Postgres { user, db }
+        }
+        compose::StoreKind::Redis => ProbeSpec::Redis,
+        compose::StoreKind::Other => ProbeSpec::Date,
     }
 }
 
@@ -593,14 +674,7 @@ fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> 
             "a ChronoStack session already exists in this directory; run `chronostack down` first"
         );
     }
-    let files = resolve_files(&cli.files)?;
-    let mut cfg_args = vec!["compose".to_string()];
-    for f in &files {
-        cfg_args.push("-f".into());
-        cfg_args.push(f.clone());
-    }
-    cfg_args.extend(docker::s(&["config", "--format", "json"]));
-    let project = compose::parse_config(&docker::run(&cfg_args)?).map_err(anyhow::Error::msg)?;
+    let (files, project) = load_project(&cli.files)?;
     let cs_project = cli
         .project_name
         .clone()

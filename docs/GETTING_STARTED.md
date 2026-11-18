@@ -121,7 +121,13 @@ Every service that matters should say `VIRTUALIZED yes` and `PROBE ok`. A `no` u
 chronostack advance 25h        # did sessions expire? check your app or database
 ```
 
-**Step 4: make your scheduled jobs run.** Most in-process schedulers (`setTimeout`, node-cron, APScheduler, `@Scheduled`) **don't** notice the clock jumping. Tell ChronoStack how to run the job at its virtual time. Create `chronostack.yml` next to your compose file:
+**Step 4: make your scheduled jobs run.** Most in-process schedulers (`setTimeout`, node-cron, APScheduler, `@Scheduled`) **don't** notice the clock jumping. Tell ChronoStack how to run the job at its virtual time, in a `chronostack.yml` next to your compose file. Start with:
+
+```sh
+chronostack init
+```
+
+It reads your compose file, detects Postgres (and pg_cron), Redis, Sidekiq, Celery and Node workers, and writes a commented starter file: a Sidekiq barrier if you use Sidekiq, and suggestions to fill in for the rest. It also tells you about settings to change in your compose file, such as Celery beat's `--max-interval 1`. Use `--print` to see the file without writing it. A trigger looks like this:
 
 ```yaml
 version: 1
@@ -141,6 +147,7 @@ Now `chronostack advance 7d` runs `nightly-job` 7 times, each at its own virtual
 
 | Command | What it does |
 |---|---|
+| `chronostack init` | Write a starter `chronostack.yml` from your compose file (`--print` to preview) |
 | `chronostack up --wait` | Start the copy of your stack on a virtual clock and wait until it's ready |
 | `chronostack doctor` | Show which services see virtual time, and why not |
 | `chronostack now` | Virtual time, real time and the difference |

@@ -75,6 +75,8 @@ After each advance, every service is probed.
 
 **Moving the clock does not, by itself, run your timers.** `setTimeout`, `asyncio.sleep` and most in-process schedulers wait on the monotonic clock, which ChronoStack deliberately leaves alone (otherwise deadlines would break). What happens depends on the scheduler:
 
+`chronostack init` applies this table to your compose file: it writes a starter `chronostack.yml` with what it can detect (Sidekiq barriers, pg_cron, Celery beat settings) and commented suggestions for the rest.
+
 | Scheduler | After an advance | What to do |
 |---|---|---|
 | **BullMQ** (delayed jobs, job schedulers) | Fires within up to about 10 s (BullMQ's longest wait between checks) | A `bullmq` barrier (section 5) |

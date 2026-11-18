@@ -62,7 +62,7 @@ chronostack advance 15d        # the trial expires at the nightly job
 chronostack run scenarios/trial.yml
 ```
 
-**3. Use it on your project:** `cd` to your compose project and run `chronostack up --wait` and `chronostack doctor`. Then follow **[Getting started](docs/GETTING_STARTED.md)**, a 10-minute walkthrough with a cheat sheet and FAQ.
+**3. Use it on your project:** `cd` to your compose project and run `chronostack init` (a starter `chronostack.yml` for your schedulers and queues), then `chronostack up --wait` and `chronostack doctor`. Then follow **[Getting started](docs/GETTING_STARTED.md)**, a 10-minute walkthrough with a cheat sheet and FAQ.
 
 Update any time with `chronostack update`. The installer verifies checksums and puts `chronostack` on your PATH; [details and uninstall](docs/GETTING_STARTED.md#1-install).
 

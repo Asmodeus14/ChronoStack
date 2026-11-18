@@ -43,6 +43,23 @@ pub struct Service {
     pub container_name: Option<String>,
     /// Networks the service joins (`default` when none are declared).
     pub networks: Vec<String>,
+    /// `command` from the Compose file, split into words (empty when not set).
+    pub command: Vec<String>,
+    /// `entrypoint` from the Compose file, split into words (empty when not set).
+    pub entrypoint: Vec<String>,
+}
+
+/// A Compose `command`/`entrypoint` value: a list, or a string split on whitespace.
+fn words(v: Option<&Value>) -> Vec<String> {
+    match v {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        Some(Value::String(s)) => s.split_whitespace().map(str::to_string).collect(),
+        _ => vec![],
+    }
 }
 
 /// The resolved Compose project.
@@ -131,6 +148,8 @@ pub fn parse_config(json_text: &str) -> Result<Project, String> {
                     _ if s.get("network_mode").is_some() => vec![],
                     _ => vec!["default".to_string()],
                 },
+                command: words(s.get("command")),
+                entrypoint: words(s.get("entrypoint")),
             });
         }
     }
@@ -141,6 +160,33 @@ pub fn parse_config(json_text: &str) -> Result<Project, String> {
         ));
     }
     Ok(Project { name, services })
+}
+
+/// What kind of datastore a service is, by image name and environment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoreKind {
+    Postgres,
+    Redis,
+    Other,
+}
+
+/// Classify a service. App containers often set `POSTGRES_*` too (to
+/// connect), so callers must tolerate an app being classified as Postgres.
+pub fn store_kind(svc: &Service, image: &str) -> StoreKind {
+    let img = image.to_ascii_lowercase();
+    let env = |k: &str| matches!(svc.environment.get(k), Some(Some(_)));
+    if ["postgres", "pgvector", "postgis", "timescale"]
+        .iter()
+        .any(|name| img.contains(name))
+        || env("POSTGRES_PASSWORD")
+        || env("POSTGRES_USER")
+    {
+        StoreKind::Postgres
+    } else if img.contains("redis") || img.contains("valkey") {
+        StoreKind::Redis
+    } else {
+        StoreKind::Other
+    }
 }
 
 /// Image name Compose uses for a service: explicit `image`, or `<project>-<service>` for builds.
@@ -466,6 +512,21 @@ mod tests {
     }
 
     #[test]
+    fn command_and_entrypoint_in_both_forms() {
+        let p = parse_config(
+            r#"{"name":"x","services":{
+                "a":{"image":"i","command":["celery","-A","app","beat"],"entrypoint":"/bin/sh -c"},
+                "b":{"image":"i","command":"bundle exec  sidekiq"},
+                "c":{"image":"i"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(p.services[0].command, ["celery", "-A", "app", "beat"]);
+        assert_eq!(p.services[0].entrypoint, ["/bin/sh", "-c"]);
+        assert_eq!(p.services[1].command, ["bundle", "exec", "sidekiq"]);
+        assert!(p.services[2].command.is_empty() && p.services[2].entrypoint.is_empty());
+    }
+
+    #[test]
     fn rejects_reserved_service_name() {
         assert!(
             parse_config(r#"{"name":"x","services":{"chronostack-clockd":{"image":"i"}}}"#)
@@ -528,6 +589,8 @@ mod tests {
             published_ports: vec![],
             container_name: None,
             networks: vec!["default".into()],
+            command: vec![],
+            entrypoint: vec![],
         };
         let mut i = info("arm64", Some(Libc::Gnu));
         i.image_ld_preload = Some("/lib/a.so /lib/b.so".into());

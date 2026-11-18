@@ -9,6 +9,10 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Added
+
+- `chronostack init`: writes a starter `chronostack.yml` from your compose file. It detects Postgres (and pg_cron), Redis, Sidekiq, Celery (beat, workers, embedded `-B`, django-celery-beat) and Node workers. It adds a Sidekiq barrier when there's a Redis service, and commented suggestions for BullMQ, Celery and triggers. It warns when Celery beat lacks `--max-interval 1`. `--print` shows the file without writing it; an existing file is only replaced with `--force`. The generated file is validated before it's written.
+
 ### Fixed
 
 - Windows installer: an account with no user-level PATH made `install.ps1` fail after copying the binary. It now treats a missing PATH as empty.
