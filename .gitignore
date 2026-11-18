@@ -36,3 +36,6 @@ __pycache__/
 
 # Vercel
 .vercel/
+
+# Benchmark scratch stacks (bench/run_bench.py removes them after each run)
+bench/advance/work-*/
