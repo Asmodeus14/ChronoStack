@@ -17,7 +17,7 @@ mod update;
 mod yaml;
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -203,6 +203,9 @@ enum Cmd {
         /// Print the report JSON instead of progress.
         #[arg(long)]
         json: bool,
+        /// Also write a JUnit XML report to this path (for CI test reporters).
+        #[arg(long, value_name = "PATH")]
+        junit: Option<PathBuf>,
         /// Refuse any advance step that would take virtual time more than this
         /// many nanoseconds past the scenario's start (set by `chronostack mcp`).
         #[arg(long, hide = true)]
@@ -479,6 +482,7 @@ fn run(cli: Cli) -> Result<i32> {
         Cmd::Run {
             file,
             json,
+            junit,
             max_advance_ns,
         } => {
             let mut s = Session::load()?;
@@ -487,7 +491,12 @@ fn run(cli: Cli) -> Result<i32> {
             let path = Path::new(&file);
             let sc = scenario::load(path, &cfg, &services)?;
             let c = client(&mut s);
-            scenario::run(&s, &c, &cfg, path, &sc, json, max_advance_ns)
+            let opts = scenario::RunOptions {
+                json,
+                max_advance_ns,
+                junit,
+            };
+            scenario::run(&s, &c, &cfg, path, &sc, &opts)
         }
     }
 }

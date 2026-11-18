@@ -200,18 +200,20 @@ jobs:
       - uses: Asmodeus14/ChronoStack@v0.1.0-alpha.6    # installs the CLI (checksum-verified)
         with: { version: 0.1.0-alpha.6 }
       - run: chronostack up --wait
-      - run: chronostack run scenarios/trial.yml
+      - run: chronostack run scenarios/trial.yml --junit .chronostack/reports/junit.xml
       - if: always()
         uses: actions/upload-artifact@v4
         with: { name: chronostack-reports, path: .chronostack/reports/ }
 ```
+
+`--junit <path>` also writes the result as JUnit XML, which most CI test reporters read: each step is a test case, a failed step is a `<failure>` with the evidence, and the steps after it are marked skipped. The JSON and Markdown reports are still written to `.chronostack/reports/`.
 
 Any other CI with Docker:
 
 ```sh
 curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.6 sh
 export PATH="$HOME/.local/bin:$PATH"
-chronostack up --wait && chronostack run scenarios/trial.yml
+chronostack up --wait && chronostack run scenarios/trial.yml --junit junit.xml
 ```
 
 Keep `.chronostack/reports/` as a build artifact, so a failed run can be read later.

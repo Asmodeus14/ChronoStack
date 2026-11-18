@@ -24,7 +24,7 @@
 //! later steps. References are checked before the run; reports show the
 //! `${…}` form, not the values.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -805,15 +805,27 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
 }
 
 /// Run a scenario; returns the exit code (0 passed, 6 failed).
+/// How `chronostack run` reports and what it may do.
+#[derive(Debug, Default)]
+pub struct RunOptions {
+    /// Print the report JSON instead of progress.
+    pub json: bool,
+    /// Refuse advance steps that end more than this past the start (MCP cap).
+    pub max_advance_ns: Option<i64>,
+    /// Also write a JUnit XML file here.
+    pub junit: Option<PathBuf>,
+}
+
 pub fn run(
     session: &Session,
     client: &Client,
     cfg: &Resolved,
     path: &Path,
     sc: &Scenario,
-    json_out: bool,
-    max_advance_ns: Option<i64>,
+    opts: &RunOptions,
 ) -> Result<i32> {
+    let json_out = opts.json;
+    let max_advance_ns = opts.max_advance_ns;
     let real_start = real_now();
     let t0 = Instant::now();
     let start = client.clock()?;
@@ -965,6 +977,10 @@ pub fn run(
     });
     let md = report::markdown(&report);
     let (jp, mp) = report::write(&report, &md, &sc.name, real_start)?;
+    if let Some(j) = &opts.junit {
+        report::write_junit(&report, j)
+            .with_context(|| format!("writing JUnit report {}", j.display()))?;
+    }
     if json_out {
         println!("{report}");
     } else {
@@ -986,6 +1002,9 @@ pub fn run(
             );
         }
         println!("report: {}\n        {}", mp.display(), jp.display());
+        if let Some(j) = &opts.junit {
+            println!("        {}", j.display());
+        }
     }
     Ok(if passed { 0 } else { EXIT_SCENARIO_FAILED })
 }

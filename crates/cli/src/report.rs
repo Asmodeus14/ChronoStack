@@ -113,6 +113,129 @@ pub fn write(
     Ok((json_path, md_path))
 }
 
+/// Escape text for XML 1.0 attributes and content, dropping characters XML
+/// can't carry (control characters other than tab, newline and carriage return).
+fn xml(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => o.push_str("&amp;"),
+            '<' => o.push_str("&lt;"),
+            '>' => o.push_str("&gt;"),
+            '"' => o.push_str("&quot;"),
+            '\'' => o.push_str("&apos;"),
+            '\t' | '\n' | '\r' => o.push(c),
+            c if (c as u32) < 0x20 || c == '\u{FFFE}' || c == '\u{FFFF}' => {}
+            c => o.push(c),
+        }
+    }
+    o
+}
+
+fn secs(ms: &Value) -> String {
+    format!("{:.3}", ms.as_u64().unwrap_or(0) as f64 / 1000.0)
+}
+
+/// JUnit XML for CI test reporters: one `<testsuite>` per scenario and one
+/// `<testcase>` per step (failed → `<failure>`, not run → `<skipped>`). Built
+/// only from the JSON report, so it always agrees with the other two files.
+pub fn junit(r: &Value) -> String {
+    let sc = &r["scenario"];
+    let name = str_of(sc, "name");
+    let class = format!("chronostack.{}", slug(name));
+    let steps: &[Value] = r["steps"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let count = |s: &str| steps.iter().filter(|x| x["status"] == s).count();
+    let mut x = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    x += &format!(
+        "<testsuites name=\"chronostack\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"0\" time=\"{}\">\n",
+        steps.len(),
+        count("failed"),
+        count("skipped"),
+        secs(&r["real_elapsed_ms"])
+    );
+    x += &format!(
+        "  <testsuite name=\"{}\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"0\" time=\"{}\" timestamp=\"{}\">\n",
+        xml(name),
+        steps.len(),
+        count("failed"),
+        count("skipped"),
+        secs(&r["real_elapsed_ms"]),
+        xml(str_of(r, "real_start").trim_end_matches('Z'))
+    );
+    x += "    <properties>\n";
+    for k in [
+        "run_id",
+        "virtual_start",
+        "virtual_end",
+        "chronostack_version",
+        "project",
+    ] {
+        x += &format!(
+            "      <property name=\"{k}\" value=\"{}\"/>\n",
+            xml(str_of(r, k))
+        );
+    }
+    x += &format!(
+        "      <property name=\"scenario_path\" value=\"{}\"/>\n",
+        xml(str_of(sc, "path"))
+    );
+    x += "    </properties>\n";
+    for st in steps {
+        let case = format!(
+            "{:02}. {}",
+            st["index"].as_u64().unwrap_or(0),
+            str_of(st, "name")
+        );
+        let open = format!(
+            "    <testcase name=\"{}\" classname=\"{}\" time=\"{}\"",
+            xml(&case),
+            xml(&class),
+            secs(&st["elapsed_ms"])
+        );
+        let detail = str_of(st, "detail");
+        let virt = format!(
+            "virtual {} -> {}",
+            str_of(st, "virtual_before"),
+            str_of(st, "virtual_after")
+        );
+        match str_of(st, "status") {
+            "skipped" => {
+                x += &format!(
+                    "{open}>\n      <skipped message=\"not run: an earlier step failed\"/>\n    </testcase>\n"
+                );
+            }
+            "failed" => {
+                let first = detail.lines().next().unwrap_or("step failed");
+                x += &format!(
+                    "{open}>\n      <failure message=\"{}\" type=\"{}\">{}\n{}</failure>\n    </testcase>\n",
+                    xml(first),
+                    xml(str_of(st, "kind")),
+                    xml(&virt),
+                    xml(detail)
+                );
+            }
+            _ => {
+                x += &format!(
+                    "{open}>\n      <system-out>{}\n{}</system-out>\n    </testcase>\n",
+                    xml(&virt),
+                    xml(detail)
+                );
+            }
+        }
+    }
+    x += "  </testsuite>\n</testsuites>\n";
+    x
+}
+
+/// Write the JUnit file to `path`, creating parent directories.
+pub fn write_junit(report: &Value, path: &std::path::Path) -> Result<()> {
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        fs::create_dir_all(dir)?;
+    }
+    fs::write(path, junit(report))?;
+    Ok(())
+}
+
 fn cell(s: &str) -> String {
     s.replace('|', "\\|").replace('\n', " ").replace('\r', "")
 }
@@ -319,5 +442,50 @@ mod tests {
         assert!(m.contains("Step 2 of 2, **receiver got it once**"));
         assert!(m.contains("blocked by outage window #1"));
         assert!(m.contains("chronostack run scenarios/trial.yml"));
+    }
+
+    fn sample() -> Value {
+        serde_json::json!({
+            "scenario": { "name": "Trial <expiry> & renewal", "path": "scenarios/trial.yml" },
+            "run_id": "ab12cd34", "chronostack_version": "0.1.0", "project": "demo-chronostack",
+            "real_start": "2026-11-18T10:00:00Z", "real_elapsed_ms": 12345,
+            "virtual_start": "2026-11-18T10:00:00Z", "virtual_end": "2026-12-03T10:00:00Z",
+            "result": "failed",
+            "steps": [
+                { "index": 1, "name": "advance 15d", "kind": "advance", "status": "passed", "elapsed_ms": 9000,
+                  "virtual_before": "2026-11-18T10:00:00Z", "virtual_after": "2026-12-03T10:00:00Z", "detail": "15 stop(s)" },
+                { "index": 2, "name": "trial expired", "kind": "assert", "status": "failed", "elapsed_ms": 250,
+                  "virtual_before": "2026-12-03T10:00:00Z", "virtual_after": "2026-12-03T10:00:00Z",
+                  "detail": "expected \"expired\", got \"active\"\nquery: select status from trials\u{1}" },
+                { "index": 3, "name": "webhook sent", "kind": "assert", "status": "skipped" }
+            ]
+        })
+    }
+
+    #[test]
+    fn junit_counts_and_cases() {
+        let x = junit(&sample());
+        assert!(x.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"));
+        assert!(x.contains(
+            "<testsuite name=\"Trial &lt;expiry&gt; &amp; renewal\" tests=\"3\" failures=\"1\" skipped=\"1\" errors=\"0\" time=\"12.345\" timestamp=\"2026-11-18T10:00:00\">"
+        ));
+        assert!(x.contains(
+            "name=\"01. advance 15d\" classname=\"chronostack.trial-expiry-renewal\" time=\"9.000\""
+        ));
+        assert!(x.contains("<failure message=\"expected &quot;expired&quot;, got &quot;active&quot;\" type=\"assert\">"));
+        assert!(x.contains("<skipped message="));
+        assert!(x.contains("<property name=\"run_id\" value=\"ab12cd34\"/>"));
+        assert!(!x.contains('\u{1}'), "control characters are dropped");
+        assert_eq!(x.matches("<testcase ").count(), 3);
+        assert_eq!(x.matches("</testcase>").count(), 3);
+    }
+
+    #[test]
+    fn junit_for_a_passing_run() {
+        let mut r = sample();
+        r["steps"] = serde_json::json!([r["steps"][0].clone()]);
+        let x = junit(&r);
+        assert!(x.contains("tests=\"1\" failures=\"0\" skipped=\"0\""));
+        assert!(x.contains("<system-out>virtual 2026-11-18T10:00:00Z -&gt; 2026-12-03T10:00:00Z\n15 stop(s)</system-out>"));
     }
 }
