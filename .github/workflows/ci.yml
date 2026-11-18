@@ -79,3 +79,5 @@ jobs:
         run: python3 tests/e2e/run_m3.py --cli target/debug/chronostack
       - name: Run e2e (M4 - MCP server, Node register)
         run: python3 tests/e2e/run_m4.py --cli target/debug/chronostack
+      - name: Run e2e (init - generated chronostack.yml)
+        run: python3 tests/e2e/run_init.py --cli target/debug/chronostack
