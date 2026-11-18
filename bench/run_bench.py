@@ -125,13 +125,24 @@ def environment(cli, stack=None):
         "docker_context": sh(["docker", "context", "show"], ROOT)[1].strip(),
     }
     if stack:
-        rc, out, _ = stack.exec("c", ["sh", "-c", "nproc; grep -m1 'model name' /proc/cpuinfo | cut -d: -f2; uname -r; "
-                                      "grep MemTotal /proc/meminfo | awk '{print $2}'; "
-                                      "dpkg-query -W -f '${Version}' libfaketime"], env={"LD_PRELOAD": ""})
-        lines = [l.strip() for l in out.splitlines()]
-        if rc == 0 and len(lines) >= 5:
-            env["linux"] = {"cpus": int(lines[0]), "cpu_model": lines[1] or "(not reported)", "kernel": lines[2],
-                            "mem_kib": int(lines[3]), "libfaketime_deb": lines[4]}
+        # One `key=value` line per fact, so a fact the CPU doesn't report (ARM has
+        # no "model name" in /proc/cpuinfo) can't shift or drop the others.
+        script = (
+            "echo cpus=$(nproc); "
+            "echo cpu_model=$(grep -m1 -E '^(model name|Model|CPU part)' /proc/cpuinfo | cut -d: -f2); "
+            "echo kernel=$(uname -r); "
+            "echo mem_kib=$(awk '/MemTotal/ {print $2}' /proc/meminfo); "
+            "echo libfaketime_deb=$(dpkg-query -W -f '${Version}' libfaketime)"
+        )
+        rc, out, _ = stack.exec("c", ["sh", "-c", script], env={"LD_PRELOAD": ""})
+        facts = dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
+        env["linux"] = {
+            "cpus": int(facts["cpus"]) if facts.get("cpus", "").isdigit() else None,
+            "cpu_model": facts.get("cpu_model", "").strip() or "(not reported)",
+            "kernel": facts.get("kernel", "").strip() or "?",
+            "mem_kib": int(facts["mem_kib"]) if facts.get("mem_kib", "").isdigit() else None,
+            "libfaketime_deb": facts.get("libfaketime_deb", "").strip() or "?",
+        }
     return env
 
 
