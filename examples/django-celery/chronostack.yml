@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=../../docs/schema/chronostack.schema.json
+# ChronoStack settings for the Celery example.
+version: 1
+
+# No trigger is needed: Celery beat's default scheduler polls the wall clock
+# (every second, because of --max-interval 1), so it notices the clock moving
+# and sends the daily task by itself.
+advance:
+  # There is nothing to ask beat whether it has finished, so give it a few
+  # seconds at each stop to send the task and let the worker run it.
+  dwell: 3s

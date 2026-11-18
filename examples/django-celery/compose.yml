@@ -1,0 +1,34 @@
+﻿# SPDX-License-Identifier: MIT OR Apache-2.0
+# Postgres, Redis, a Celery worker and Celery beat with one daily task.
+# Nothing in here knows about ChronoStack.
+name: celery-daily-task
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app"]
+      interval: 1s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+
+  worker:
+    build: .
+    command: ["celery", "-A", "tasks", "worker", "--loglevel=info"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  beat:
+    build: .
+    command: ["celery", "-A", "tasks", "beat", "--loglevel=info", "--max-interval", "1"]
+    depends_on:
+      - worker
