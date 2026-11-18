@@ -45,7 +45,7 @@
 |---|---|---|
 | `documentation.yml` (offline link check) | ✅ | Runs on every push; passing |
 | `ci.yml` | ✅ | fmt, clippy (`-D warnings`), unit tests on Linux x86_64/arm64, Windows and macOS, MSRV 1.85, and e2e on native Linux x86_64 and arm64 |
-| `nightly.yml` | ✅ | Demo ×10 (determinism), scheduler matrix and no-hang suite on x86_64 and arm64 |
+| `nightly.yml` | ✅ | Demo ×10 (reproducibility), scheduler matrix and no-hang suite on x86_64 and arm64 |
 | Dependabot | ✅ | `github-actions`, `cargo` and `docker`. An open cargo PR (major `getrandom`/`ureq` bumps) fails CI and needs a code change. |
 | `.gitignore`, `.gitattributes`, `.editorconfig` | ✅ | |
 | rustfmt / clippy | ✅ | Default rustfmt style; clippy with `-D warnings` in CI; workspace lint `unsafe_code = "deny"` |

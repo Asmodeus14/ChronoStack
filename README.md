@@ -76,7 +76,7 @@ flowchart LR
   CLI -- "triggers · barriers · probes" --> SVC
 ```
 
-1. **One clock for every service.** A small C library loaded with `LD_PRELOAD` makes wall-clock reads (`now()`, `Date.now()`, `time.time()`, Redis expiry) return virtual time. It adds about 13 ns per read. Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so locks and timeouts never hang.
+1. **One clock for every service.** A small C library loaded with `LD_PRELOAD` makes wall-clock reads (`now()`, `Date.now()`, `time.time()`, Redis expiry) return virtual time. It adds about 13 ns per read. Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so the timed waits behind locks and timeouts return on time instead of hanging. That's checked in C, Python, Node and the JVM ([results](docs/M0_RESULTS.md)), and re-run every night in CI.
 2. **Moving the clock runs your scheduled work.** Changing the clock doesn't fire timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So `advance` stops at each interesting virtual time, runs the **triggers** you declare (e.g. "the nightly job at 03:00"), and waits on **barriers** (e.g. "the queue is empty") before moving on. pg_cron is detected and handled automatically.
 3. **Everything is verified.** After each advance, every service is probed to confirm it sees the new time, and `doctor` explains anything it can't reach.
 
@@ -103,7 +103,7 @@ When something breaks, the Markdown report says what was expected, what happened
 ## Features
 
 - **No code changes:** works on your existing `compose.yml`, as a separate copy. Your containers, data and files are untouched.
-- **Scheduler-aware stepping:** triggers run at their exact virtual times. BullMQ and Celery beat fire on their own, and pg_cron jobs are never skipped.
+- **Scheduler-aware stepping:** triggers run at their exact virtual times. BullMQ and Celery beat fire on their own. For pg_cron, the clock stops on each job's minute so fixed-time jobs run; jobs like `*/5 * * * *` run once per stop unless you pass `--pg-cron-all`.
 - **Waits for your jobs:** built-in `bullmq` and `sidekiq` barriers hold each step until the queues are drained, and running jobs finish before the clock moves.
 - **Outages in virtual time:** a small proxy in front of HTTP dependencies (`http` or `https`) makes "the payment API is down on day 3 from 09:00 to 11:00" a one-liner.
 - **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports, with secrets redacted.

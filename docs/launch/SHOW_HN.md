@@ -10,7 +10,7 @@
 
 **Text (or first comment):**
 
-> I kept testing trial expiry and webhook retries by editing timestamps in Postgres, so I built a tool that moves the clock for a whole Compose stack: Postgres `now()`, Redis TTLs, Node/Python/Ruby/JVM services, all at once, with no code changes (an `LD_PRELOAD` shim plus a small controller container).
+> I kept testing trial expiry and webhook retries by editing timestamps in Postgres, so I built a tool that moves the clock for a whole Compose stack: Postgres `now()`, Redis TTLs, Node and Python services (JVM and Ruby should work but aren't covered by tests yet), all at once, with no code changes (an `LD_PRELOAD` shim plus a small controller container).
 >
 > The fake clock was the easy part. What took the time:
 >
@@ -24,7 +24,7 @@
 >
 > Before posting this I ran it against a few open-source projects' published images, testing their real time-based features, and found six date bugs: Saleor's unpaid-order expiry fired far too late for settings of a day or more, Twenty's trash cleanup deleted records up to a day early, Chatwoot never reopened snoozed conversations after a background-job outage of more than 3 days, Formbricks scheduled surveys a day late in UTC+12 zones, tududi moved monthly recurring tasks to the wrong day, and Worklenz's "1st Monday" recurring tasks moved into the previous month and then stopped recurring. All are reported upstream (links on the site and in the README); Twenty has merged the fix, Chatwoot's team has confirmed theirs as a bug, and three more fix PRs are open.
 >
-> Limits: Go binaries aren't covered (no libc), time only moves forward, and Apple-silicon Macs are untested (Linux and Intel macOS run in CI). If you have an M-series Mac, issue #5 is a 5-minute test. It's an alpha (0.1.0-alpha.5), MIT/Apache-2.0.
+> Limits: Go binaries aren't covered (no libc), time only moves forward, and Apple-silicon Macs are untested (Linux and Intel macOS run in CI). If you have an M-series Mac, issue #5 is a 5-minute test. It's an alpha (0.1.0-alpha.6), MIT/Apache-2.0.
 >
 > Site, with an interactive demo: https://chronostack-dev.vercel.app. I'd especially like to hear what breaks on your stack (`chronostack doctor` output helps).
 
