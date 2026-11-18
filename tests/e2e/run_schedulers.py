@@ -10,7 +10,10 @@ The output documents behaviour for docs/MVP_SCOPE.md. The script fails only
 when the observed behaviour differs from the documented expectation below, or
 on harness errors.
 
-Usage: python tests/e2e/run_schedulers.py [--cli PATH]
+Usage: python tests/e2e/run_schedulers.py [--cli PATH] [--wait-seconds N]
+
+--wait-seconds changes the real-time budget (default 20) for one-off
+measurements; the documented expectations assume the default.
 """
 import argparse
 import datetime as dt
@@ -39,6 +42,9 @@ EXPECT = {
     "APScheduler 3 (BlockingScheduler, cron)": "trigger",  # measured 2026-11-13: no run within 20 s
     "BullMQ job scheduler (cron)": "fires",  # measured 2026-11-13: ~1 s after advance; worst case ~10 s (BullMQ maximumBlockTimeout), see GUIDE section 5
     "BullMQ delayed job (2h)": "fires",  # measured 2026-11-13: immediately
+    # No expectation yet (recorded as "measured", never fails the run) until
+    # the nightly matrix has results on both architectures:
+    #   Spring @Scheduled (cron), Laravel scheduler (schedule:work), sidekiq-cron
 }
 
 
@@ -50,7 +56,9 @@ def sh(args, timeout=900):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cli")
+    ap.add_argument("--wait-seconds", type=int, default=WAIT_S)
     a = ap.parse_args()
+    wait_s = a.wait_seconds
     cli = os.path.abspath(a.cli) if a.cli else os.path.join(ROOT, "target", "debug", "chronostack" + (".exe" if os.name == "nt" else ""))
 
     def cs(*args):
@@ -91,8 +99,9 @@ def main():
         start = dt.datetime(day.year, day.month, day.day, 2, 30, tzinfo=dt.timezone.utc)
         rc, _ = js("advance", "--to", start.strftime("%Y-%m-%dT%H:%M:%SZ"), "--no-probe")
         assert rc == 0, "positioning failed"
-        time.sleep(WAIT_S)  # catch-up runs from the positioning jump happen here
-        ex("redis", "redis-cli", "DEL", "celery:runs", "nodecron:runs", "apscheduler:runs", "done:daily", "done:delayed")
+        time.sleep(wait_s)  # catch-up runs from the positioning jump happen here
+        ex("redis", "redis-cli", "DEL", "celery:runs", "nodecron:runs", "apscheduler:runs", "done:daily", "done:delayed",
+           "spring:runs", "laravel:runs", "sidekiqcron:runs")
         assert ex("bullmq", "node", "bullmq-add.js", "scheduler")[0] == 0
         assert ex("bullmq", "node", "bullmq-add.js", "delayed")[0] == 0
         time.sleep(3)
@@ -103,26 +112,29 @@ def main():
         seen = {}
         keys = {"celery beat (beat_max_loop_interval=1)": "celery:runs", "node-cron": "nodecron:runs",
                 "APScheduler 3 (BlockingScheduler, cron)": "apscheduler:runs",
-                "BullMQ job scheduler (cron)": "done:daily"}
-        while time.monotonic() - t0 < WAIT_S and len(seen) < len(keys):
+                "BullMQ job scheduler (cron)": "done:daily",
+                "Spring @Scheduled (cron)": "spring:runs",
+                "Laravel scheduler (schedule:work)": "laravel:runs",
+                "sidekiq-cron": "sidekiqcron:runs"}
+        while time.monotonic() - t0 < wait_s and len(seen) < len(keys):
             for name, key in keys.items():
                 if name not in seen and counter(key) > 0:
                     seen[name] = time.monotonic() - t0
             time.sleep(1)
         for name in keys:
-            rows.append((name, f"{seen[name]:.0f}s after advance" if name in seen else f"no run within {WAIT_S}s",
+            rows.append((name, f"{seen[name]:.0f}s after advance" if name in seen else f"no run within {wait_s}s",
                          "fires" if name in seen else "trigger"))
 
         # 03:30 -> 04:35: the 2h delayed job (added at 02:30) is due.
         js("advance", "65m", "--no-probe")
         t0 = time.monotonic()
         fired = None
-        while time.monotonic() - t0 < WAIT_S:
+        while time.monotonic() - t0 < wait_s:
             if counter("done:delayed") > 0:
                 fired = time.monotonic() - t0
                 break
             time.sleep(1)
-        rows.append(("BullMQ delayed job (2h)", f"{fired:.0f}s after advance" if fired is not None else f"no run within {WAIT_S}s",
+        rows.append(("BullMQ delayed job (2h)", f"{fired:.0f}s after advance" if fired is not None else f"no run within {wait_s}s",
                      "fires" if fired is not None else "trigger"))
     finally:
         cs("down", "-v")
