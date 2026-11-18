@@ -24,7 +24,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Alpha.** The latest pre-release, [`v0.1.0-alpha.5`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.5), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest pre-release, [`v0.1.0-alpha.6`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.6), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. **Apple-silicon Macs are untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 
@@ -45,12 +45,12 @@ $ chronostack run scenarios/trial.yml   # a scripted, repeatable test with a rep
 
 ```sh
 # Linux / macOS
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.5/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.5 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.6 sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-$env:CHRONOSTACK_VERSION = "0.1.0-alpha.5"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.5/install.ps1 | iex
+$env:CHRONOSTACK_VERSION = "0.1.0-alpha.6"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.ps1 | iex
 ```
 
 **2. Run the demo:** a small SaaS app with a 14-day trial, a nightly job and webhooks.
