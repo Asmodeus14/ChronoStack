@@ -577,14 +577,13 @@ fn load_project(given: &[String]) -> Result<(Vec<String>, compose::Project)> {
 }
 
 fn init_cmd(cli: &Cli, print: bool, force: bool) -> Result<i32> {
-    if !print
-        && !force
-        && let Some(existing) = config::find(Path::new("."))
-    {
-        bail!(
-            "{} already exists; use --force to overwrite it, or --print to see the suggestion",
-            existing.file_name().unwrap_or_default().to_string_lossy()
-        );
+    if !print && !force {
+        if let Some(existing) = config::find(Path::new(".")) {
+            bail!(
+                "{} already exists; use --force to overwrite it, or --print to see the suggestion",
+                existing.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
     }
     let (files, project) = load_project(&cli.files)?;
     let g = init::generate(&project, &files);

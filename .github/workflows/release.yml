@@ -265,9 +265,55 @@ jobs:
           echo "demo took $((end - start)) s"
           test $((end - start)) -lt 300
 
+  smoke-macos:
+    name: Install test (${{ matrix.runner }})
+    # GitHub's macOS runners can't start the Linux VM that Docker needs on
+    # Apple silicon, so this checks what doesn't need a running engine: the
+    # installer, the macOS binary, and `init`/`config` against a real compose
+    # file (`docker compose config` works without an engine).
+    needs: [meta, package]
+    if: ${{ !cancelled() && needs.package.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, arch: arm64 }
+          - { runner: macos-15-intel, arch: x86_64 }
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: examples/saas-trial-demo
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dl
+      - name: Install with install.sh (served locally)
+        run: |
+          (cd dl/release && python3 -m http.server 8765 >/dev/null 2>&1 &)
+          sleep 1
+          CHRONOSTACK_VERSION="$VERSION" CHRONOSTACK_DOWNLOAD_BASE=http://127.0.0.1:8765 sh dl/release/install.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: The installed binary is native and runs
+        run: |
+          test "$(uname -m)" = "${{ matrix.arch }}"
+          file "$(command -v chronostack)" | tee /dev/stderr | grep -q "${{ matrix.arch }}"
+          chronostack --version | grep -qx "chronostack $VERSION"
+      - name: init and config against the demo's compose file
+        run: |
+          brew install docker docker-compose
+          mkdir -p ~/.docker/cli-plugins
+          ln -sfn "$(brew --prefix)/opt/docker-compose/bin/docker-compose" ~/.docker/cli-plugins/docker-compose
+          cp -r examples/saas-trial-demo "$RUNNER_TEMP/demo" && cd "$RUNNER_TEMP/demo"
+          rm chronostack.yml
+          chronostack init
+          chronostack config | grep -q "is valid"
+
   release:
     name: Draft GitHub Release
-    needs: [meta, smoke]
+    needs: [meta, smoke, smoke-macos]
     if: needs.meta.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
