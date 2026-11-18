@@ -100,7 +100,7 @@ Reference: `clock_gettime(2)`: https://man7.org/linux/man-pages/man2/clock_getti
 **[Recommendation]** Never virtualize monotonic clocks in v0.1. Make scheduled work happen through:
 
 * **Polling schedulers** — supported with a measured per-library "minimum dwell".
-* **Triggers** — `chronostack.yml` declares commands/HTTP calls executed at each step (deterministic, any language).
+* **Triggers** — `chronostack.yml` declares commands/HTTP calls executed at each step (reproducible, any language).
 * **SDK adapters** — opt-in in-process integrations (Node first).
 
 And make advancement *acknowledged*: after each step, wait on a **barrier** (SQL/Redis/HTTP condition) rather than a fixed sleep.
