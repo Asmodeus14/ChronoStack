@@ -98,12 +98,14 @@ enum Cmd {
     },
     /// Move virtual time forward, running scheduled triggers and waiting on barriers.
     ///
-    /// Examples: `advance 25h`, `advance 14d --step 1d`, `advance --to 2026-12-01T03:00:00Z`.
+    /// Examples: `advance 25h`, `advance 14d --step 1d`, `advance --to 2026-12-01T03:00:00Z`,
+    /// `advance --to 2026-12-01`.
     Advance {
         /// How far to move, e.g. `25h`, `14d`, `1h30m`.
         #[arg(required_unless_present = "to", conflicts_with = "to")]
         duration: Option<String>,
-        /// Move to an absolute UTC time instead (RFC 3339, e.g. 2026-12-01T03:00:00Z).
+        /// Move to an absolute time instead (RFC 3339, e.g. 2026-12-01T03:00:00Z; an offset such as
+        /// 2026-12-01T09:00:00+05:30 is converted to UTC; a plain date such as 2026-12-01 is midnight UTC).
         #[arg(long)]
         to: Option<String>,
         /// Stop every STEP (e.g. `1d`): runs step triggers and barriers each time.

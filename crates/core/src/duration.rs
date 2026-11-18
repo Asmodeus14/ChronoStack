@@ -123,16 +123,25 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// Parse an RFC 3339 UTC timestamp: `2026-11-14T03:00:00Z` (seconds optional,
-/// `Z` or `+00:00` required) into Unix nanoseconds.
+/// Parse an RFC 3339 timestamp into Unix nanoseconds (UTC): `2026-11-14T03:00:00Z`
+/// (seconds optional), a time with an offset, `2026-11-14T08:30:00+05:30`
+/// (converted to UTC), or a plain date, `2026-11-14` (midnight UTC). A time
+/// needs its `Z` or offset.
 pub fn parse_utc(input: &str) -> Result<i64, String> {
-    let bad = || format!("invalid timestamp `{input}`: expected e.g. 2026-11-14T03:00:00Z (UTC)");
+    let bad = || {
+        format!(
+            "invalid timestamp `{input}`: expected e.g. 2026-11-14T03:00:00Z (UTC), \
+             2026-11-14T08:30:00+05:30 (with an offset) or 2026-11-14 (midnight UTC)"
+        )
+    };
     let s = input.trim();
-    let s = s
-        .strip_suffix('Z')
-        .or_else(|| s.strip_suffix("+00:00"))
-        .ok_or_else(bad)?;
-    let (date, time) = s.split_once('T').ok_or_else(bad)?;
+    let (date, tod, offset) = match s.split_once('T') {
+        None => (s, 0, 0),
+        Some((date, rest)) => {
+            let (time, offset) = split_offset(rest).ok_or_else(bad)?;
+            (date, parse_time_of_day(time).map_err(|_| bad())?, offset)
+        }
+    };
     let d: Vec<&str> = date.split('-').collect();
     if d.len() != 3 {
         return Err(bad());
@@ -145,8 +154,28 @@ pub fn parse_utc(input: &str) -> Result<i64, String> {
     if !(1..=12).contains(&m) || day == 0 || day > days_in_month(y, m) {
         return Err(bad());
     }
-    let tod = parse_time_of_day(time).map_err(|_| bad())?;
-    Ok(days_from_civil(y, m, day) * 86_400 * NS + tod)
+    Ok(days_from_civil(y, m, day) * 86_400 * NS + tod - offset)
+}
+
+/// Split a time's zone off: `03:00Z` or `03:00+00:00` (also `-HH:MM`) give the
+/// time and the offset from UTC in nanoseconds.
+fn split_offset(s: &str) -> Option<(&str, i64)> {
+    if let Some(time) = s.strip_suffix('Z') {
+        return Some((time, 0));
+    }
+    let (time, zone) = s.split_at_checked(s.len().checked_sub(6)?)?;
+    let sign = match zone.as_bytes()[0] {
+        b'+' => 1,
+        b'-' => -1,
+        _ => return None,
+    };
+    let (h, m) = zone[1..].split_once(':')?;
+    let two_digits = |p: &str| p.len() == 2 && p.bytes().all(|b| b.is_ascii_digit());
+    if !two_digits(h) || !two_digits(m) {
+        return None;
+    }
+    let (h, m): (i64, i64) = (h.parse().ok()?, m.parse().ok()?);
+    (h <= 23 && m <= 59).then_some((time, sign * (h * 3600 + m * 60) * NS))
 }
 
 /// Parse `HH:MM` or `HH:MM:SS` (UTC time of day) into nanoseconds after midnight.
@@ -248,7 +277,6 @@ mod tests {
             parse_utc("2026-11-14T03:00:00+00:00").unwrap()
         );
         for bad in [
-            "2026-11-14",
             "2026-11-14T03:00:00",
             "2026-02-30T00:00:00Z",
             "2026-13-01T00:00:00Z",
@@ -257,6 +285,69 @@ mod tests {
         ] {
             assert!(parse_utc(bad).is_err(), "accepted {bad}");
         }
+    }
+
+    #[test]
+    fn a_plain_date_is_midnight_utc() {
+        assert_eq!(
+            parse_utc("2026-12-01").unwrap(),
+            parse_utc("2026-12-01T00:00:00Z").unwrap()
+        );
+        assert_eq!(
+            format_utc(parse_utc("2028-02-29").unwrap()),
+            "2028-02-29T00:00:00Z"
+        );
+        assert_eq!(
+            parse_utc(" 2026-12-01 ").unwrap(),
+            parse_utc("2026-12-01").unwrap()
+        );
+        for bad in [
+            "2026-02-30",
+            "2027-02-29",
+            "2026-13-01",
+            "2026-00-10",
+            "2026-12",
+            "2026-12-01-02",
+        ] {
+            assert!(parse_utc(bad).is_err(), "accepted {bad}");
+        }
+    }
+
+    #[test]
+    fn an_offset_is_converted_to_utc() {
+        let utc = |s: &str| format_utc(parse_utc(s).unwrap());
+        assert_eq!(utc("2026-12-01T09:00:00+05:30"), "2026-12-01T03:30:00Z");
+        assert_eq!(utc("2026-12-01T09:00:00-08:00"), "2026-12-01T17:00:00Z");
+        assert_eq!(utc("2026-12-01T09:00+05:30"), "2026-12-01T03:30:00Z");
+        assert_eq!(utc("2026-01-01T00:30:00+01:00"), "2025-12-31T23:30:00Z");
+        assert_eq!(utc("2026-12-31T20:00:00-05:00"), "2027-01-01T01:00:00Z");
+        assert_eq!(utc("2026-12-01T09:00:00-00:00"), "2026-12-01T09:00:00Z");
+        assert_eq!(utc("2026-12-01T09:00:00+14:00"), "2026-11-30T19:00:00Z");
+        assert_eq!(
+            parse_utc("2026-12-01T09:00:00+00:00").unwrap(),
+            parse_utc("2026-12-01T09:00:00Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn a_malformed_offset_is_an_error() {
+        for bad in [
+            "2026-12-01T09:00:00+5:30",
+            "2026-12-01T09:00:00+0530",
+            "2026-12-01T09:00:00+05",
+            "2026-12-01T09:00:00+05:60",
+            "2026-12-01T09:00:00+24:00",
+            "2026-12-01T09:00:00+05:30:00",
+            "2026-12-01T09:00:00+05:+5",
+            "2026-12-01T+05:30",
+            "2026-12-01+05:30",
+            "2026-12-01T09:00:00+05:30Z",
+            "2026-12-01T09:00:00+٠٥:٣٠",
+        ] {
+            assert!(parse_utc(bad).is_err(), "accepted {bad}");
+        }
+        let message = parse_utc("2026-12-01T09:00:00+5:30").unwrap_err();
+        assert!(message.contains("2026-12-01T09:00:00+5:30") && message.contains("+05:30"));
     }
 
     #[test]
