@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../../docs/schema/chronostack.schema.json
+# ChronoStack settings for the Sidekiq example.
+version: 1
+
+# No trigger is needed: Sidekiq's scheduled-job poller compares job times with
+# the (virtual) wall clock, so the job that was scheduled with perform_in runs
+# by itself once the clock passes its time.
+barriers:
+  # Wait at each stop until the queues are empty, no scheduled or retry job is
+  # due and no job is running.
+  - name: sidekiq-idle
+    sidekiq: { service: redis }
