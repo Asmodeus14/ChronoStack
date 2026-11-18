@@ -478,9 +478,6 @@ fn run(cli: Cli) -> Result<i32> {
     }
 }
 
-/// Connect to clockd. Docker may assign a new random host port when the
-/// controller container restarts (found by the M1 e2e test), so if the stored
-/// port does not answer, re-resolve it once and persist the new one.
 /// Load `chronostack.yml` from the current directory, if present.
 fn load_config(s: &Session) -> Result<config::Resolved> {
     let services: Vec<String> = s.services.iter().map(|e| e.plan.service.clone()).collect();
@@ -490,6 +487,9 @@ fn load_config(s: &Session) -> Result<config::Resolved> {
     }
 }
 
+/// Connect to clockd. Docker may assign a new random host port when the
+/// controller container restarts (found by the M1 e2e test), so if the stored
+/// port does not answer, re-resolve it once and persist the new one.
 fn client(s: &mut Session) -> Client {
     let c = Client::new(s.base_url(), s.token.clone());
     if c.clock().is_ok() {
