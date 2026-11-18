@@ -45,4 +45,4 @@ The query returns three rows, one on each of the next three days:
 
 Without `--step`, `chronostack advance 3d` adds a single row.
 
-The run time (`16:12` above) is when the clock landed, not 03:00: beat sends a missed job when it notices the jump (see the [guide](../../docs/GUIDE.md#4-make-your-scheduled-jobs-run)). To land just after 03:00, use `advance: { to: next 03:01 }` with `step: 1d` in `chronostack.yml`.
+The run time (`16:12` above) is when the clock landed, not 03:00: beat sends a missed job when it notices the jump (see the [guide](../../docs/GUIDE.md#4-make-your-scheduled-jobs-run)). To land each stop just after 03:00 instead, see the guide.
