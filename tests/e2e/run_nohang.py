@@ -3,10 +3,13 @@
 
 Starts tests/e2e/nohang with `chronostack up --wait`, moves virtual time to
 +1 day, +30 days, +365 days and then freezes it. At each point every runtime
-(C glibc/musl, Python 3.10/3.12/3.12-alpine, Node 22 slim/alpine, JVM 21) runs
+(C glibc/musl, Python 3.10/3.12/3.12-alpine, Node 22 slim/alpine, JVM 21/17,
+Ruby 3.3, PHP 8.3, .NET 8) runs
 its wait primitives with an absolute deadline of "virtual now + 1 s". Each wait
 must return after 0.9-2.5 s of real time; a hang means the shim's deadline
-translation is broken on this architecture.
+translation is broken on this architecture. Before the waits, each language
+runtime's own wall clock must read virtual time (within 5 s), so a runtime
+that isn't virtualized at all can't pass by never hanging.
 
 Usage: python tests/e2e/run_nohang.py [--cli PATH]
 """
@@ -37,6 +40,23 @@ SUITES = [
     ("node22", "node22", ["node", "/t/t.js", "nohang"]),
     ("node22-alpine", "node22-alpine", ["node", "/t/t.js", "nohang"]),
     ("jvm21", "jvm21", ["java", "/t/Test.java", "nohang"]),
+    ("jvm17", "jvm17", ["java", "/t/Test.java", "nohang"]),
+    ("ruby3.3", "ruby33", ["ruby", "/t/t.rb"]),
+    ("php8.3", "php83", ["php", "/t/t.php"]),
+    ("dotnet8", "dotnet8", ["dotnet", "/app/nohang.dll"]),
+]
+
+
+# Language-level wall-clock reads: (service, command, JSON field in epoch seconds).
+NOW = [
+    ("python3.10", "py310", ["python", "/t/t.py", "now"], "time"),
+    ("python3.12-alpine", "py312-alpine", ["python", "/t/t.py", "now"], "time"),
+    ("node22", "node22", ["node", "/t/t.js", "now"], "now"),
+    ("jvm21", "jvm21", ["java", "/t/Test.java", "now"], "currentTimeMillis"),
+    ("jvm17", "jvm17", ["java", "/t/Test.java", "now"], "currentTimeMillis"),
+    ("ruby3.3", "ruby33", ["ruby", "/t/t.rb", "now"], "now"),
+    ("php8.3", "php83", ["php", "/t/t.php", "now"], "now"),
+    ("dotnet8", "dotnet8", ["dotnet", "/app/nohang.dll", "now"], "now"),
 ]
 
 
@@ -79,6 +99,22 @@ def main():
                 fails.append(f"{label}: `{' '.join(cmd)}` failed: {(err or out)[-300:]}")
                 break
             print(f"\n=== {label}", flush=True)
+            if label == "+1d":
+                rc, out, _ = sh([cli, "now", "--json"])
+                virtual = json.loads(out.strip().splitlines()[-1])["virtual_ns"] / 1e9
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    seen = list(pool.map(lambda n: (n, exec_in(n[1], n[2])), NOW))
+                for (area, _svc, _cmd, field), (rc, out, err) in seen:
+                    try:
+                        got = float(json.loads(out.strip().splitlines()[-1])[field])
+                    except (ValueError, KeyError, IndexError):
+                        fails.append(f"{label} {area}: wall clock not readable (rc={rc}) {(err or out).strip()[-200:]}")
+                        continue
+                    off = got - virtual
+                    ok = abs(off) <= 5
+                    print(f"  {area:18} wall clock {'virtual' if ok else 'NOT VIRTUAL'} ({off:+.1f}s)", flush=True)
+                    if not ok:
+                        fails.append(f"{label} {area}: wall clock is {off:+.0f}s from virtual time")
             with ThreadPoolExecutor(max_workers=4) as pool:
                 results = list(pool.map(lambda s: (s[0], exec_in(s[1], s[2])), SUITES))
             for area, (rc, out, err) in results:

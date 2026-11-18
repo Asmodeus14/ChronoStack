@@ -1,8 +1,9 @@
 //! Resolved Compose model (from `docker compose config --format json`) and
 //! generation of the ChronoStack override file.
 //!
-//! The override is written as JSON, which is valid YAML, so Compose accepts it
-//! as an extra `-f` file. User files are never modified.
+//! The override is built here as JSON and written as YAML by the CLI
+//! (`crates/cli/src/yaml.rs`), so it can carry Compose's `!reset` tag; Compose
+//! reads it as an extra `-f` file. User files are never modified.
 
 use std::collections::BTreeMap;
 

@@ -49,3 +49,26 @@ services:
     image: eclipse-temurin:21-jdk
     command: ["sleep", "infinity"]
     volumes: [../../../spike/tests/java:/t:ro]
+  jvm17:
+    image: eclipse-temurin:17-jdk
+    command: ["sleep", "infinity"]
+    volumes: [../../../spike/tests/java:/t:ro]
+  ruby33:
+    image: ruby:3.3-slim
+    command: ["sleep", "infinity"]
+    volumes: [./ruby:/t:ro]
+  php83:
+    image: php:8.3-cli
+    command: ["sleep", "infinity"]
+    volumes: [./php:/t:ro]
+  dotnet8:
+    build:
+      context: ./dotnet
+      dockerfile_inline: |
+        FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+        WORKDIR /src
+        COPY nohang.csproj Program.cs ./
+        RUN dotnet publish -c Release -o /app
+        FROM mcr.microsoft.com/dotnet/runtime:8.0
+        COPY --from=build /app /app
+    command: ["sleep", "infinity"]

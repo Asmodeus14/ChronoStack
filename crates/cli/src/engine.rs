@@ -56,6 +56,9 @@ pub struct Options {
 
 /// Upper bound on pg_cron stops with `--pg-cron-all` (each costs about 1.2 s).
 const PG_CRON_ALL_MAX_STOPS: usize = 2_000;
+/// Occurrences enumerated per pg_cron job. Higher than `PG_CRON_ALL_MAX_STOPS`
+/// so that limit's error can report how many stops the span really needs.
+const PG_CRON_OCCURRENCES_PER_JOB: usize = 5_000;
 
 /// A wildcard pg_cron job: how often it is due versus how often it will run.
 #[derive(Debug, Clone, Serialize)]
@@ -211,7 +214,7 @@ fn pg_cron_plan(
             if cron.wildcard {
                 wildcards.push((schedule.to_string(), cron.clone()));
             }
-            match cron.occurrences(from, to, PG_CRON_ALL_MAX_STOPS.max(5_000)) {
+            match cron.occurrences(from, to, PG_CRON_OCCURRENCES_PER_JOB) {
                 Ok(occ) => pinned.extend(occ.into_iter().map(|t| t + 1_000_000_000)),
                 Err(e) => return hourly(format!("{svc}: schedule `{schedule}`: {e}")),
             }

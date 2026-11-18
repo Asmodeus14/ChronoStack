@@ -17,3 +17,9 @@ services:
   apscheduler:
     build: ./apscheduler
     command: ["python", "-u", "job.py"]
+  spring:
+    build: ./spring
+  laravel:
+    build: ./laravel
+  sidekiqcron:
+    build: ./sidekiq-cron
