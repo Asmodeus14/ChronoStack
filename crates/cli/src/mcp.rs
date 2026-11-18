@@ -68,7 +68,7 @@ fn schema(props: Value, required: &[&str]) -> Value {
 
 fn tools() -> Vec<Value> {
     let none = json!({ "type": "object", "additionalProperties": false });
-    let when = "`now`, `+<duration>` (e.g. +2d, +1h30m), `next HH:MM` (UTC) or a UTC time like 2026-12-01T09:00:00Z";
+    let when = "`now`, `+<duration>` (e.g. +2d, +1h30m), `next HH:MM` (UTC), a UTC time like 2026-12-01T09:00:00Z (or with an offset, 2026-12-01T09:00:00+05:30) or a date like 2026-12-01 (midnight UTC)";
     vec![
         json!({ "name": "clock_status", "title": "Clock status",
             "description": "Current virtual and real time, the offset between them, and whether the clock is frozen.",

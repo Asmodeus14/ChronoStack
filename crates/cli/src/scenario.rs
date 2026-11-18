@@ -4,7 +4,7 @@
 //! version: 1
 //! name: Trial expires and the webhook survives an outage
 //! steps:
-//!   - advance: { to: next 00:00 }                # now, +<dur>, next HH:MM or a UTC time
+//!   - advance: { to: next 00:00 }                # now, +<dur>, next HH:MM, a date or a UTC time
 //!   - name: sign up
 //!     exec: { service: api, command: [node, scripts/call.js, signup, a@example.com] }
 //!   - fault: { target: webhooks, from: +14d2h, for: 4h }

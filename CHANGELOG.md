@@ -11,6 +11,7 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ### Added
 
+- `chronostack advance --to` and fault windows (`--from`, `--until`, and scenario `advance: { to: ... }`) accept a plain date (`2026-12-01`, midnight UTC) and a UTC offset (`2026-12-01T09:00:00+05:30`, converted to UTC), as well as `Z`. A time without a `Z` or an offset is still an error.
 - `chronostack run --junit <path>` also writes the scenario result as JUnit XML for CI test reporters. Each step is a test case: a failed step becomes a `<failure>` with its evidence, steps after it are `<skipped>`, and the run ID and virtual start and end times are recorded as properties.
 - `mcp.max_wall` in `chronostack.yml` (default `10m`): an MCP tool call that is still running after this much real time is stopped and returns an error, so a barrier that never clears can't leave an AI agent waiting indefinitely.
 

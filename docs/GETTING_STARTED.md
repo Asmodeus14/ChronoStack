@@ -153,7 +153,7 @@ Now `chronostack advance 7d` runs `nightly-job` 7 times, each at its own virtual
 | `chronostack now` | Virtual time, real time and the difference |
 | `chronostack advance 14d` | Move forward 14 days, running your triggers at their virtual times |
 | `chronostack advance 14d --dry-run` | Show what would run, without moving the clock |
-| `chronostack advance --to 2026-12-01T00:00:00Z` | Move forward to an exact time (UTC) |
+| `chronostack advance --to 2026-12-01T00:00:00Z` | Move forward to an exact time (UTC, a UTC offset like `+05:30`, or a plain date for midnight UTC) |
 | `chronostack freeze` / `unfreeze` | Stop and restart virtual time |
 | `chronostack fault set <proxy> --from +1d --for 2h` | Make an HTTP dependency "down" during a virtual window ([how](GUIDE.md#6-outages-for-http-dependencies)) |
 | `chronostack events` | What happened: clock moves, outages, proxied requests |

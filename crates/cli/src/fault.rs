@@ -67,7 +67,8 @@ pub fn plan(project: &Project, proxies: &[ProxyCfg]) -> Result<ProxyPlan> {
 }
 
 /// A point in virtual time: `now`, `+<duration>` (from now), `next HH:MM`
-/// (next UTC time of day, strictly after now) or an RFC 3339 UTC timestamp.
+/// (next UTC time of day, strictly after now), an RFC 3339 timestamp (a `Z` or an
+/// offset such as `+05:30`) or a plain date (midnight UTC).
 pub fn parse_when(s: &str, now: i64) -> Result<i64> {
     let s = s.trim();
     if s == "now" {
@@ -85,7 +86,9 @@ pub fn parse_when(s: &str, now: i64) -> Result<i64> {
         ));
     }
     parse_utc(s).map_err(|e| {
-        anyhow::anyhow!("`{s}`: expected `now`, `+<duration>`, `next HH:MM` or a UTC time ({e})")
+        anyhow::anyhow!(
+            "`{s}`: expected `now`, `+<duration>`, `next HH:MM`, a date or a timestamp ({e})"
+        )
     })
 }
 
@@ -228,6 +231,14 @@ mod tests {
         assert_eq!(
             parse_when("2026-12-01T00:00:00Z", now).unwrap(),
             parse_utc("2026-12-01T00:00:00Z").unwrap()
+        );
+        assert_eq!(
+            parse_when("2026-12-01", now).unwrap(),
+            parse_utc("2026-12-01T00:00:00Z").unwrap()
+        );
+        assert_eq!(
+            format_utc(parse_when("2026-12-01T09:00:00+05:30", now).unwrap()),
+            "2026-12-01T03:30:00Z"
         );
         assert!(parse_when("tomorrow", now).is_err());
         assert_eq!(
