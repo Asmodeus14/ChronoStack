@@ -301,7 +301,7 @@
         </div>
         <div class="mech-text">
           <h3 data-reveal>One clock for every service.</h3>
-          <p data-reveal>A small C library loaded with <code>LD_PRELOAD</code> makes wall-clock reads (<code>now()</code>, <code>Date.now()</code>, <code>time.time()</code>, Redis expiry) return virtual time. It adds about 13&nbsp;ns per read. Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so the timed waits behind locks and timeouts return on time instead of hanging (tested nightly in C, Python, Node and the JVM).</p>
+          <p data-reveal>A small C library loaded with <code>LD_PRELOAD</code> makes wall-clock reads (<code>now()</code>, <code>Date.now()</code>, <code>time.time()</code>, Redis expiry) return virtual time. It adds about 12&ndash;16&nbsp;ns per read in C and 10&ndash;26&nbsp;ns in Python and Node, measured on three machines (<a href="https://github.com/Asmodeus14/ChronoStack/tree/main/bench">benchmarks</a>). Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so the timed waits behind locks and timeouts return on time instead of hanging (tested nightly in C, Python, Node and the JVM).</p>
         </div>
       </article>
 

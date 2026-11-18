@@ -1,0 +1,1257 @@
+{
+ "bench": "B1 clock-read overhead",
+ "unit": "ns per wall-clock read",
+ "reps": 10,
+ "iterations": {
+  "c": {
+   "default": 10000000,
+   "libfaketime-nocache-file": 200000
+  },
+  "python": {
+   "default": 2000000,
+   "libfaketime-nocache-file": 100000
+  },
+  "node": {
+   "default": 10000000,
+   "libfaketime-nocache-file": 200000
+  }
+ },
+ "environment": {
+  "date_utc": "2026-11-18T13:39:25Z",
+  "host": {
+   "os": "Linux-7.0.0-1017-azure-aarch64-with-glibc2.39",
+   "machine": "aarch64",
+   "python": "3.12.3"
+  },
+  "chronostack": "chronostack 0.1.0-alpha.6",
+  "git_commit": "eaeed0c891b2297bc88064995ce1e484a044fe51",
+  "docker": "28.0.4 (linux/arm64)",
+  "docker_context": "default",
+  "linux": {
+   "cpus": 4,
+   "cpu_model": "0xd49",
+   "kernel": "7.0.0-1017-azure",
+   "mem_kib": 16324144,
+   "libfaketime_deb": "0.9.10-2.1"
+  }
+ },
+ "samples": {
+  "c": {
+   "native": [
+    30.881,
+    30.869,
+    30.881,
+    30.883,
+    30.876,
+    30.872,
+    30.873,
+    30.871,
+    30.87,
+    30.879
+   ],
+   "chronostack": [
+    43.623,
+    44.411,
+    44.088,
+    44.071,
+    44.365,
+    44.36,
+    44.092,
+    44.469,
+    44.418,
+    44.385
+   ],
+   "libfaketime": [
+    71.726,
+    72.231,
+    71.892,
+    71.792,
+    71.762,
+    71.628,
+    72.109,
+    72.195,
+    72.444,
+    71.755
+   ],
+   "libfaketime-nocache-file": [
+    3760.69,
+    3765.14,
+    3765.817,
+    3778.044,
+    3762.423,
+    3764.572,
+    3751.762,
+    3777.035,
+    3766.546,
+    3771.497
+   ]
+  },
+  "python": {
+   "native": [
+    64.5776575,
+    64.5450245,
+    64.536429,
+    64.491023,
+    64.8610535,
+    64.5103825,
+    64.5466165,
+    64.62174,
+    64.4279845,
+    64.506573
+   ],
+   "chronostack": [
+    83.2542175,
+    83.439869,
+    83.570424,
+    83.2889055,
+    83.31742,
+    83.22916,
+    83.2939005,
+    83.369018,
+    83.428577,
+    83.460416
+   ],
+   "libfaketime": [
+    114.8845715,
+    110.3355535,
+    110.868629,
+    111.0222965,
+    110.9481515,
+    111.651153,
+    110.4308465,
+    110.3817355,
+    110.9452175,
+    111.363827
+   ],
+   "libfaketime-nocache-file": [
+    3929.39895,
+    3932.69953,
+    3924.23369,
+    3899.12051,
+    3886.90324,
+    4049.47252,
+    3896.22992,
+    3903.05887,
+    3906.98519,
+    3930.30575
+   ]
+  },
+  "node": {
+   "native": [
+    50.3971396,
+    50.2721304,
+    51.2809709,
+    51.0348278,
+    50.9664501,
+    50.257351,
+    50.3460881,
+    50.3760652,
+    50.4467492,
+    50.3973142
+   ],
+   "chronostack": [
+    71.8861537,
+    71.5736526,
+    71.9670486,
+    71.9382098,
+    73.1031967,
+    71.9443564,
+    71.8295189,
+    71.9019948,
+    71.580994,
+    71.5039222
+   ],
+   "libfaketime": [
+    95.7710358,
+    96.1836285,
+    96.3938682,
+    96.2279279,
+    97.6689298,
+    96.2638938,
+    96.6512388,
+    96.1943301,
+    96.070958,
+    95.902666
+   ],
+   "libfaketime-nocache-file": [
+    3988.98761,
+    4009.032485,
+    3996.897685,
+    4025.09585,
+    3989.828305,
+    4002.643815,
+    4017.389815,
+    4064.416095,
+    4125.50511,
+    4043.73727
+   ]
+  }
+ },
+ "summary": {
+  "c": {
+   "native": {
+    "n": 10,
+    "median": 30.8745,
+    "p10": 30.8699,
+    "p90": 30.8812,
+    "min": 30.869,
+    "max": 30.883
+   },
+   "chronostack": {
+    "n": 10,
+    "median": 44.3625,
+    "p10": 44.026199999999996,
+    "p90": 44.4231,
+    "min": 43.623,
+    "max": 44.469
+   },
+   "libfaketime": {
+    "n": 10,
+    "median": 71.842,
+    "p10": 71.7162,
+    "p90": 72.25229999999999,
+    "min": 71.628,
+    "max": 72.444
+   },
+   "libfaketime-nocache-file": {
+    "n": 10,
+    "median": 3765.4785,
+    "p10": 3759.7972,
+    "p90": 3777.1358999999998,
+    "min": 3751.762,
+    "max": 3778.044
+   }
+  },
+  "python": {
+   "native": {
+    "n": 10,
+    "median": 64.54072675,
+    "p10": 64.48471915,
+    "p90": 64.64567135,
+    "min": 64.4279845,
+    "max": 64.8610535
+   },
+   "chronostack": {
+    "n": 10,
+    "median": 83.343219,
+    "p10": 83.25171175,
+    "p90": 83.4714168,
+    "min": 83.22916,
+    "max": 83.570424
+   },
+   "libfaketime": {
+    "n": 10,
+    "median": 110.9466845,
+    "p10": 110.37711730000001,
+    "p90": 111.97449485,
+    "min": 110.3355535,
+    "max": 114.8845715
+   },
+   "libfaketime-nocache-file": {
+    "n": 10,
+    "median": 3915.60944,
+    "p10": 3895.2972520000003,
+    "p90": 3944.376829,
+    "min": 3886.90324,
+    "max": 4049.47252
+   }
+  },
+  "node": {
+   "native": {
+    "n": 10,
+    "median": 50.3972269,
+    "p10": 50.27065246,
+    "p90": 51.05944211,
+    "min": 50.257351,
+    "max": 51.2809709
+   },
+   "chronostack": {
+    "n": 10,
+    "median": 71.89407424999999,
+    "p10": 71.56667956,
+    "p90": 72.08066341,
+    "min": 71.5039222,
+    "max": 73.1031967
+   },
+   "libfaketime": {
+    "n": 10,
+    "median": 96.211129,
+    "p10": 95.88950298,
+    "p90": 96.7530079,
+    "min": 95.7710358,
+    "max": 97.6689298
+   },
+   "libfaketime-nocache-file": {
+    "n": 10,
+    "median": 4013.21115,
+    "p10": 3989.7442355,
+    "p90": 4070.5249965,
+    "min": 3988.98761,
+    "max": 4125.50511
+   }
+  }
+ },
+ "clock_checks_passed": true,
+ "clock_checks": [
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 0,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 0,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 0,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 0,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 0,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 0,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 0,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 0,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 0,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 0,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 0,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 0,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 1,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 1,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 1,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 1,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 1,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 1,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 1,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 1,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 1,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 1,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 1,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 1,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 2,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 2,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 2,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 2,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 2,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 2,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 2,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 2,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 2,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 2,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 2,
+   "offset_s": 0.7,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 2,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 3,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 3,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 3,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 3,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 3,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 3,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 3,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 3,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 3,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 3,
+   "offset_s": 0.7,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 3,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 3,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 4,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 4,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 4,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 4,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 4,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 4,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 4,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 4,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 4,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 4,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 4,
+   "offset_s": 86401.2,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 4,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 5,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 5,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 5,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 5,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 5,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 5,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 5,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 5,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 5,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 5,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 5,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 5,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 6,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 6,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 6,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 6,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 6,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 6,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 6,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 6,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 6,
+   "offset_s": 86401.2,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 6,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 6,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 6,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 7,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 7,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 7,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 7,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 7,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 7,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 7,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 7,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 7,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 7,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 7,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 7,
+   "offset_s": 86401.2,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 8,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 8,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 8,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 8,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 8,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 8,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 8,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 8,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 8,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 8,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 8,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 8,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "chronostack",
+   "rep": 9,
+   "offset_s": 172800.6,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime",
+   "rep": 9,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "libfaketime-nocache-file",
+   "rep": 9,
+   "offset_s": 86400.9,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "c",
+   "config": "native",
+   "rep": 9,
+   "offset_s": 0.4,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "chronostack",
+   "rep": 9,
+   "offset_s": 172800.3,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime",
+   "rep": 9,
+   "offset_s": 86400.4,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "libfaketime-nocache-file",
+   "rep": 9,
+   "offset_s": 86400.5,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "python",
+   "config": "native",
+   "rep": 9,
+   "offset_s": 0.3,
+   "expected_offset_s": 0,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "chronostack",
+   "rep": 9,
+   "offset_s": 172800.9,
+   "expected_offset_s": 172800,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime",
+   "rep": 9,
+   "offset_s": 86401.1,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "libfaketime-nocache-file",
+   "rep": 9,
+   "offset_s": 86401.0,
+   "expected_offset_s": 86400,
+   "ok": true
+  },
+  {
+   "runtime": "node",
+   "config": "native",
+   "rep": 9,
+   "offset_s": 0.6,
+   "expected_offset_s": 0,
+   "ok": true
+  }
+ ]
+}

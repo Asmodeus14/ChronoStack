@@ -76,7 +76,7 @@ flowchart LR
   CLI -- "triggers · barriers · probes" --> SVC
 ```
 
-1. **One clock for every service.** A small C library loaded with `LD_PRELOAD` makes wall-clock reads (`now()`, `Date.now()`, `time.time()`, Redis expiry) return virtual time. It adds about 13 ns per read. Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so the timed waits behind locks and timeouts return on time instead of hanging. That's checked in C, Python, Node and the JVM ([results](docs/M0_RESULTS.md)), and re-run every night in CI.
+1. **One clock for every service.** A small C library loaded with `LD_PRELOAD` makes wall-clock reads (`now()`, `Date.now()`, `time.time()`, Redis expiry) return virtual time. It adds about 12–16 ns per read in C and 10–26 ns in Python and Node, measured on three machines ([benchmarks](bench/README.md)). Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so the timed waits behind locks and timeouts return on time instead of hanging. That's checked in C, Python, Node and the JVM ([results](docs/M0_RESULTS.md)), and re-run every night in CI.
 2. **Moving the clock runs your scheduled work.** Changing the clock doesn't fire timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So `advance` stops at each interesting virtual time, runs the **triggers** you declare (e.g. "the nightly job at 03:00"), and waits on **barriers** (e.g. "the queue is empty") before moving on. pg_cron is detected and handled automatically.
 3. **Everything is verified.** After each advance, every service is probed to confirm it sees the new time, and `doctor` explains anything it can't reach.
 

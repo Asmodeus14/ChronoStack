@@ -7,6 +7,18 @@ These are reproducible measurements behind the performance numbers in the README
 | Folder | Machine | B1 | B2 |
 |---|---|---|---|
 | [2026-11-18-windows11-wsl2-ryzen7840hs](results/2026-11-18-windows11-wsl2-ryzen7840hs/README.md) | Windows 11 laptop, Docker Desktop (WSL2), AMD Ryzen 7 7840HS | ✅ | ✅ |
+| [2026-11-18-github-ubuntu-latest](results/2026-11-18-github-ubuntu-latest/README.md) | GitHub-hosted runner, x86_64, 4 vCPUs, Intel Xeon Platinum 8573C | ✅ | ✅ |
+| [2026-11-18-github-ubuntu-24.04-arm](results/2026-11-18-github-ubuntu-24.04-arm/README.md) | GitHub-hosted runner, arm64, 4 vCPUs, Arm Neoverse N2 (CPU part `0xd49`) | ✅ | ✅ |
+
+**Summary across the three machines** (median overhead per wall-clock read, compared with native in the same container):
+
+| Runtime | ChronoStack | libfaketime (cached) | libfaketime (file, no cache) |
+|---|---|---|---|
+| C | +12 to +16 ns | +41 to +60 ns | +3.7 to +14 µs |
+| Python | +10 to +26 ns | +40 to +71 ns | +3.7 to +14 µs |
+| Node | +12 to +22 ns | +44 to +68 ns | +3.8 to +15 µs |
+
+`advance 1h` without probes takes 3 ms on the Linux runners and 28 ms under Docker Desktop. With probes it takes 0.15–0.56 s for one service and 0.64–1.16 s for 20.
 
 Runs on GitHub's Linux runners (x86_64 and arm64) can be started from the **Benchmarks** workflow (`.github/workflows/bench.yml`). Each run uploads its results folder as an artifact.
 
