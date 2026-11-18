@@ -40,7 +40,7 @@ triggers:
 
 This one surprised me most. Many APIs take an **absolute** deadline in wall-clock time, for example `sem_timedwait`, `pthread_cond_timedwait`, `pthread_mutex_timedlock`, `clock_nanosleep(..., TIMER_ABSTIME)`, `timerfd` and Java's `LockSupport.parkUntil`. A program computes "now + 1 s" from the *fake* clock and hands that deadline to the kernel. The kernel compares it with the *real* clock. Fourteen days ahead, a one-second wait becomes a fourteen-day wait.
 
-I measured it: with deadline translation off, every one of those APIs hung at +1 day. With the preload library translating absolute deadlines back to real time, all of them return in about a second. That holds in C (glibc and musl), Python, Node and the JVM, at +1 day, +30 days, +365 days and with the clock frozen: 272 of 272 checks, on x86_64 and arm64, every night in CI ([results](../M0_RESULTS.md)). The overhead of the shim is about 12–14 ns per clock read.
+I measured it: with deadline translation off, every one of those APIs hung at +1 day. With the preload library translating absolute deadlines back to real time, all of them return in about a second. That holds in C (glibc and musl), Python, Node and the JVM, at +1 day, +30 days, +365 days and with the clock frozen: 272 of 272 checks, on x86_64 and arm64, every night in CI ([results](../M0_RESULTS.md)). The overhead of the shim is about 12–16 ns per clock read in C, and 10–26 ns in Python and Node ([benchmarks](../../bench/README.md)).
 
 ### 3. pg_cron silently skips jobs after a big jump
 
