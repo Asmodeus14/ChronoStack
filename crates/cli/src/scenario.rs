@@ -24,11 +24,11 @@
 //! later steps. References are checked before the run; reports show the
 //! `${…}` form, not the values.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
-use chronostack_core::duration::{format_utc, parse_duration};
+use chronostack_core::duration::{format_span, format_utc, parse_duration};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -576,6 +576,35 @@ struct StepOutcome {
     output: Option<String>,
 }
 
+/// Refuse an `advance` step that would end more than `cap_ns` past `start_ns`
+/// (the scenario's starting virtual time). `chronostack mcp` sets the cap from
+/// `mcp.max_advance`, so a scenario can't move further than `clock_advance` may.
+fn check_horizon(st: &Step, now_ns: i64, start_ns: i64, cap_ns: i64) -> Result<()> {
+    let Some(a) = &st.advance else {
+        return Ok(());
+    };
+    let by = |d: &str| -> Result<i64> {
+        Ok(now_ns.saturating_add(parse_duration(d).map_err(anyhow::Error::msg)?))
+    };
+    let target = match a {
+        AdvanceStep::By(d) => by(d)?,
+        AdvanceStep::Full(f) => match (&f.by, &f.to) {
+            (Some(b), _) => by(b)?,
+            (_, Some(t)) => fault::parse_when(t, now_ns)?,
+            _ => return Ok(()),
+        },
+    };
+    let span = target.saturating_sub(start_ns);
+    if span > cap_ns {
+        bail!(
+            "refused: this step would move virtual time {} past the scenario start, more than mcp.max_advance ({}); raise it in chronostack.yml if intended",
+            format_span(span),
+            format_span(cap_ns)
+        );
+    }
+    Ok(())
+}
+
 fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Result<StepOutcome> {
     let compose = session.compose();
     let done = |ok: bool, detail: String| StepOutcome {
@@ -776,14 +805,27 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
 }
 
 /// Run a scenario; returns the exit code (0 passed, 6 failed).
+/// How `chronostack run` reports and what it may do.
+#[derive(Debug, Default)]
+pub struct RunOptions {
+    /// Print the report JSON instead of progress.
+    pub json: bool,
+    /// Refuse advance steps that end more than this past the start (MCP cap).
+    pub max_advance_ns: Option<i64>,
+    /// Also write a JUnit XML file here.
+    pub junit: Option<PathBuf>,
+}
+
 pub fn run(
     session: &Session,
     client: &Client,
     cfg: &Resolved,
     path: &Path,
     sc: &Scenario,
-    json_out: bool,
+    opts: &RunOptions,
 ) -> Result<i32> {
+    let json_out = opts.json;
+    let max_advance_ns = opts.max_advance_ns;
     let real_start = real_now();
     let t0 = Instant::now();
     let start = client.clock()?;
@@ -823,7 +865,12 @@ pub fn run(
             None => Ok(st.clone()),
         };
         let mut out = resolved
-            .and_then(|step| run_step(&step, session, client, cfg))
+            .and_then(|step| {
+                if let Some(cap) = max_advance_ns {
+                    check_horizon(&step, before.virtual_ns, start.virtual_ns, cap)?;
+                }
+                run_step(&step, session, client, cfg)
+            })
             .unwrap_or_else(|e| StepOutcome {
                 ok: false,
                 detail: redact(&format!("{e:#}")),
@@ -930,6 +977,10 @@ pub fn run(
     });
     let md = report::markdown(&report);
     let (jp, mp) = report::write(&report, &md, &sc.name, real_start)?;
+    if let Some(j) = &opts.junit {
+        report::write_junit(&report, j)
+            .with_context(|| format!("writing JUnit report {}", j.display()))?;
+    }
     if json_out {
         println!("{report}");
     } else {
@@ -951,6 +1002,9 @@ pub fn run(
             );
         }
         println!("report: {}\n        {}", mp.display(), jp.display());
+        if let Some(j) = &opts.junit {
+            println!("        {}", j.display());
+        }
     }
     Ok(if passed { 0 } else { EXIT_SCENARIO_FAILED })
 }
@@ -1127,5 +1181,25 @@ steps: [{advance: {to: 'tomorrow'}}]",
             let err = format!("{:#}", parse(y).unwrap_err());
             assert!(err.contains(want), "`{y}` gave `{err}`, wanted `{want}`");
         }
+    }
+
+    #[test]
+    fn horizon_cap_counts_from_the_scenario_start() {
+        const D: i64 = 86_400_000_000_000;
+        let step = |y: &str| -> Step { serde_norway::from_str(y).unwrap() };
+        let start = 1_000 * D;
+        // 10d from the start: allowed under a 30d cap.
+        assert!(check_horizon(&step("advance: 10d"), start, start, 30 * D).is_ok());
+        // Already 25d in, another 10d ends 35d past the start: refused.
+        let e = check_horizon(&step("advance: 10d"), start + 25 * D, start, 30 * D).unwrap_err();
+        assert!(e.to_string().contains("mcp.max_advance"), "{e}");
+        // `by` and `to` forms.
+        assert!(check_horizon(&step("advance: {by: 100y}"), start, start, 30 * D).is_err());
+        assert!(check_horizon(&step("advance: {to: +29d}"), start, start, 30 * D).is_ok());
+        assert!(check_horizon(&step("advance: {to: +31d}"), start, start, 30 * D).is_err());
+        // Exactly at the cap is allowed.
+        assert!(check_horizon(&step("advance: 30d"), start, start, 30 * D).is_ok());
+        // Non-advance steps are not affected.
+        assert!(check_horizon(&step("sleep: 1s"), start, start, 0).is_ok());
     }
 }

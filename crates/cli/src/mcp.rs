@@ -9,19 +9,23 @@
 //! Every tool runs this same binary as a subprocess with `--json`, so agents get
 //! exactly the CLI's engine and behaviour, and nothing but MCP messages ever
 //! reaches stdout. The tool set is fixed: no arbitrary commands, only the
-//! triggers declared in `chronostack.yml`; `clock_advance` is capped by
-//! `mcp.max_advance` (default 400 days); scenario files must be inside the
-//! project directory.
+//! triggers declared in `chronostack.yml`; `clock_advance` and the total advance
+//! of `scenario_run` are capped by `mcp.max_advance` (default 400 days); every
+//! tool call is stopped after `mcp.max_wall` of real time (default 10 minutes);
+//! scenario files must be inside the project directory.
 
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use chronostack_core::duration::{format_utc, parse_duration};
+use chronostack_core::duration::{format_span, format_utc, parse_duration};
 use serde_json::{Map, Value, json};
 
 use crate::client::Client;
+use crate::config::{DEFAULT_MCP_MAX_ADVANCE_NS, DEFAULT_MCP_MAX_WALL_NS};
 use crate::fault;
 use crate::session::Session;
 
@@ -35,6 +39,24 @@ clock_advance (runs declared triggers and waits on barriers at each stop) → ev
 inspect → scenario_run for scripted checks. Time only moves forward.";
 
 type RpcError = (i64, String, Option<Value>);
+
+/// Agent limits from the `mcp:` section of `chronostack.yml`.
+#[derive(Debug, Clone, Copy)]
+pub struct Limits {
+    /// Largest `clock_advance`, and largest total advance of a `scenario_run`.
+    pub max_advance_ns: i64,
+    /// Real time one tool call may take before its subprocess is stopped.
+    pub max_wall_ns: i64,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Limits {
+            max_advance_ns: DEFAULT_MCP_MAX_ADVANCE_NS,
+            max_wall_ns: DEFAULT_MCP_MAX_WALL_NS,
+        }
+    }
+}
 
 fn rpc_err(code: i64, msg: impl Into<String>) -> RpcError {
     (code, msg.into(), None)
@@ -105,17 +127,63 @@ fn tools() -> Vec<Value> {
 }
 
 /// Run this binary with `args` (it always ends in `--json`); parse the last JSON line.
-fn cli(args: &[String]) -> Result<(i32, Value, String)> {
+fn cli(args: &[String], max_wall: Duration) -> Result<(i32, Value, String)> {
     let exe = std::env::current_exe()?;
-    let out = Command::new(exe).args(args).stdin(Stdio::null()).output()?;
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    let v = stdout
+    let mut cmd = Command::new(exe);
+    cmd.args(args);
+    run_bounded(&mut cmd, max_wall)
+}
+
+/// Run `cmd`, stopping it after `max_wall`; return (exit code, last JSON line
+/// of stdout or null, trimmed stderr).
+fn run_bounded(cmd: &mut Command, max_wall: Duration) -> Result<(i32, Value, String)> {
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    // Drain both pipes on their own threads so a chatty child can't block on a
+    // full pipe while we wait for it.
+    let drain = |mut r: Box<dyn Read + Send>| {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = r.read_to_end(&mut buf);
+            let _ = tx.send(buf);
+        });
+        rx
+    };
+    let out_rx = drain(Box::new(child.stdout.take().expect("piped")));
+    let err_rx = drain(Box::new(child.stderr.take().expect("piped")));
+    let deadline = Instant::now() + max_wall;
+    let status = loop {
+        if let Some(st) = child.try_wait()? {
+            break st;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!(
+                "stopped after {} of real time (mcp.max_wall). The clock may have moved part of the way: \
+                 check clock_status. Commands it started inside containers may still be running. \
+                 Raise mcp.max_wall in chronostack.yml if this call needs longer",
+                format_span(i64::try_from(max_wall.as_nanos()).unwrap_or(i64::MAX))
+            );
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    // The pipes close when the child exits; a grandchild that inherited them
+    // could keep them open, so don't wait forever for the rest of the output.
+    let grace = Duration::from_secs(5);
+    let stdout = out_rx.recv_timeout(grace).unwrap_or_default();
+    let stderr = err_rx.recv_timeout(grace).unwrap_or_default();
+    let v = String::from_utf8_lossy(&stdout)
         .lines()
         .rev()
         .find_map(|l| serde_json::from_str::<Value>(l.trim()).ok())
         .unwrap_or(Value::Null);
-    Ok((out.status.code().unwrap_or(1), v, stderr))
+    let stderr = String::from_utf8_lossy(&stderr).trim().to_string();
+    Ok((status.code().unwrap_or(1), v, stderr))
 }
 
 fn s(v: &str) -> String {
@@ -131,11 +199,9 @@ fn arg_str<'a>(a: &'a Map<String, Value>, k: &str) -> Result<Option<&'a str>, St
 }
 
 /// Result of one tool call: (structured result, is_error).
-fn call_tool(
-    name: &str,
-    a: &Map<String, Value>,
-    max_advance_ns: i64,
-) -> Result<(Value, bool), String> {
+fn call_tool(name: &str, a: &Map<String, Value>, limits: Limits) -> Result<(Value, bool), String> {
+    let max_advance_ns = limits.max_advance_ns;
+    let max_wall = Duration::from_nanos(u64::try_from(limits.max_wall_ns).unwrap_or(0));
     let known: &[&str] = match name {
         "clock_advance" => &["duration", "to", "step", "dry_run"],
         "fault_set" => &["target", "from", "for", "until", "status"],
@@ -148,7 +214,7 @@ fn call_tool(
         return Err(format!("unknown argument `{k}` for {name}"));
     }
     let run = |args: Vec<String>| -> Result<(Value, bool), String> {
-        let (code, v, err) = cli(&args).map_err(|e| e.to_string())?;
+        let (code, v, err) = cli(&args, max_wall).map_err(|e| e.to_string())?;
         if v.is_null() {
             return Ok((
                 json!({ "error": if err.is_empty() { format!("exit code {code}") } else { err } }),
@@ -237,11 +303,11 @@ fn call_tool(
                 (None, true) => vec![s("fault"), s("clear"), s("--all")],
                 _ => return Err("give exactly one of `id` or `all: true`".into()),
             };
-            let (code, _, err) = cli(&args).map_err(|e| e.to_string())?;
-            let (v, e) = run(vec![s("fault"), s("list"), s("--json")])?;
+            let (code, _, err) = cli(&args, max_wall).map_err(|e| e.to_string())?;
             if code != 0 {
                 return Ok((json!({ "error": err }), true));
             }
+            let (v, e) = run(vec![s("fault"), s("list"), s("--json")])?;
             Ok((json!({ "remaining": v }), e))
         }
         "events_tail" => {
@@ -271,7 +337,13 @@ fn call_tool(
         "scenario_run" => {
             let file = arg_str(a, "file")?.ok_or("`file` is required")?;
             let path = inside_project(file)?;
-            let (v, err) = run(vec![s("run"), path, s("--json")])?;
+            let (v, err) = run(vec![
+                s("run"),
+                path,
+                s("--max-advance-ns"),
+                max_advance_ns.to_string(),
+                s("--json"),
+            ])?;
             if v.get("steps").is_none() {
                 return Ok((v, true));
             }
@@ -330,7 +402,7 @@ fn inside_project(file: &str) -> Result<String, String> {
 struct State {
     /// Legacy version negotiated by `initialize`.
     legacy: Option<String>,
-    max_advance_ns: i64,
+    limits: Limits,
 }
 
 fn meta_version(params: &Value) -> Option<&str> {
@@ -426,7 +498,7 @@ fn handle(st: &mut State, method: &str, params: &Value) -> Result<Value, RpcErro
                 Some(Value::Object(m)) => m,
                 Some(_) => return Err(rpc_err(-32602, "`arguments` must be an object")),
             };
-            let (value, is_error) = match call_tool(name, args, st.max_advance_ns) {
+            let (value, is_error) = match call_tool(name, args, st.limits) {
                 Ok(r) => r,
                 Err(msg) => (json!({ "error": msg }), true),
             };
@@ -475,7 +547,7 @@ fn handle_line(st: &mut State, line: &str) -> Option<Value> {
     })
 }
 
-pub fn serve(max_advance_ns: i64) -> Result<i32> {
+pub fn serve(limits: Limits) -> Result<i32> {
     eprintln!(
         "chronostack mcp: serving on stdio (protocol {MODERN_VERSION}, {}) in {}",
         LEGACY_VERSIONS.join(", "),
@@ -483,7 +555,7 @@ pub fn serve(max_advance_ns: i64) -> Result<i32> {
     );
     let mut st = State {
         legacy: None,
-        max_advance_ns,
+        limits,
     };
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout().lock();
@@ -507,7 +579,10 @@ mod tests {
     fn st() -> State {
         State {
             legacy: None,
-            max_advance_ns: 1,
+            limits: Limits {
+                max_advance_ns: 1,
+                max_wall_ns: DEFAULT_MCP_MAX_WALL_NS,
+            },
         }
     }
 
@@ -646,5 +721,47 @@ mod tests {
         assert!(inside_project("../../etc/passwd").is_err());
         assert!(inside_project("Cargo.toml").is_err(), "not a .yml file");
         assert!(inside_project("does-not-exist.yml").is_err());
+    }
+
+    fn shell(script: &str) -> Command {
+        if cfg!(windows) {
+            let mut c = Command::new("powershell");
+            c.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+            c
+        } else {
+            let mut c = Command::new("sh");
+            c.args(["-c", script]);
+            c
+        }
+    }
+
+    #[test]
+    fn bounded_run_returns_the_last_json_line() {
+        let script = if cfg!(windows) {
+            r#"Write-Output 'progress'; Write-Output '{"ok":true}'; [Console]::Error.WriteLine('note'); exit 4"#
+        } else {
+            r#"echo progress; echo '{"ok":true}'; echo note >&2; exit 4"#
+        };
+        let (code, v, err) = run_bounded(&mut shell(script), Duration::from_secs(60)).unwrap();
+        assert_eq!(code, 4);
+        assert_eq!(v, json!({ "ok": true }));
+        assert_eq!(err, "note");
+    }
+
+    #[test]
+    fn bounded_run_stops_a_slow_command() {
+        let script = if cfg!(windows) {
+            "Start-Sleep -Seconds 30"
+        } else {
+            "sleep 30"
+        };
+        let t = Instant::now();
+        let e = run_bounded(&mut shell(script), Duration::from_millis(500)).unwrap_err();
+        assert!(e.to_string().contains("mcp.max_wall"), "{e}");
+        assert!(
+            t.elapsed() < Duration::from_secs(15),
+            "took {:?}",
+            t.elapsed()
+        );
     }
 }

@@ -50,8 +50,12 @@ pub struct Config {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct McpCfg {
-    /// Largest single `clock_advance` an agent may request (default 400d).
+    /// Largest single `clock_advance` an agent may request, and the largest
+    /// total advance of a `scenario_run` (default 400d).
     pub max_advance: Option<String>,
+    /// Longest real time one MCP tool call may run before it is stopped
+    /// (default 10m).
+    pub max_wall: Option<String>,
 }
 
 /// An HTTP egress target routed through the `clockd` fault proxy.
@@ -195,9 +199,12 @@ pub struct Resolved {
     pub barrier_timeouts_ns: Vec<i64>,
     /// `mcp.max_advance` (default 400 days).
     pub mcp_max_advance_ns: i64,
+    /// `mcp.max_wall` (default 10 minutes).
+    pub mcp_max_wall_ns: i64,
 }
 
 pub const DEFAULT_MCP_MAX_ADVANCE_NS: i64 = 400 * 86_400_000_000_000;
+pub const DEFAULT_MCP_MAX_WALL_NS: i64 = 600_000_000_000;
 
 const DEFAULT_TIMEOUT_NS: i64 = 60_000_000_000;
 const DEFAULT_BARRIER_TIMEOUT_NS: i64 = 30_000_000_000;
@@ -224,6 +231,7 @@ impl Resolved {
             trigger_timeouts_ns: vec![],
             barrier_timeouts_ns: vec![],
             mcp_max_advance_ns: DEFAULT_MCP_MAX_ADVANCE_NS,
+            mcp_max_wall_ns: DEFAULT_MCP_MAX_WALL_NS,
         }
     }
 }
@@ -389,9 +397,17 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
         Some(v) => dur("mcp.max_advance", v)?,
         None => DEFAULT_MCP_MAX_ADVANCE_NS,
     };
+    let mcp_max_wall_ns = match &config.mcp.max_wall {
+        Some(v) => dur("mcp.max_wall", v)?,
+        None => DEFAULT_MCP_MAX_WALL_NS,
+    };
+    if mcp_max_wall_ns <= 0 {
+        bail!("mcp.max_wall must be positive");
+    }
     Ok(Resolved {
         path: None,
         mcp_max_advance_ns,
+        mcp_max_wall_ns,
         config,
         max_jump_ns,
         dwell_ns,
@@ -408,6 +424,18 @@ mod tests {
     fn parse(y: &str) -> Result<Resolved> {
         let c: Config = serde_norway::from_str(y)?;
         validate(c, &["worker".into(), "db".into(), "cache".into()])
+    }
+
+    #[test]
+    fn mcp_limits() {
+        let r = parse("version: 1\n").unwrap();
+        assert_eq!(r.mcp_max_advance_ns, DEFAULT_MCP_MAX_ADVANCE_NS);
+        assert_eq!(r.mcp_max_wall_ns, DEFAULT_MCP_MAX_WALL_NS);
+        let r = parse("version: 1\nmcp: { max_advance: 30d, max_wall: 90s }\n").unwrap();
+        assert_eq!(r.mcp_max_advance_ns, 30 * 86_400_000_000_000);
+        assert_eq!(r.mcp_max_wall_ns, 90_000_000_000);
+        assert!(parse("version: 1\nmcp: { max_wall: 0s }\n").is_err());
+        assert!(parse("version: 1\nmcp: { max_wall: soon }\n").is_err());
     }
 
     #[test]

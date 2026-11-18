@@ -17,7 +17,7 @@ mod update;
 mod yaml;
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -203,6 +203,13 @@ enum Cmd {
         /// Print the report JSON instead of progress.
         #[arg(long)]
         json: bool,
+        /// Also write a JUnit XML report to this path (for CI test reporters).
+        #[arg(long, value_name = "PATH")]
+        junit: Option<PathBuf>,
+        /// Refuse any advance step that would take virtual time more than this
+        /// many nanoseconds past the scenario's start (set by `chronostack mcp`).
+        #[arg(long, hide = true)]
+        max_advance_ns: Option<i64>,
     },
 }
 
@@ -449,11 +456,17 @@ fn run(cli: Cli) -> Result<i32> {
             let services: Vec<String> = Session::load()
                 .map(|s| s.services.iter().map(|e| e.plan.service.clone()).collect())
                 .unwrap_or_default();
-            let max = match config::find(Path::new(".")) {
-                Some(p) => config::load(&p, &services)?.mcp_max_advance_ns,
-                None => config::DEFAULT_MCP_MAX_ADVANCE_NS,
+            let limits = match config::find(Path::new(".")) {
+                Some(p) => {
+                    let c = config::load(&p, &services)?;
+                    mcp::Limits {
+                        max_advance_ns: c.mcp_max_advance_ns,
+                        max_wall_ns: c.mcp_max_wall_ns,
+                    }
+                }
+                None => mcp::Limits::default(),
             };
-            mcp::serve(max)
+            mcp::serve(limits)
         }
         Cmd::Update {
             check,
@@ -466,14 +479,24 @@ fn run(cli: Cli) -> Result<i32> {
             pre,
             force,
         }),
-        Cmd::Run { file, json } => {
+        Cmd::Run {
+            file,
+            json,
+            junit,
+            max_advance_ns,
+        } => {
             let mut s = Session::load()?;
             let cfg = load_config(&s)?;
             let services: Vec<String> = s.services.iter().map(|e| e.plan.service.clone()).collect();
             let path = Path::new(&file);
             let sc = scenario::load(path, &cfg, &services)?;
             let c = client(&mut s);
-            scenario::run(&s, &c, &cfg, path, &sc, json)
+            let opts = scenario::RunOptions {
+                json,
+                max_advance_ns,
+                junit,
+            };
+            scenario::run(&s, &c, &cfg, path, &sc, &opts)
         }
     }
 }

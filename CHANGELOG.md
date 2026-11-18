@@ -9,6 +9,16 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Added
+
+- `chronostack run --junit <path>` also writes the scenario result as JUnit XML for CI test reporters. Each step is a test case: a failed step becomes a `<failure>` with its evidence, steps after it are `<skipped>`, and the run ID and virtual start and end times are recorded as properties.
+- `mcp.max_wall` in `chronostack.yml` (default `10m`): an MCP tool call that is still running after this much real time is stopped and returns an error, so a barrier that never clears can't leave an AI agent waiting indefinitely.
+
+### Fixed
+
+- MCP `scenario_run` now applies `mcp.max_advance`. Before, a scenario file could advance the clock further than `clock_advance` was allowed to. The cap counts from the virtual time at the start of the scenario; a step that would go past it fails with a "refused" message and nothing moves.
+- MCP `fault_clear` no longer lists faults after a failed clear; it returns the error straight away.
+
 ## [0.1.0-alpha.6] - 2026-11-18
 
 ### Added
