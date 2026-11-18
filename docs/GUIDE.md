@@ -85,9 +85,12 @@ After each advance, every service is probed.
 | **sidekiq-cron** (Ruby) | Fires if its 30 s poll lands within 60 s after the job's time (`reschedule_grace_period`); otherwise that run is skipped | Land each stop just after the job's minute (`advance: { to: next 02:15 }`) with a `sidekiq` barrier and `settle: 35s`, or declare a trigger |
 | **pg_cron** | Detected automatically; ChronoStack stops the clock on each job's minute | Nothing. Jobs like `*/5 * * * *` run once per stop; `advance --pg-cron-all` runs every occurrence. |
 | A worker that polls the database (`WHERE run_at <= now()`) | Runs at its next poll | A barrier (section 5) so ChronoStack waits for it |
+| **Laravel scheduler** (`php artisan schedule:work`) | Does not fire: `schedule:run` only runs jobs due in the current minute, so a jump past a job's minute skips it | Declare a **trigger** that runs `php artisan schedule:run` at the job's time |
 | **node-cron**, **APScheduler**, `setTimeout`-based loops, Spring `@Scheduled` | Does not fire | Declare a **trigger** |
 
 **Schedulers that fire on their own run a missed job when the clock lands, not at the job's own time.** After `advance 1d` from 01:30, a 01:00 Celery beat job runs at 01:30 plus a second or two, so its `now()` is 01:30. If a test depends on a job's exact time (for example "exactly 30 days after creation"), land each step just after the job's time (`advance: { to: next 01:01 }`, then `step: 1d`), or declare a trigger, which always runs at the scheduled time.
+
+**They also run a missed job only once per jump.** A single `advance 3d` runs a daily Celery beat task once, not three times (measured with the scheduler test fixture). To get one run per day, stop the clock each day with `advance 3d --step 1d`, or declare a trigger with a `schedule`, which runs at every scheduled time in the span.
 
 A trigger runs your job's code **at its virtual time**, in the container, like the scheduler would:
 
