@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Benchmarks B1 (clock-read overhead) and B2 (advance latency), on demand.
+# GitHub-hosted runners are shared VMs: use these runs to compare
+# configurations within one run, not as absolute numbers (bench/README.md).
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      reps:
+        description: Repetitions per configuration
+        default: "10"
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Benchmarks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
+      - run: cargo build --release -p chronostack
+      - run: python3 bench/run_bench.py --reps "$REPS" --label "github-$RUNNER_LABEL"
+        env:
+          REPS: ${{ inputs.reps }}
+          RUNNER_LABEL: ${{ matrix.os }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench-${{ matrix.os }}
+          path: bench/results/
