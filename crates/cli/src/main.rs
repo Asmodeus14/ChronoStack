@@ -203,6 +203,10 @@ enum Cmd {
         /// Print the report JSON instead of progress.
         #[arg(long)]
         json: bool,
+        /// Refuse any advance step that would take virtual time more than this
+        /// many nanoseconds past the scenario's start (set by `chronostack mcp`).
+        #[arg(long, hide = true)]
+        max_advance_ns: Option<i64>,
     },
 }
 
@@ -449,11 +453,17 @@ fn run(cli: Cli) -> Result<i32> {
             let services: Vec<String> = Session::load()
                 .map(|s| s.services.iter().map(|e| e.plan.service.clone()).collect())
                 .unwrap_or_default();
-            let max = match config::find(Path::new(".")) {
-                Some(p) => config::load(&p, &services)?.mcp_max_advance_ns,
-                None => config::DEFAULT_MCP_MAX_ADVANCE_NS,
+            let limits = match config::find(Path::new(".")) {
+                Some(p) => {
+                    let c = config::load(&p, &services)?;
+                    mcp::Limits {
+                        max_advance_ns: c.mcp_max_advance_ns,
+                        max_wall_ns: c.mcp_max_wall_ns,
+                    }
+                }
+                None => mcp::Limits::default(),
             };
-            mcp::serve(max)
+            mcp::serve(limits)
         }
         Cmd::Update {
             check,
@@ -466,14 +476,18 @@ fn run(cli: Cli) -> Result<i32> {
             pre,
             force,
         }),
-        Cmd::Run { file, json } => {
+        Cmd::Run {
+            file,
+            json,
+            max_advance_ns,
+        } => {
             let mut s = Session::load()?;
             let cfg = load_config(&s)?;
             let services: Vec<String> = s.services.iter().map(|e| e.plan.service.clone()).collect();
             let path = Path::new(&file);
             let sc = scenario::load(path, &cfg, &services)?;
             let c = client(&mut s);
-            scenario::run(&s, &c, &cfg, path, &sc, json)
+            scenario::run(&s, &c, &cfg, path, &sc, json, max_advance_ns)
         }
     }
 }

@@ -203,7 +203,13 @@ It should: everything runs in Docker's Linux VM, the same as on Windows. It hasn
 Yes, on Linux runners. There's a GitHub Action (`uses: Asmodeus14/ChronoStack@v0.1.0-alpha.6`); see the [CI section](GUIDE.md#8-in-ci).
 
 **Can an AI agent drive it?**
-Yes. `chronostack mcp` is an MCP server with a fixed, safe set of tools: `claude mcp add chronostack -- chronostack mcp --project-dir <your project>`.
+Yes. `chronostack mcp` is an MCP server with a fixed, safe set of tools: `claude mcp add chronostack -- chronostack mcp --project-dir <your project>`. Two limits in `chronostack.yml` bound what an agent can do:
+
+```yaml
+mcp:
+  max_advance: 400d  # largest clock_advance, and largest total advance of a scenario_run
+  max_wall: 10m      # a tool call still running after this much real time is stopped
+```
 
 **Something else is wrong.**
 Open an [issue](https://github.com/Asmodeus14/ChronoStack/issues) with your compose snippet and the output of `chronostack doctor`.

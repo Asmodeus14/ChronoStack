@@ -350,7 +350,11 @@
       "properties": {
         "max_advance": {
           "$ref": "#/$defs/duration",
-          "description": "Largest single clock_advance an agent may request (default 400d)."
+          "description": "Largest single clock_advance an agent may request, and the largest total advance of a scenario_run, counted from the scenario's start (default 400d)."
+        },
+        "max_wall": {
+          "$ref": "#/$defs/duration",
+          "description": "Longest real time one MCP tool call may run before it is stopped (default 10m)."
         }
       }
     }
