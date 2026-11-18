@@ -1,16 +1,17 @@
 # Contributing to ChronoStack
 
-Thanks for your interest. ChronoStack is in its **design phase**. There is no code yet, and right now the most valuable contributions are technical review and real-world input.
+Thanks for your interest. ChronoStack is an alpha: the CLI, controller and shim work and are tested in CI, and there's plenty of room to help.
 
 > [!NOTE]
 > **License.** ChronoStack is dual-licensed under `MIT OR Apache-2.0` ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion is dual-licensed the same way, without additional terms or conditions.
 
-## Ways to contribute today
+## Ways to contribute
 
-1. **Challenge the technical claims.** [TECHNICAL_FEASIBILITY.md](docs/TECHNICAL_FEASIBILITY.md) and [SOURCE_VERIFICATION.md](docs/SOURCE_VERIFICATION.md) label every claim as Verified, Partially verified, Assumption or Unresolved. If you know the answer to an open question, open an issue and cite the source code or documentation.
-2. **Review the architecture.** Comment on the [Architecture Decision Records](docs/ARCHITECTURE_DECISIONS.md).
-3. **Share your use case.** Tell us how you test trials, expiry, retention or retries today. Use the feature request template or Discussions.
+1. **Pick up an issue.** Issues labelled [`good first issue`](https://github.com/Asmodeus14/ChronoStack/labels/good%20first%20issue) are small and self-contained, and most need only Rust (no Docker). [`help wanted`](https://github.com/Asmodeus14/ChronoStack/labels/help%20wanted) issues are bigger, such as example apps. Comment on the issue before you start so nobody duplicates work; questions are welcome and get a quick reply.
+2. **Try it on your stack.** Run it against your own Compose project and report what breaks, with `chronostack doctor` output. This is the most useful feedback right now.
+3. **Test on Apple silicon.** If you have an M-series Mac, [#5](https://github.com/Asmodeus14/ChronoStack/issues/5) is a short end-to-end test.
 4. **Improve the docs.** Fix unclear wording, broken links or inconsistencies.
+5. **Challenge the technical claims.** [TECHNICAL_FEASIBILITY.md](docs/TECHNICAL_FEASIBILITY.md) and [SOURCE_VERIFICATION.md](docs/SOURCE_VERIFICATION.md) label claims as Verified, Partially verified, Assumption or Unresolved. If you know the answer to an open question, open an issue and cite the source.
 
 ## Repository structure
 
@@ -46,6 +47,8 @@ sdk/node/                  Node register for host-native processes (M4)
 
 ### Build and test
 
+For most `good first issue` tasks, the first three commands are all you need:
+
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
@@ -53,6 +56,7 @@ cargo test --workspace            # clockd's tests only run on Linux
 docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .   # also runs clockd tests
 python tests/e2e/run_m1.py        # end-to-end: controller, CLI, doctor (real Docker, real services)
 python tests/e2e/run_m2.py        # engine, demo lifecycle, trigger timeouts, pg_cron
+python tests/e2e/run_init.py --cli target/debug/chronostack   # `init` on the fixtures and the demo
 python tests/e2e/run_schedulers.py  # scheduler matrix (nightly in CI)
 python tests/e2e/run_nohang.py    # no-hang suite across runtimes (nightly in CI)
 ```
@@ -78,7 +82,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): `fea
 2. Keep each pull request focused on one concern.
 3. Fill in the pull request template, including the testing and documentation checklists.
 4. Update `CHANGELOG.md` under `[Unreleased]` for user-visible changes.
-5. CI must pass. A maintainer reviews; at least one approval is required before merging.
+5. CI must pass. A maintainer reviews and merges, usually within a day or two.
 
 ## Reporting bugs
 
