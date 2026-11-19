@@ -1,6 +1,6 @@
-name: Beta report (I tried it on my stack)
+name: Try-it report (I tried it on my stack)
 description: Tell us how ChronoStack did on your own Docker Compose project, whether it worked or not
-title: "Beta report: "
+title: "Try-it report: "
 labels: ["beta-report"]
 body:
   - type: markdown

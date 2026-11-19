@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for reporting! **Security issues must not be reported here** — see SECURITY.md.
-        Documentation errors (wrong technical claims, broken links) are valid bugs too. Tried it on your own stack? The beta report form is quicker.
+        Documentation errors (wrong technical claims, broken links) are valid bugs too. Tried it on your own stack? The try-it report form is quicker.
   - type: dropdown
     id: area
     attributes:
