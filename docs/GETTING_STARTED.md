@@ -48,6 +48,14 @@ $env:CHRONOSTACK_VERSION = "0.1.0-alpha.6"; irm https://github.com/Asmodeus14/Ch
 
 It works in the same window straight away.
 
+**Homebrew (macOS, Linux)**
+
+```sh
+brew install asmodeus14/tap/chronostack
+```
+
+Upgrade with `brew upgrade chronostack`; `chronostack update` is for the script installs.
+
 **Check it worked:**
 
 ```sh

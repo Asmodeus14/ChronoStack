@@ -1,0 +1,58 @@
+# Update the Homebrew tap (Asmodeus14/homebrew-tap) when a release is published.
+# Runs on publish, not on the draft: draft assets can't be downloaded by brew.
+# Needs a HOMEBREW_TAP_TOKEN secret (fine-grained token, Contents: read and
+# write on Asmodeus14/homebrew-tap only). Without it the job only warns.
+name: Homebrew tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish to the tap (e.g. 0.1.0-alpha.7)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  formula:
+    runs-on: ubuntu-latest
+    env:
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      VERSION_INPUT: ${{ inputs.version }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version
+        id: v
+        run: |
+          v="${VERSION_INPUT:-${TAG#v}}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version $v"
+      - name: Write the formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" -p SHA256SUMS -D /tmp/rel
+          python3 scripts/homebrew_formula.py "$VERSION" /tmp/rel/SHA256SUMS > /tmp/chronostack.rb
+          cat /tmp/chronostack.rb
+      - name: Push to the tap
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set; update Formula/chronostack.rb in Asmodeus14/homebrew-tap by hand"
+            exit 0
+          fi
+          git clone -q "https://x-access-token:${TAP_TOKEN}@github.com/Asmodeus14/homebrew-tap.git" /tmp/tap
+          cp /tmp/chronostack.rb /tmp/tap/Formula/chronostack.rb
+          cd /tmp/tap
+          if git diff --quiet; then echo "formula already at $VERSION"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "chronostack $VERSION"
+          git push -q origin HEAD:main
+          echo "tap updated to $VERSION"

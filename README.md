@@ -53,6 +53,11 @@ curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-al
 $env:CHRONOSTACK_VERSION = "0.1.0-alpha.6"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.ps1 | iex
 ```
 
+```sh
+# or with Homebrew (macOS, Linux)
+brew install asmodeus14/tap/chronostack
+```
+
 **2. Run the demo:** a small SaaS app with a 14-day trial, a nightly job and webhooks.
 
 ```sh

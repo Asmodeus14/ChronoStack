@@ -94,6 +94,13 @@ fn extract(archive: &[u8], zip: bool, name: &str) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Whether `exe` (resolved through symlinks) lives in a Homebrew Cellar, where
+/// `brew` owns the file and replacing it would leave Homebrew out of sync.
+fn installed_by_homebrew(exe: &std::path::Path) -> bool {
+    let real = std::fs::canonicalize(exe).unwrap_or_else(|_| exe.to_path_buf());
+    real.components().any(|c| c.as_os_str() == "Cellar")
+}
+
 pub struct Options {
     pub check: bool,
     pub version: Option<String>,
@@ -117,9 +124,17 @@ pub fn run(o: &Options) -> Result<i32> {
         Some(v) => Version::parse(v.trim_start_matches('v')).context("--version")?,
         None => newest(&agent, pre)?,
     };
+    let homebrew = std::env::current_exe()
+        .map(|e| installed_by_homebrew(&e))
+        .unwrap_or(false);
+    let how = if homebrew {
+        "brew upgrade chronostack"
+    } else {
+        "chronostack update"
+    };
     if o.check {
         if wanted > current {
-            println!("update available: {current} → {wanted} (run `chronostack update`)");
+            println!("update available: {current} → {wanted} (run `{how}`)");
         } else {
             println!("chronostack {current} is up to date");
         }
@@ -128,6 +143,12 @@ pub fn run(o: &Options) -> Result<i32> {
     if wanted <= current && !o.force && o.version.is_none() {
         println!("chronostack {current} is up to date");
         return Ok(0);
+    }
+    if homebrew {
+        bail!(
+            "this chronostack was installed with Homebrew; run `brew upgrade chronostack` instead \
+             (replacing Homebrew's copy would leave brew out of sync)"
+        );
     }
 
     let base = std::env::var("CHRONOSTACK_DOWNLOAD_BASE")
@@ -229,6 +250,20 @@ mod tests {
             extract(zip_bytes.get_ref(), true, "chronostack.exe").unwrap(),
             b"exe"
         );
+    }
+
+    #[test]
+    fn detects_a_homebrew_cellar() {
+        use std::path::Path;
+        assert!(installed_by_homebrew(Path::new(
+            "/opt/homebrew/Cellar/chronostack/0.1.0-alpha.6/bin/chronostack"
+        )));
+        assert!(installed_by_homebrew(Path::new(
+            "/home/linuxbrew/.linuxbrew/Cellar/chronostack/0.1.0/bin/chronostack"
+        )));
+        assert!(!installed_by_homebrew(Path::new(
+            "/home/me/.local/bin/chronostack"
+        )));
     }
 
     #[test]
