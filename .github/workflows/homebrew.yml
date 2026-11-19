@@ -50,7 +50,13 @@ jobs:
           git clone -q "https://x-access-token:${TAP_TOKEN}@github.com/Asmodeus14/homebrew-tap.git" /tmp/tap
           cp /tmp/chronostack.rb /tmp/tap/Formula/chronostack.rb
           cd /tmp/tap
-          if git diff --quiet; then echo "formula already at $VERSION"; exit 0; fi
+          if git diff --quiet; then
+            # Nothing to commit: still check the token can push (a dry run is
+            # refused without write access), so a manual run tests the setup.
+            git push --dry-run -q origin HEAD:main
+            echo "formula already at $VERSION; the token can push to the tap"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -qam "chronostack $VERSION"
