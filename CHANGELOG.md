@@ -9,17 +9,19 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.7] - 2026-11-19
+
 ### Added
 
 - `chronostack run --junit <path>` also writes the scenario result as JUnit XML for CI test reporters. Each step is a test case: a failed step becomes a `<failure>` with its evidence, steps after it are `<skipped>`, and the run ID and virtual start and end times are recorded as properties.
 - `mcp.max_wall` in `chronostack.yml` (default `10m`): an MCP tool call that is still running after this much real time is stopped and returns an error, so a barrier that never clears can't leave an AI agent waiting indefinitely.
-
 - Homebrew: `brew install asmodeus14/tap/chronostack` (macOS and Linux). The tap is updated when a release is published.
+- Benchmarks (`bench/`): clock-read overhead against native and libfaketime, and `advance` latency, with results from GitHub's x86_64 and arm64 runners and a laptop. About 12–16 ns per read in C and 10–26 ns in Python and Node.
 
 ### Changed
 
-- `chronostack update` refuses to replace a Homebrew install and says to run `brew upgrade chronostack`; `update --check` suggests the same.
 - `chronostack up` refuses to start when the copy would share writable storage with your own stack: a bind mount (`./data:/var/lib/postgresql/data`), a volume with `external: true`, or a volume with a fixed `name:`. Docker can't give the copy its own version of these, so a job that runs during `advance` (a cleanup of "old" records, say) could change or delete your real data. The error names each mount. Use a named volume, mount it read-only (`:ro`, which only prints a note), or pass `--allow-shared-mounts` if sharing is intended. `chronostack doctor` lists these mounts (`shared_mounts` in `--json`).
+- `chronostack update` refuses to replace a Homebrew install and says to run `brew upgrade chronostack`; `update --check` suggests the same.
 
 ### Fixed
 
