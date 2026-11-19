@@ -15,6 +15,7 @@
 4. **First release only:** GHCR creates the `chronostack-clockd` package as **private**. Make it public in GitHub → Packages → chronostack-clockd → Package settings → Change visibility, otherwise users can't pull the image.
 5. Review the draft and publish it.
 6. Move the install links (README, `docs/`, `website/index.html`, `install/install.sh`) to the new version in a follow-up PR, once the release is published.
+7. Publishing triggers the **Homebrew tap** workflow (`.github/workflows/homebrew.yml`), which writes `Formula/chronostack.rb` in [Asmodeus14/homebrew-tap](https://github.com/Asmodeus14/homebrew-tap) from the release's `SHA256SUMS` (`scripts/homebrew_formula.py`). It needs the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token with Contents read and write on `homebrew-tap` only. Without it the job warns, and the formula is updated by hand: `python scripts/homebrew_formula.py X.Y.Z SHA256SUMS > Formula/chronostack.rb`.
 
 ## Versioning
 
