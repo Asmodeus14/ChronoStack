@@ -14,6 +14,10 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 - `chronostack run --junit <path>` also writes the scenario result as JUnit XML for CI test reporters. Each step is a test case: a failed step becomes a `<failure>` with its evidence, steps after it are `<skipped>`, and the run ID and virtual start and end times are recorded as properties.
 - `mcp.max_wall` in `chronostack.yml` (default `10m`): an MCP tool call that is still running after this much real time is stopped and returns an error, so a barrier that never clears can't leave an AI agent waiting indefinitely.
 
+### Changed
+
+- `chronostack up` refuses to start when the copy would share writable storage with your own stack: a bind mount (`./data:/var/lib/postgresql/data`), a volume with `external: true`, or a volume with a fixed `name:`. Docker can't give the copy its own version of these, so a job that runs during `advance` (a cleanup of "old" records, say) could change or delete your real data. The error names each mount. Use a named volume, mount it read-only (`:ro`, which only prints a note), or pass `--allow-shared-mounts` if sharing is intended. `chronostack doctor` lists these mounts (`shared_mounts` in `--json`).
+
 ### Fixed
 
 - MCP `scenario_run` now applies `mcp.max_advance`. Before, a scenario file could advance the clock further than `clock_advance` was allowed to. The cap counts from the virtual time at the start of the scenario; a step that would go past it fails with a "refused" message and nothing moves.

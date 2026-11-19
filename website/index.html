@@ -45,7 +45,7 @@
       "name": "Do I have to change my code or my compose file?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. ChronoStack works on your existing compose.yml, as a separate copy, and leaves your containers, data and files untouched. When a scheduler needs help firing at the right virtual time, that's one line of YAML (a trigger)."
+        "text": "No. ChronoStack works on your existing compose.yml, as a separate copy with its own containers and named volumes, and leaves your files untouched. Bind mounts and external volumes can't be copied, so up stops if one is writable. When a scheduler needs help firing at the right virtual time, that's one line of YAML (a trigger)."
       }
     },
     {
@@ -409,7 +409,7 @@
     <section class="feat" aria-labelledby="feat-title">
       <h2 id="feat-title" data-reveal>Built to sit on the stack you already have.</h2>
       <dl class="feat-list">
-        <div><dt>No code changes</dt><dd>Works on your existing <code>compose.yml</code>, as a separate copy. Your containers, data and files are untouched.</dd></div>
+        <div><dt>No code changes</dt><dd>Works on your existing <code>compose.yml</code>, as a separate copy with its own containers and named volumes. Your files are untouched, and <code>up</code> stops if a writable bind mount would let the copy change your real data.</dd></div>
         <div><dt>Scheduler-aware stepping</dt><dd>Triggers run at their exact virtual times. BullMQ and Celery beat fire on their own. For pg_cron, the clock stops on each job&rsquo;s minute so fixed-time jobs run; jobs like <code>*/5 * * * *</code> run once per stop unless you pass <code>--pg-cron-all</code>.</dd></div>
         <div><dt>Waits for your jobs</dt><dd>Built-in <code>bullmq</code> and <code>sidekiq</code> barriers hold each step until the queues are drained, and running jobs finish before the clock moves.</dd></div>
         <div><dt>Outages in virtual time</dt><dd>A small proxy in front of HTTP dependencies makes “the payment API is down on day 3 from 09:00 to 11:00” a one-liner.</dd></div>
@@ -501,7 +501,7 @@
         </details>
         <details class="faq-item">
           <summary><h3>Do I have to change my code or my compose file?</h3></summary>
-          <p>No. ChronoStack works on your existing <code>compose.yml</code>, as a separate copy, and leaves your containers, data and files untouched. When a scheduler needs help firing at the right virtual time, that's one line of YAML (a trigger).</p>
+          <p>No. ChronoStack works on your existing <code>compose.yml</code>, as a separate copy with its own containers and named volumes, and leaves your files untouched. Bind mounts and external volumes can't be copied, so <code>up</code> stops if one is writable. When a scheduler needs help firing at the right virtual time, that's one line of YAML (a trigger).</p>
         </details>
         <details class="faq-item">
           <summary><h3>Which languages and databases does it support?</h3></summary>

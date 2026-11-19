@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use chronostack_core::compose::ServicePlan;
+use chronostack_core::compose::{ServicePlan, SharedMount};
 use serde::{Deserialize, Serialize};
 
 use crate::docker::Compose;
@@ -41,6 +41,9 @@ pub struct Session {
     pub port: u16,
     pub token: String,
     pub services: Vec<ServiceEntry>,
+    /// Mounts the copy shares with the user's own stack (listed by `doctor`).
+    #[serde(default)]
+    pub shared_mounts: Vec<SharedMount>,
 }
 
 impl Session {

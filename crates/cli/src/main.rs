@@ -83,6 +83,10 @@ enum Cmd {
         /// How long `--wait` waits (e.g. 120s, 5m).
         #[arg(long, default_value = "120s", requires = "wait")]
         wait_timeout: String,
+        /// Start even if a writable bind mount, external volume or fixed-name volume
+        /// is shared with your own stack (jobs run during `advance` can change it).
+        #[arg(long)]
+        allow_shared_mounts: bool,
     },
     /// Stop the ChronoStack stack (your own stack and files are untouched).
     Down {
@@ -266,13 +270,14 @@ fn run(cli: Cli) -> Result<i32> {
             keep_ports,
             wait,
             ref wait_timeout,
+            allow_shared_mounts,
         } => {
             let wait = if wait {
                 Some(parse_duration(wait_timeout).map_err(anyhow::Error::msg)?)
             } else {
                 None
             };
-            up(&cli, clockd_image, keep_ports, wait)
+            up(&cli, clockd_image, keep_ports, wait, allow_shared_mounts)
         }
         Cmd::Down { volumes } => down(volumes).map(|_| 0),
         Cmd::Now { json } => {
@@ -690,13 +695,78 @@ fn compose_supports_reset() -> bool {
     matches!(nums.as_slice(), [major, minor] if (*major, *minor) >= (2, 24))
 }
 
-fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> Result<i32> {
+/// How a shared mount's source is shown: bind paths under the current
+/// directory as `./…`, everything else as Compose resolved it.
+fn mount_source(m: &compose::SharedMount) -> String {
+    if m.kind == compose::SharedKind::Bind {
+        if let Ok(cwd) = std::env::current_dir() {
+            if let Ok(rest) = Path::new(&m.source).strip_prefix(&cwd) {
+                return format!("./{}", rest.display());
+            }
+        }
+    }
+    m.source.clone()
+}
+
+fn describe_mount(m: &compose::SharedMount) -> String {
+    format!(
+        "{}: {} is shared with your own stack ({}{}, mounted at {})",
+        m.service,
+        mount_source(m),
+        m.kind.describe(),
+        if m.read_only { ", read-only" } else { "" },
+        m.target
+    )
+}
+
+/// Refuse to start when the copy would share writable storage with the
+/// user's own stack, unless `--allow-shared-mounts` is given. Read-only
+/// mounts can't be changed, so they only get a note.
+fn check_shared_mounts(mounts: &[compose::SharedMount], allow: bool) -> Result<()> {
+    let (read_only, writable): (Vec<_>, Vec<_>) = mounts.iter().partition(|m| m.read_only);
+    for m in &read_only {
+        eprintln!("note: {}", describe_mount(m));
+    }
+    if writable.is_empty() {
+        return Ok(());
+    }
+    let list: Vec<String> = writable
+        .iter()
+        .map(|m| format!("  {}", describe_mount(m)))
+        .collect();
+    let list = list.join("\n");
+    if allow {
+        eprintln!(
+            "warning: starting with storage shared with your own stack (--allow-shared-mounts):\n\
+             {list}\n\
+             Jobs that run during `advance` can change it."
+        );
+        return Ok(());
+    }
+    bail!(
+        "the ChronoStack copy would share storage with your own stack:\n\
+         {list}\n\
+         Jobs that run during `advance` can change these files and volumes, \
+         so your real data could be changed or deleted.\n\
+         Use a named volume (Compose gives the copy its own), mount it read-only (`:ro`), \
+         or pass --allow-shared-mounts if sharing is intended."
+    )
+}
+
+fn up(
+    cli: &Cli,
+    clockd_image: &str,
+    keep_ports: bool,
+    wait_ns: Option<i64>,
+    allow_shared_mounts: bool,
+) -> Result<i32> {
     if Session::path().exists() {
         bail!(
             "a ChronoStack session already exists in this directory; run `chronostack down` first"
         );
     }
     let (files, project) = load_project(&cli.files)?;
+    check_shared_mounts(&project.shared_mounts, allow_shared_mounts)?;
     let cs_project = cli
         .project_name
         .clone()
@@ -810,6 +880,7 @@ fn up(cli: &Cli, clockd_image: &str, keep_ports: bool, wait_ns: Option<i64>) -> 
         port,
         token,
         services: entries,
+        shared_mounts: project.shared_mounts.clone(),
     };
     session.save()?;
     let st = Client::new(session.base_url(), session.token.clone())
@@ -997,7 +1068,7 @@ fn doctor(json_out: bool) -> Result<i32> {
     if json_out {
         println!(
             "{}",
-            json!({ "clock": clock.as_ref().ok(), "clockd_reachable": clock.is_ok(), "cli_version": env!("CARGO_PKG_VERSION"), "clockd_version": clockd_version, "services": rows, "problems": problem_count })
+            json!({ "clock": clock.as_ref().ok(), "clockd_reachable": clock.is_ok(), "cli_version": env!("CARGO_PKG_VERSION"), "clockd_version": clockd_version, "services": rows, "shared_mounts": s.shared_mounts, "problems": problem_count })
         );
     } else {
         match &clock {
@@ -1087,6 +1158,15 @@ fn doctor(json_out: bool) -> Result<i32> {
             println!("\nnotes:");
             notes.iter().for_each(|n| println!("{n}"));
         }
+        if !s.shared_mounts.is_empty() {
+            println!("\nshared with your own stack (not copied):");
+            for m in &s.shared_mounts {
+                println!("  {}", describe_mount(m));
+            }
+            if s.shared_mounts.iter().any(|m| !m.read_only) {
+                println!("  jobs that run during `advance` can change the writable ones");
+            }
+        }
         println!(
             "\n{}",
             if problem_count == 0 {
@@ -1101,4 +1181,41 @@ fn doctor(json_out: bool) -> Result<i32> {
     } else {
         0
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chronostack_core::compose::{SharedKind, SharedMount};
+
+    fn mount(kind: SharedKind, source: &str, read_only: bool) -> SharedMount {
+        SharedMount {
+            service: "db".into(),
+            kind,
+            source: source.into(),
+            target: "/data".into(),
+            read_only,
+        }
+    }
+
+    #[test]
+    fn writable_shared_mounts_stop_up_unless_allowed() {
+        let mounts = [
+            mount(SharedKind::Bind, "/srv/app/data", false),
+            mount(SharedKind::ExternalVolume, "shared-db", false),
+        ];
+        let err = check_shared_mounts(&mounts, false).unwrap_err().to_string();
+        assert!(err.contains("db: /srv/app/data is shared with your own stack (bind mount"));
+        assert!(err.contains("db: shared-db is shared with your own stack (external volume"));
+        assert!(err.contains("--allow-shared-mounts"));
+        assert!(check_shared_mounts(&mounts, true).is_ok());
+    }
+
+    #[test]
+    fn read_only_and_unshared_mounts_are_allowed() {
+        assert!(check_shared_mounts(&[], false).is_ok());
+        let ro = [mount(SharedKind::Bind, "/srv/app/conf", true)];
+        assert!(check_shared_mounts(&ro, false).is_ok());
+        assert!(describe_mount(&ro[0]).contains("(bind mount, read-only, mounted at /data)"));
+    }
 }

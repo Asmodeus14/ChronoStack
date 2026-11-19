@@ -68,6 +68,105 @@ fn words(v: Option<&Value>) -> Vec<String> {
 pub struct Project {
     pub name: String,
     pub services: Vec<Service>,
+    /// Mounts the ChronoStack copy would share with the user's own stack.
+    pub shared_mounts: Vec<SharedMount>,
+}
+
+/// Why a mount is shared between the user's stack and the ChronoStack copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SharedKind {
+    /// A host file or directory.
+    Bind,
+    /// A volume declared `external: true`.
+    ExternalVolume,
+    /// A volume with a fixed `name:`, which Compose does not prefix with the project.
+    NamedVolume,
+}
+
+impl SharedKind {
+    pub fn describe(self) -> &'static str {
+        match self {
+            SharedKind::Bind => "bind mount",
+            SharedKind::ExternalVolume => "external volume",
+            SharedKind::NamedVolume => "volume with a fixed name",
+        }
+    }
+}
+
+/// A mount the copy would share with the user's own stack. Ordinary named
+/// volumes are not shared: Compose names them `<project>_<key>`, and the copy
+/// runs under its own project name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SharedMount {
+    pub service: String,
+    pub kind: SharedKind,
+    /// Host path (bind mount) or Docker volume name.
+    pub source: String,
+    /// Path inside the container.
+    pub target: String,
+    pub read_only: bool,
+}
+
+/// Find the shared mounts in a resolved model (`docker compose config --format
+/// json`, loaded under the user's own project name).
+fn shared_mounts(v: &Value, project: &str) -> Vec<SharedMount> {
+    let top = v.get("volumes").and_then(Value::as_object);
+    let mut out = Vec::new();
+    let Some(services) = v.get("services").and_then(Value::as_object) else {
+        return out;
+    };
+    for (svc, s) in services {
+        for m in s
+            .get("volumes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(source) = m.get("source").and_then(Value::as_str) else {
+                continue; // anonymous volume or tmpfs: private to the container
+            };
+            let kind = match m.get("type").and_then(Value::as_str) {
+                Some("bind") => SharedKind::Bind,
+                Some("volume") => {
+                    let decl = top.and_then(|t| t.get(source));
+                    let name = decl.and_then(|d| d.get("name")).and_then(Value::as_str);
+                    if decl
+                        .and_then(|d| d.get("external"))
+                        .and_then(Value::as_bool)
+                        == Some(true)
+                    {
+                        SharedKind::ExternalVolume
+                    } else if name.is_some_and(|n| n != format!("{project}_{source}")) {
+                        SharedKind::NamedVolume
+                    } else {
+                        continue;
+                    }
+                }
+                _ => continue,
+            };
+            let name = match kind {
+                SharedKind::Bind => source,
+                _ => top
+                    .and_then(|t| t.get(source))
+                    .and_then(|d| d.get("name"))
+                    .and_then(Value::as_str)
+                    .unwrap_or(source),
+            };
+            out.push(SharedMount {
+                service: svc.clone(),
+                kind,
+                source: name.to_string(),
+                target: m
+                    .get("target")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                read_only: m.get("read_only").and_then(Value::as_bool) == Some(true),
+            });
+        }
+    }
+    out
 }
 
 /// Parse the output of `docker compose config --format json`.
@@ -160,7 +259,12 @@ pub fn parse_config(json_text: &str) -> Result<Project, String> {
             paths::CLOCKD_SERVICE
         ));
     }
-    Ok(Project { name, services })
+    let shared_mounts = shared_mounts(&v, &name);
+    Ok(Project {
+        name,
+        services,
+        shared_mounts,
+    })
 }
 
 /// What kind of datastore a service is, by image name and environment.
@@ -482,6 +586,70 @@ mod tests {
         "whoami": {"image": "traefik/whoami"}
       }
     }"#;
+
+    /// Shape taken from `docker compose config --format json` (Compose 2.x).
+    const MOUNTS: &str = r#"{
+      "name": "mnt",
+      "services": {
+        "db": {"image": "postgres:16", "volumes": [
+          {"type": "bind", "source": "/home/me/app/data", "target": "/var/lib/postgresql/data", "bind": {}},
+          {"type": "bind", "source": "/home/me/app/conf", "target": "/etc/conf", "read_only": true, "bind": {}},
+          {"type": "volume", "source": "shared-db", "target": "/backup", "volume": {}},
+          {"type": "volume", "source": "fixed", "target": "/fixed", "volume": {}},
+          {"type": "volume", "source": "db-data", "target": "/normal", "volume": {}},
+          {"type": "tmpfs", "target": "/tmp/x"},
+          {"type": "volume", "target": "/just-anon", "volume": {}}
+        ]},
+        "web": {"image": "nginx"}
+      },
+      "volumes": {
+        "db-data": {"name": "mnt_db-data"},
+        "fixed": {"name": "my-fixed-vol"},
+        "shared-db": {"name": "shared-db", "external": true}
+      }
+    }"#;
+
+    #[test]
+    fn finds_mounts_shared_with_the_users_stack() {
+        let p = parse_config(MOUNTS).unwrap();
+        let got: Vec<_> = p
+            .shared_mounts
+            .iter()
+            .map(|m| (m.kind, m.source.as_str(), m.target.as_str(), m.read_only))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (
+                    SharedKind::Bind,
+                    "/home/me/app/data",
+                    "/var/lib/postgresql/data",
+                    false
+                ),
+                (SharedKind::Bind, "/home/me/app/conf", "/etc/conf", true),
+                (SharedKind::ExternalVolume, "shared-db", "/backup", false),
+                (SharedKind::NamedVolume, "my-fixed-vol", "/fixed", false),
+            ]
+        );
+        assert!(p.shared_mounts.iter().all(|m| m.service == "db"));
+    }
+
+    #[test]
+    fn ordinary_volumes_are_not_shared() {
+        assert!(parse_config(CONFIG).unwrap().shared_mounts.is_empty());
+        // A volume whose name is the project default is copied per project.
+        let only_default = MOUNTS
+            .replace(r#""name": "my-fixed-vol""#, r#""name": "mnt_fixed""#)
+            .replace(r#", "external": true"#, "")
+            .replace(r#""name": "shared-db""#, r#""name": "mnt_shared-db""#)
+            .replace(r#""type": "bind""#, r#""type": "tmpfs""#);
+        assert!(
+            parse_config(&only_default)
+                .unwrap()
+                .shared_mounts
+                .is_empty()
+        );
+    }
 
     fn info(arch: &str, libc: Option<Libc>) -> ImageInfo {
         ImageInfo {

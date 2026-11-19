@@ -39,6 +39,7 @@
 13. A trigger that times out is stopped inside its container only if the image has `sh`.
 14. The fault proxy works only for URLs your Compose file sets in environment variables (`http://` or `https://` upstreams). Outage windows return an HTTP status; latency, drops and partitions are v0.2.
 15. Celery beat with django-celery-beat's `DatabaseScheduler`: crontab tasks may not be sent after a clock jump (interval tasks are fine). Declare triggers for them. Root cause not yet found ([#9](https://github.com/Asmodeus14/ChronoStack/issues/9)).
+16. Bind mounts and volumes with `external: true` or a fixed `name:` are shared between the copy and your normal stack. `up` refuses to start when one is writable unless you pass `--allow-shared-mounts`; read-only ones get a note. `doctor` lists them.
 5. Native host processes: Node only, via `chronostack/register`.
 6. External services (Stripe, SendGrid) are not virtualized; use their test-clock features or mocks.
 7. Data written with virtual timestamps persists in ChronoStack volumes.

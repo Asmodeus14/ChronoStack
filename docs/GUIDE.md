@@ -21,7 +21,8 @@ cd your-project            # where your compose.yml / docker-compose.yml lives
 chronostack up --wait
 ```
 
-- ChronoStack starts a **separate copy** of your project, named `<project>-chronostack`, with its own volumes. Your normal stack and its data are not touched, and no file in your project is changed. The generated override lives in `.chronostack/`, which ignores itself in git.
+- ChronoStack starts a **separate copy** of your project, named `<project>-chronostack`, with its own named volumes. No file in your project is changed. The generated override lives in `.chronostack/`, which ignores itself in git.
+- **Some storage can't be copied:** bind mounts (`./data:/var/lib/postgresql/data`), volumes with `external: true`, and volumes with a fixed `name:` are the same folder or volume in the copy as in your normal stack. A job that runs during `advance` (say, "delete records older than 7 days") would change your real data there. So `up` refuses to start when one of them is writable, and names it. Switch it to an ordinary named volume, mount it read-only (`:ro`, which only gets a note), or pass `--allow-shared-mounts` if sharing is what you want, e.g. for a config folder. `doctor` lists these mounts too.
 - Host ports and `container_name` are dropped in the copy, so it can run next to your normal stack. To reach the copy from your browser, use `chronostack up --keep-ports`; it then conflicts with your normal stack's ports.
 - `--wait` returns once every virtualized service answers a time probe.
 - Several compose files work as with Compose: `chronostack -f compose.yml -f compose.dev.yml up`.
@@ -235,6 +236,7 @@ Keep `.chronostack/reports/` as a build artifact, so a failed run can be read la
 | A pg_cron job like `*/5 * * * *` ran fewer times than expected | It runs once per clock stop | `advance --pg-cron-all`, or `--step` |
 | `doctor` warns the CLI and controller versions differ | An old stack from another CLI version | `chronostack down`, then `up` |
 | Data looks "from the future" | It was written in virtual time | It's in the copy's own volumes; `chronostack down -v` removes them |
+| `up` says the copy "would share storage with your own stack" | A writable bind mount, `external` volume or fixed-name volume (section 1) | Use a named volume or `:ro`, or pass `--allow-shared-mounts` if sharing is intended |
 | `chronostack: command not found` / "not recognized" right after installing | The terminal was opened before the install (on Linux and macOS, `curl … \| sh` can't change the shell that ran it) | Run the `export PATH=…` line the installer printed, or open a new terminal. On Windows the installer updates the current session itself. |
 | macOS: "cannot be opened because the developer cannot be verified" | The archive was downloaded in a browser (binaries aren't notarized yet) | Install with the script, or run `xattr -d com.apple.quarantine ~/.local/bin/chronostack` |
 

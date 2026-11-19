@@ -22,7 +22,7 @@
 | Writer dies mid-update | Odd seq forever | Readers bounded retry → last good snapshot; clockd repairs on restart. |
 | Fault proxy failure | Silent bypass would hide bugs | Proxy failure = connection refused (fail closed), logged as an event. |
 | Secrets leakage | Reports/logs include env vars, trigger output, SQL results | Never serialize environment; redact values matching common secret patterns (implemented in M3: URL credentials, Bearer/Basic values, `password=`/`token:`/`api_key` style values, bare 32+ hex or 40+ base64 tokens; declared `redact:` keys are still planned); truncate trigger output (4 KB). Reports are local files only; nothing is sent over the network. No telemetry in v0.1. |
-| Data safety | Running against a dev DB with real data writes "future" timestamps | `up` uses a distinct project name (`<project>-chronostack`) by default so volumes are separate; warn if the target project is already running. |
+| Data safety | Running against a dev DB with real data writes "future" timestamps; jobs run during `advance` delete "old" data | `up` uses a distinct project name (`<project>-chronostack`) by default so named volumes are separate. Bind mounts, `external` volumes and fixed-name volumes can't be separated: `up` refuses to start when one is writable unless `--allow-shared-mounts` is passed (read-only ones get a note), and `doctor` lists them. |
 | Supply chain | Malicious release artifacts | Signed checksums, SBOM, reproducible-ish builds, GHCR image digests pinned in CLI release. |
 | Shim in every process | Crash risk in critical processes | No allocation, no locks, no Rust/C++ runtime, constructor does minimal work; `dlsym` failures fall back to raw `syscall` for reads. |
 

@@ -24,7 +24,7 @@ your compose.yml ──► chronostack up ──► a copy of your stack, on one
                                               and your daily job ran 14 times
 ```
 
-- It runs a **copy** of your stack. Your normal containers and data are never touched, and your files are never modified.
+- It runs a **copy** of your stack, with its own containers and named volumes, and your files are never modified. Bind mounts and `external` or fixed-name volumes can't be copied, so `up` stops if one is writable (see the FAQ below).
 - It **doesn't change your computer's clock.** Only the processes inside the copy see the virtual time.
 - **Time only moves forward.** To start again: `chronostack down -v` and `chronostack up`.
 
@@ -182,7 +182,9 @@ Durations look like `90s`, `25h`, `14d`, `1h30m`.
 No. Only processes inside ChronoStack's copy of your stack see virtual time. Your machine and your normal containers keep real time.
 
 **Will it touch my data or my compose files?**
-No. The copy has its own volumes, and the extra settings live in `.chronostack/` (which ignores itself in git). Your compose files are never edited. `chronostack down -v` deletes the copy's data.
+Not unless you allow it. The copy gets its own named volumes, and the extra settings live in `.chronostack/` (which ignores itself in git). Your compose files are never edited. `chronostack down -v` deletes the copy's data.
+
+The exception is storage Docker can't copy: bind mounts like `./data:/var/lib/postgresql/data`, and volumes with `external: true` or a fixed `name:`. The copy would use the same folder or volume as your normal stack, so a cleanup job that runs during `advance` could delete real data. `up` refuses to start when one of these is writable and tells you which. Use a named volume, mount it read-only (`:ro`), or pass `--allow-shared-mounts` if sharing is intended. `chronostack doctor` lists them.
 
 **I advanced 7 days, but my cron job didn't run. Why?**
 Most schedulers wait on a timer that doesn't notice the wall clock jumping. Declare a trigger for the job ([step 4](#3-use-it-on-your-own-project)). BullMQ, Celery beat (with `beat_max_loop_interval: 1`) and pg_cron are the exceptions; they work on their own.
