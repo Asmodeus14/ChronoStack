@@ -71,4 +71,4 @@ AI agents can drive it too, through an MCP server ("verify webhook retries durin
 - **macOS** hasn't been tested yet. If you have a Mac, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 - Time only moves forward.
 
-It's open source (MIT OR Apache-2.0) and pre-alpha: [github.com/Asmodeus14/ChronoStack](https://github.com/Asmodeus14/ChronoStack). I'd love to hear how you test time-dependent code today, and whether this works on your stack (`chronostack doctor` output welcome).
+It's open source (MIT OR Apache-2.0) and in alpha: [github.com/Asmodeus14/ChronoStack](https://github.com/Asmodeus14/ChronoStack). I'd love to hear how you test time-dependent code today, and whether this works on your stack (`chronostack doctor` output welcome).
