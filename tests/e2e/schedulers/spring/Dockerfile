@@ -3,7 +3,13 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /src
 COPY pom.xml ./
 COPY src ./src
-RUN mvn -q -B package dependency:copy-dependencies -DoutputDirectory=target/lib
+# Maven Central downloads occasionally fail on CI runners: retry each request,
+# then the whole build, and keep the output (no -q) so a real error is visible.
+RUN for i in 1 2 3; do \
+      mvn -B --no-transfer-progress -Daether.connector.http.retryHandler.count=5 \
+        package dependency:copy-dependencies -DoutputDirectory=target/lib && exit 0; \
+      echo "mvn failed (attempt $i of 3), retrying in 10s"; sleep 10; \
+    done; exit 1
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
