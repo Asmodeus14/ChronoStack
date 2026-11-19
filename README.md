@@ -102,7 +102,7 @@ When something breaks, the Markdown report says what was expected, what happened
 
 ## Features
 
-- **No code changes:** works on your existing `compose.yml`, as a separate copy. Your containers, data and files are untouched.
+- **No code changes:** works on your existing `compose.yml`, as a separate copy with its own containers and named volumes, and leaves your files untouched. Bind mounts and external volumes can't be copied, so `up` stops if one is writable instead of letting the copy change your real data.
 - **Scheduler-aware stepping:** triggers run at their exact virtual times. BullMQ and Celery beat fire on their own. For pg_cron, the clock stops on each job's minute so fixed-time jobs run; jobs like `*/5 * * * *` run once per stop unless you pass `--pg-cron-all`.
 - **Waits for your jobs:** built-in `bullmq` and `sidekiq` barriers hold each step until the queues are drained, and running jobs finish before the clock moves.
 - **Outages in virtual time:** a small proxy in front of HTTP dependencies (`http` or `https`) makes "the payment API is down on day 3 from 09:00 to 11:00" a one-liner.

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Shared-mount fixture: `chronostack up` must refuse the writable bind mount
+# (the copy would write to the same folder as the user's own stack), only note
+# the read-only one, and start when --allow-shared-mounts is given.
+# run_shared_mounts.py copies this file to a temporary directory first.
+name: e2e-shared
+services:
+  app:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
+    volumes:
+      - ./data:/data              # writable bind mount: shared with the real stack
+      - ./conf:/conf:ro           # read-only bind mount: a note only
+      - app-data:/var/lib/app     # ordinary named volume: the copy gets its own
+volumes:
+  app-data:
