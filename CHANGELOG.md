@@ -11,6 +11,7 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ### Added
 
+- `expose:` in `chronostack.yml` publishes chosen container ports of the copy on 127.0.0.1: `app:3000` on a free port, or `{service: app, port: 3000, host_port: 8080}` on a fixed one. Nothing else is published, so the copy still runs next to your own stack. `up` and `doctor` show the URLs (`exposed` in `doctor --json`). In HTTP triggers, barriers and scenario `http` steps, `service://app:3000/path` goes to that port; `chronostack.yml` is checked so such a URL names an exposed port.
 - Publishing to crates.io: `chronostack` and `chronostack-core` are published from each release's tag (`cargo install chronostack@<version>`), starting with the next release.
 - Scoop (Windows): `scoop bucket add chronostack https://github.com/Asmodeus14/scoop-bucket`, then `scoop install chronostack/chronostack`. The bucket is updated when a release is published.
 

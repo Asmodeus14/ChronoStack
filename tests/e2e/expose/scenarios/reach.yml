@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=../../../../docs/schema/scenario.schema.json
+version: 1
+name: Reach exposed services from the host
+steps:
+  - name: api answers through its fixed host port
+    http: { url: "service://api:80/hello", method: GET, status: 200 }
+  - name: a day passes (the 03:00 trigger calls web)
+    advance: 1d
+  - name: web answers through its loopback port
+    http: { url: "service://web:80/hello", method: GET, status: 200 }

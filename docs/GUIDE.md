@@ -23,7 +23,15 @@ chronostack up --wait
 
 - ChronoStack starts a **separate copy** of your project, named `<project>-chronostack`, with its own named volumes. No file in your project is changed. The generated override lives in `.chronostack/`, which ignores itself in git.
 - **Some storage can't be copied:** bind mounts (`./data:/var/lib/postgresql/data`), volumes with `external: true`, and volumes with a fixed `name:` are the same folder or volume in the copy as in your normal stack. A job that runs during `advance` (say, "delete records older than 7 days") would change your real data there. So `up` refuses to start when one of them is writable, and names it. Switch it to an ordinary named volume, mount it read-only (`:ro`, which only gets a note), or pass `--allow-shared-mounts` if sharing is what you want, e.g. for a config folder. `doctor` lists these mounts too.
-- Host ports and `container_name` are dropped in the copy, so it can run next to your normal stack. To reach the copy from your browser, use `chronostack up --keep-ports`; it then conflicts with your normal stack's ports.
+- Host ports and `container_name` are dropped in the copy, so it can run next to your normal stack. To reach a service of the copy from your machine, list it under `expose:` in `chronostack.yml`:
+
+  ```yaml
+  expose:
+    - app:3000                                  # a free port on 127.0.0.1, shown by `up` and `doctor`
+    - { service: web, port: 80, host_port: 8080 }   # always http://127.0.0.1:8080
+  ```
+
+  Only these ports are published, and only on 127.0.0.1. In triggers, barriers and scenario `http` steps, `service://app:3000/path` goes to that port, wherever it landed. `chronostack up --keep-ports` keeps all your own published ports instead; it then conflicts with your normal stack's ports.
 - `--wait` returns once every virtualized service answers a time probe.
 - Several compose files work as with Compose: `chronostack -f compose.yml -f compose.dev.yml up`.
 
@@ -104,7 +112,7 @@ triggers:
     exec: { service: worker, command: [node, src/jobs/expire-trials.js] }
   - name: nightly-report
     schedule: { every: 1d, at: "01:30" }
-    http: { url: "http://localhost:8080/internal/run-report" }   # from the host
+    http: { url: "service://api:8080/internal/run-report" }   # api:8080 listed under expose:
 ```
 
 Then `chronostack advance 14d` runs `expire-trials` 14 times, each at its own virtual 03:00. `chronostack advance 14d --dry-run` prints the plan first. A trigger without `schedule` runs at the end of every `--step`.

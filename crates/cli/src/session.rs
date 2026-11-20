@@ -44,6 +44,9 @@ pub struct Session {
     /// Mounts the copy shares with the user's own stack (listed by `doctor`).
     #[serde(default)]
     pub shared_mounts: Vec<SharedMount>,
+    /// `expose:` ports as published on 127.0.0.1 (`service://` URLs resolve here).
+    #[serde(default)]
+    pub exposed: Vec<crate::expose::Exposed>,
 }
 
 impl Session {

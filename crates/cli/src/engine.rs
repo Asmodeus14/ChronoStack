@@ -380,10 +380,15 @@ pub(crate) fn run_exec(
 }
 
 pub(crate) fn run_http(spec: &HttpSpec, timeout: Duration) -> (bool, Option<String>) {
+    // `service://app:3000/…` goes to the port `expose:` published for it.
+    let url = match crate::expose::resolve_with_session(&spec.url) {
+        Ok(u) => u,
+        Err(e) => return (false, Some(format!("{e:#}"))),
+    };
     let agent = crate::client::agent(timeout);
     let builder = ureq::http::Request::builder()
         .method(spec.method.as_str())
-        .uri(&spec.url);
+        .uri(&url);
     // Methods that carry a body get an explicit empty one (`content-length: 0`);
     // a `()` body would be sent chunked, which some webhook receivers mishandle.
     let no_body = matches!(

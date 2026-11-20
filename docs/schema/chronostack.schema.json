@@ -43,7 +43,7 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "Must be reachable from the host running the CLI."
+          "description": "Must be reachable from the host running the CLI. service://<service>:<port>/path goes to a port listed in expose: (chronostack.yml)."
         },
         "method": {
           "type": "string",
@@ -356,6 +356,43 @@
           "$ref": "#/$defs/duration",
           "description": "Longest real time one MCP tool call may run before it is stopped (default 10m)."
         }
+      }
+    },
+    "expose": {
+      "type": "array",
+      "description": "Container ports of the ChronoStack copy to publish on 127.0.0.1, so tools on the host (your browser, HTTP triggers, scenario http steps) can reach them. Use service://<service>:<port>/path in URLs.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[^:]+:[0-9]+$",
+            "description": "<service>:<port>, on a host port Docker picks, e.g. app:3000"
+          },
+          {
+            "type": "object",
+            "required": [
+              "service",
+              "port"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "service": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "host_port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "description": "Fixed host port (127.0.0.1 only)"
+              }
+            }
+          }
+        ]
       }
     }
   }

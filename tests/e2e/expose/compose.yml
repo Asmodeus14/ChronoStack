@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# `expose:` fixture. web publishes a fixed host port that the copy must drop
+# (replaced by the exposed loopback port); api publishes none and is exposed on
+# a fixed host port. Both are traefik/whoami, which answers any HTTP request.
+name: e2e-expose
+services:
+  web:
+    image: traefik/whoami
+    ports:
+      - "18080:80"
+  api:
+    image: traefik/whoami
+  worker:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
