@@ -32,7 +32,7 @@ shim/                      C preload library (libchronoclock)
 docker/clockd.Dockerfile   Controller image (clockd + preload libraries)
 tests/e2e/                 End-to-end tests against real Docker
 examples/saas-trial-demo/  Reference demo (Node, Postgres, Redis)
-spike/                     M0 feasibility spike (frozen, reference only)
+spike/                     M0 feasibility spike (frozen); its test programs are reused by the no-hang suite
 sdk/node/                  Node register for host-native processes (M4)
 ```
 
@@ -61,7 +61,7 @@ python tests/e2e/run_schedulers.py  # scheduler matrix (nightly in CI)
 python tests/e2e/run_nohang.py    # no-hang suite across runtimes (nightly in CI)
 ```
 
-The M0 spike harness (`spike/run_m0.py`) is kept for reference. It is not part of CI.
+The M0 spike harness (`spike/run_m0.py`) is kept for reference and is not part of CI. Its test programs in `spike/tests/` (C, Python, Node, Java) are still used: the nightly no-hang suite (`tests/e2e/run_nohang.py`) builds and mounts them, so changes there affect CI.
 
 ## Coding conventions
 

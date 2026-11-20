@@ -159,7 +159,7 @@ shim/             # C preload library (built for glibc and musl inside docker/cl
 docker/           # controller image
 examples/saas-trial-demo/
 tests/e2e/        # Docker-based end-to-end tests, scheduler matrix, no-hang suite
-spike/            # M0 feasibility spike (frozen, reference only)
+spike/            # M0 feasibility spike (frozen); spike/tests/ is reused by the no-hang suite
 docs/
 ```
 
