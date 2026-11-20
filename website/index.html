@@ -53,7 +53,7 @@
       "name": "Which languages and databases does it support?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Tested in CI: PostgreSQL 16 (including pg_cron), Redis 7, Node.js 22 and Python 3.10 / 3.12. JVM 21 passes a no-hang suite and is otherwise experimental. Node.js 20, Python 3.13+, JVM 17, Ruby 3.x and MariaDB are expected to work but aren't covered by tests."
+        "text": "Tested in CI: PostgreSQL 16 (including pg_cron), Redis 7, Node.js 22 and Python 3.10 / 3.12. JVM 17 and 21, Ruby 3.3, PHP 8.3 and .NET 8 pass a nightly no-hang suite and clock check but haven't been tried on real apps yet. Node.js 20, Python 3.13+ and MariaDB are expected to work but aren't covered by tests."
       }
     },
     {
@@ -126,7 +126,7 @@
         "applicationCategory": "DeveloperApplication",
         "applicationSubCategory": "Testing tool",
         "operatingSystem": "Linux, Windows, macOS",
-        "softwareVersion": "0.1.0-alpha.6",
+        "softwareVersion": "0.1.0-alpha.7",
         "downloadUrl": "https://github.com/Asmodeus14/ChronoStack/releases",
         "installUrl": "https://chronostack-dev.vercel.app/#install",
         "image": "https://chronostack-dev.vercel.app/assets/og.png",
@@ -235,7 +235,7 @@
             <button type="button" data-os="win" aria-pressed="false" aria-label="Windows" title="Windows"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-windows"/></svg></button>
           </div>
           <div class="cmd cmd--hero">
-            <pre><code id="hero-cmd">curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.6 sh</code></pre>
+            <pre><code id="hero-cmd">curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.7/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.7 sh</code></pre>
             <button class="copy" type="button" aria-label="Copy command" title="Copy"><svg class="icon i-copy" aria-hidden="true" focusable="false"><use href="#i-copy"/></svg><svg class="icon i-check" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></button>
           </div>
         </div>
@@ -244,7 +244,7 @@
           <a class="btn btn-line" href="https://github.com/Asmodeus14/ChronoStack">View on GitHub</a>
         </div>
         <p class="hero-status" data-hero>
-          Alpha · <a href="https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.6">v0.1.0-alpha.6</a> · MIT or Apache-2.0
+          Alpha · <a href="https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.7">v0.1.0-alpha.7</a> · MIT or Apache-2.0
         </p>
       </div>
       <p class="hero-cue" data-hero aria-hidden="true">
@@ -452,7 +452,7 @@
           <tr><th scope="row">Chatwoot</th><td>Conversations whose snooze ended while background jobs were down for more than 3&nbsp;days were never reopened.</td><td>Confirmed by maintainers · <a href="https://github.com/chatwoot/chatwoot/issues/16667">issue</a> · <a href="https://github.com/chatwoot/chatwoot/pull/16679">community fix PR</a></td></tr>
           <tr><th scope="row">Formbricks</th><td>With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late.</td><td>Confirmed by maintainers · <a href="https://github.com/formbricks/formbricks/issues/10021">issue</a></td></tr>
           <tr><th scope="row">tududi</th><td>Monthly recurring tasks moved to the wrong day: for users in the Americas, “on the 1st” became the last day of the previous month, and “last Friday” skipped months.</td><td>Fix proposed · <a href="https://github.com/chrisvel/tududi/issues/2100">issue</a> · <a href="https://github.com/chrisvel/tududi/pull/2101">PR</a></td></tr>
-          <tr><th scope="row">Worklenz</th><td>Monthly “Nth weekday” recurring tasks landed on the wrong date: “1st Monday” moved back into the previous month and then stopped recurring, and “2nd Tuesday” came a week early.</td><td>Fix proposed · <a href="https://github.com/Worklenz/worklenz/issues/959">issue</a> · <a href="https://github.com/Worklenz/worklenz/pull/960">PR</a></td></tr>
+          <tr><th scope="row">Worklenz</th><td>Monthly “Nth weekday” recurring tasks landed on the wrong date: “1st Monday” moved back into the previous month and then stopped recurring, and “2nd Tuesday” came a week early.</td><td>Fixed · <a href="https://github.com/Worklenz/worklenz/issues/959">issue</a> · <a href="https://github.com/Worklenz/worklenz/pull/960">PR</a></td></tr>
         </tbody>
       </table>
     </section>
@@ -468,10 +468,10 @@
         <tbody>
           <tr><td>PostgreSQL 16 (Debian, Alpine), including pg_cron · Redis 7 (Debian, Alpine)</td><td><span class="st st-yes">Tested in CI</span></td></tr>
           <tr><td>Node.js 22 · Python 3.10 / 3.12 (Debian, Alpine)</td><td><span class="st st-yes">Tested in CI, plus a nightly no-hang suite</span></td></tr>
-          <tr><td>JVM 21</td><td><span class="st st-yes">No-hang suite; otherwise experimental</span></td></tr>
+          <tr><td>JVM 17 / 21 · Ruby 3.3 · PHP 8.3 · .NET 8</td><td><span class="st st-yes">Nightly no-hang suite and clock check; not yet tried on real apps</span></td></tr>
           <tr><td>BullMQ, Celery beat, pg_cron</td><td><span class="st st-yes">Work without triggers (measured)</span></td></tr>
-          <tr><td>node-cron, APScheduler, <code>setTimeout</code>-style loops</td><td><span class="st st-mid">Need a trigger (measured)</span></td></tr>
-          <tr><td>Node.js 20, Python 3.13+, JVM 17, Ruby 3.x, MariaDB</td><td><span class="st st-mid">Expected to work; not covered by tests</span></td></tr>
+          <tr><td>node-cron, APScheduler, Spring <code>@Scheduled</code>, Laravel <code>schedule:work</code>, sidekiq-cron, <code>setTimeout</code>-style loops</td><td><span class="st st-mid">Need a trigger (measured)</span></td></tr>
+          <tr><td>Node.js 20, Python 3.13+, MariaDB</td><td><span class="st st-mid">Expected to work; not covered by tests</span></td></tr>
           <tr><td>Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop)</td><td><span class="st st-yes">CI · tested by hand</span></td></tr>
           <tr><td>Host: macOS Intel (native CLI, Docker in a Linux VM)</td><td><span class="st st-yes">CI (nightly)</span></td></tr>
           <tr><td>Host: macOS Apple silicon: installer and native CLI</td><td><span class="st st-yes">CI (release)</span></td></tr>
@@ -505,7 +505,7 @@
         </details>
         <details class="faq-item">
           <summary><h3>Which languages and databases does it support?</h3></summary>
-          <p>Tested in CI: PostgreSQL 16 (including pg_cron), Redis 7, Node.js 22 and Python 3.10 / 3.12. JVM 21 passes a no-hang suite and is otherwise experimental. Node.js 20, Python 3.13+, JVM 17, Ruby 3.x and MariaDB are expected to work but aren't covered by tests.</p>
+          <p>Tested in CI: PostgreSQL 16 (including pg_cron), Redis 7, Node.js 22 and Python 3.10 / 3.12. JVM 17 and 21, Ruby 3.3, PHP 8.3 and .NET 8 pass a nightly no-hang suite and clock check but haven't been tried on real apps yet. Node.js 20, Python 3.13+ and MariaDB are expected to work but aren't covered by tests.</p>
         </details>
         <details class="faq-item">
           <summary><h3>Does it work with Go?</h3></summary>
@@ -547,11 +547,11 @@
             <button role="tab" id="tab-win" aria-controls="panel-win" aria-selected="false" tabindex="-1" aria-label="Windows (PowerShell)" title="Windows (PowerShell)"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-windows"/></svg></button>
           </div>
           <div class="cmd" role="tabpanel" id="panel-unix" aria-labelledby="tab-unix">
-            <pre><code>curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.6 sh</code></pre>
+            <pre><code>curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.7/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.7 sh</code></pre>
             <button class="copy" type="button" aria-label="Copy command" title="Copy"><svg class="icon i-copy" aria-hidden="true" focusable="false"><use href="#i-copy"/></svg><svg class="icon i-check" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></button>
           </div>
           <div class="cmd" role="tabpanel" id="panel-win" aria-labelledby="tab-win" hidden>
-            <pre><code>$env:CHRONOSTACK_VERSION = "0.1.0-alpha.6"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.6/install.ps1 | iex</code></pre>
+            <pre><code>$env:CHRONOSTACK_VERSION = "0.1.0-alpha.7"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.7/install.ps1 | iex</code></pre>
             <button class="copy" type="button" aria-label="Copy command" title="Copy"><svg class="icon i-copy" aria-hidden="true" focusable="false"><use href="#i-copy"/></svg><svg class="icon i-check" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></button>
           </div>
         </div>

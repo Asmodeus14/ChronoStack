@@ -42,9 +42,11 @@ EXPECT = {
     "APScheduler 3 (BlockingScheduler, cron)": "trigger",  # measured 2026-11-13: no run within 20 s
     "BullMQ job scheduler (cron)": "fires",  # measured 2026-11-13: ~1 s after advance; worst case ~10 s (BullMQ maximumBlockTimeout), see GUIDE section 5
     "BullMQ delayed job (2h)": "fires",  # measured 2026-11-13: immediately
-    # No expectation yet (recorded as "measured", never fails the run) until
-    # the nightly matrix has results on both architectures:
-    #   Spring @Scheduled (cron), Laravel scheduler (schedule:work), sidekiq-cron
+    # measured in the nightly matrix on x86_64 and arm64, 2026-11-19 and 2026-11-20:
+    # no run within 20 s (a 90 s wait made no difference, 2026-11-18)
+    "Spring @Scheduled (cron)": "trigger",
+    "Laravel scheduler (schedule:work)": "trigger",
+    "sidekiq-cron": "trigger",
 }
 
 

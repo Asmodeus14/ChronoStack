@@ -1,6 +1,6 @@
 # ChronoStack Documentation
 
-ChronoStack is in **alpha** (latest pre-release `v0.1.0-alpha.6`; the first was `v0.1.0-alpha.2`). The guide and the results documents describe what is built and tested. The planning documents (vision, architecture, roadmap) also cover work that is not built yet; their status notes say which.
+ChronoStack is in **alpha** (latest pre-release `v0.1.0-alpha.7`; the first was `v0.1.0-alpha.2`). The guide and the results documents describe what is built and tested. The planning documents (vision, architecture, roadmap) also cover work that is not built yet; their status notes say which.
 
 ## Start here
 
