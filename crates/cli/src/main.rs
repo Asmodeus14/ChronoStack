@@ -30,13 +30,20 @@ use serde_json::json;
 
 use crate::client::Client;
 
-/// Controller image used by `up`. Release builds set it (at compile time) to
-/// the published image pinned by digest; source builds use a locally built image.
+/// Controller image used by `up`. The release workflow sets it (at compile
+/// time) to the published image pinned by digest. Without that, debug builds
+/// (development, e2e tests) use a locally built image, and release builds
+/// (`cargo install`) use the published image for this version.
 const DEFAULT_CLOCKD_IMAGE: &str = match option_env!("CHRONOSTACK_DEFAULT_CLOCKD_IMAGE") {
     Some(v) => v,
-    None => LOCAL_CLOCKD_IMAGE,
+    None if cfg!(debug_assertions) => LOCAL_CLOCKD_IMAGE,
+    None => PUBLISHED_CLOCKD_IMAGE,
 };
 const LOCAL_CLOCKD_IMAGE: &str = "chronostack/clockd:dev";
+const PUBLISHED_CLOCKD_IMAGE: &str = concat!(
+    "ghcr.io/asmodeus14/chronostack-clockd:",
+    env!("CARGO_PKG_VERSION")
+);
 use crate::docker::Compose;
 use crate::session::{ProbeSpec, ServiceEntry, Session};
 

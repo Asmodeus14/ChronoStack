@@ -6,10 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 authors.workspace = true
+readme = "../../README.md"
 keywords = ["testing", "time", "docker-compose", "faketime", "devtools"]
 categories = ["development-tools::testing", "command-line-utilities"]
-publish = false
 
 [[bin]]
 name = "chronostack"

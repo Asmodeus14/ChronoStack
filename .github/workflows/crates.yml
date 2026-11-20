@@ -1,0 +1,45 @@
+# Publish chronostack-core and chronostack to crates.io when a release is
+# published, from that release's tag. Needs a CARGO_REGISTRY_TOKEN secret (a
+# crates.io token with the publish-new and publish-update scopes). Without it
+# the job only warns.
+name: crates.io
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release to publish (e.g. 0.1.0-alpha.8); its tag is checked out"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check the tag matches the crate version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG does not match Cargo.toml version $version"
+            exit 1
+          fi
+      - name: Publish
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::warning::CARGO_REGISTRY_TOKEN is not set; publish by hand with: cargo publish -p chronostack-core -p chronostack"
+            exit 0
+          fi
+          # Both crates in one call: cargo publishes chronostack-core first and
+          # waits for it to be available before publishing chronostack.
+          cargo publish --locked -p chronostack-core -p chronostack

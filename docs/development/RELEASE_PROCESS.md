@@ -4,7 +4,7 @@
 
 ### How to cut a release
 
-1. Set `version` in the root `Cargo.toml` (and `sdk/node/package.json`), and the `version` input default in `action.yml`, so `uses: Asmodeus14/ChronoStack@vX.Y.Z` installs X.Y.Z (the Action's own test runs only by hand, so this can't break CI before the release exists). Rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z[-pre]] - YYYY-MM-DD`.
+1. Set `version` in the root `Cargo.toml` (`[workspace.package]` and the exact `chronostack-core` version under `[workspace.dependencies]`; also `sdk/node/package.json`), and the `version` input default in `action.yml`, so `uses: Asmodeus14/ChronoStack@vX.Y.Z` installs X.Y.Z (the Action's own test runs only by hand, so this can't break CI before the release exists). Rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z[-pre]] - YYYY-MM-DD`.
 2. Run the workflow by hand (dry run) and wait for it to pass.
 3. Push an annotated tag `vX.Y.Z[-pre]`. The workflow checks the tag matches `Cargo.toml`, then:
    - builds the controller image natively on x86_64 and arm64, pushes `ghcr.io/asmodeus14/chronostack-clockd:X.Y.Z-amd64/-arm64` and the multi-arch `:X.Y.Z`;
@@ -16,6 +16,7 @@
 5. Review the draft and publish it.
 6. Move the install links (README, `docs/`, `website/index.html`, `install/install.sh`) to the new version in a follow-up PR, once the release is published.
 7. Publishing triggers the **Homebrew tap** workflow (`.github/workflows/homebrew.yml`), which writes `Formula/chronostack.rb` in [Asmodeus14/homebrew-tap](https://github.com/Asmodeus14/homebrew-tap) from the release's `SHA256SUMS` (`scripts/homebrew_formula.py`). It needs the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token with Contents read and write on `homebrew-tap` only. Without it the job warns, and the formula is updated by hand: `python scripts/homebrew_formula.py X.Y.Z SHA256SUMS > Formula/chronostack.rb`.
+8. Publishing also triggers the **crates.io** workflow (`.github/workflows/crates.yml`), which publishes `chronostack-core` and `chronostack` from the release tag. It needs the `CARGO_REGISTRY_TOKEN` secret (a crates.io token with the publish-new and publish-update scopes). Without it the job warns; publish by hand from the tag with `cargo publish -p chronostack-core -p chronostack`. crates.io versions can't be replaced, only yanked. `cargo install` skips pre-releases unless the version is given: `cargo install chronostack@X.Y.Z-alpha.N`.
 
 ## Versioning
 
