@@ -25,10 +25,10 @@ getrandom = "0.4"
 ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 # `chronostack update`
 semver = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "7", default-features = false, features = ["deflate"] }
 self-replace = "1"
 serde_norway = "0.9"
 regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
