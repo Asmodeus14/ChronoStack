@@ -83,3 +83,5 @@ jobs:
         run: python3 tests/e2e/run_init.py --cli target/debug/chronostack
       - name: Run e2e (shared mounts - up refuses writable bind mounts)
         run: python3 tests/e2e/run_shared_mounts.py --cli target/debug/chronostack
+      - name: Run e2e (expose - loopback ports and service:// URLs)
+        run: python3 tests/e2e/run_expose.py --cli target/debug/chronostack

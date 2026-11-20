@@ -44,6 +44,26 @@ pub struct Config {
     pub proxies: Vec<ProxyCfg>,
     #[serde(default)]
     pub mcp: McpCfg,
+    /// Container ports of the copy to publish on 127.0.0.1 (`app:3000`, or
+    /// `{service: app, port: 3000, host_port: 8080}` for a fixed host port).
+    #[serde(default)]
+    pub expose: Vec<ExposeCfg>,
+}
+
+/// One `expose:` entry.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ExposeCfg {
+    Short(String),
+    Long(ExposeLong),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExposeLong {
+    pub service: String,
+    pub port: u16,
+    pub host_port: Option<u16>,
 }
 
 /// Limits for `chronostack mcp` (AI agents).
@@ -201,6 +221,8 @@ pub struct Resolved {
     pub mcp_max_advance_ns: i64,
     /// `mcp.max_wall` (default 10 minutes).
     pub mcp_max_wall_ns: i64,
+    /// `expose:` entries, validated.
+    pub expose: Vec<chronostack_core::compose::Expose>,
 }
 
 pub const DEFAULT_MCP_MAX_ADVANCE_NS: i64 = 400 * 86_400_000_000_000;
@@ -224,6 +246,7 @@ impl Resolved {
                 barriers: vec![],
                 proxies: vec![],
                 mcp: McpCfg::default(),
+                expose: vec![],
             },
             max_jump_ns: None,
             dwell_ns: None,
@@ -232,8 +255,55 @@ impl Resolved {
             barrier_timeouts_ns: vec![],
             mcp_max_advance_ns: DEFAULT_MCP_MAX_ADVANCE_NS,
             mcp_max_wall_ns: DEFAULT_MCP_MAX_WALL_NS,
+            expose: vec![],
         }
     }
+}
+
+/// Validate `expose:`: known services, real ports, no duplicates.
+fn check_expose(
+    entries: &[ExposeCfg],
+    check_service: &dyn Fn(&str, &str) -> Result<()>,
+) -> Result<Vec<chronostack_core::compose::Expose>> {
+    let mut out: Vec<chronostack_core::compose::Expose> = Vec::new();
+    for entry in entries {
+        let e = match entry {
+            ExposeCfg::Short(s) => {
+                let (service, port) =
+                    crate::expose::parse_target(s).map_err(|e| anyhow::anyhow!("expose: {e}"))?;
+                chronostack_core::compose::Expose {
+                    service,
+                    port,
+                    host_port: None,
+                }
+            }
+            ExposeCfg::Long(l) => {
+                if l.port == 0 || l.host_port == Some(0) {
+                    bail!("expose `{}`: ports must be 1-65535", l.service);
+                }
+                chronostack_core::compose::Expose {
+                    service: l.service.clone(),
+                    port: l.port,
+                    host_port: l.host_port,
+                }
+            }
+        };
+        let what = format!("expose `{}:{}`", e.service, e.port);
+        check_service(&what, &e.service)?;
+        if out
+            .iter()
+            .any(|x| x.service == e.service && x.port == e.port)
+        {
+            bail!("{what}: listed twice");
+        }
+        if let Some(h) = e.host_port {
+            if out.iter().any(|x| x.host_port == Some(h)) {
+                bail!("{what}: host port {h} is used by another entry");
+            }
+        }
+        out.push(e);
+    }
+    Ok(out)
 }
 
 /// Find `chronostack.yml` in `dir`.
@@ -266,6 +336,7 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
         }
         Ok(())
     };
+    let expose = check_expose(&config.expose, &check_service)?;
     let mut names = std::collections::HashSet::new();
     let mut schedules = Vec::new();
     let mut trigger_timeouts_ns = Vec::new();
@@ -281,7 +352,7 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
                     bail!("{what}: exec.command is empty");
                 }
             }
-            (None, Some(_)) => {}
+            (None, Some(h)) => crate::expose::check_url(&what, &h.url, &expose)?,
             _ => bail!("{what}: set exactly one of `exec` or `http`"),
         }
         if let Some(s) = &t.schedule {
@@ -331,6 +402,9 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
         }
         if let Some(s) = &b.exec {
             check_service(&what, &s.service)?;
+        }
+        if let Some(h) = &b.http {
+            crate::expose::check_url(&what, &h.url, &expose)?;
         }
         if let Some(q) = &b.bullmq {
             check_service(&what, &q.service)?;
@@ -406,6 +480,7 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
     }
     Ok(Resolved {
         path: None,
+        expose,
         mcp_max_advance_ns,
         mcp_max_wall_ns,
         config,
@@ -436,6 +511,42 @@ mod tests {
         assert_eq!(r.mcp_max_wall_ns, 90_000_000_000);
         assert!(parse("version: 1\nmcp: { max_wall: 0s }\n").is_err());
         assert!(parse("version: 1\nmcp: { max_wall: soon }\n").is_err());
+    }
+
+    #[test]
+    fn expose_entries() {
+        let r = parse(
+            "version: 1\nexpose:\n  - worker:3000\n  - { service: db, port: 5432, host_port: 15432 }\n",
+        )
+        .unwrap();
+        let got: Vec<_> = r
+            .expose
+            .iter()
+            .map(|e| (e.service.as_str(), e.port, e.host_port))
+            .collect();
+        assert_eq!(got, vec![("worker", 3000, None), ("db", 5432, Some(15432))]);
+        for bad in [
+            "expose: [nope:3000]",
+            "expose: [worker]",
+            "expose: [worker:0]",
+            "expose: [worker:3000, worker:3000]",
+            "expose: [{service: worker, port: 1, host_port: 9000}, {service: db, port: 2, host_port: 9000}]",
+            "expose: [{service: worker, port: 1, extra: x}]",
+        ] {
+            assert!(parse(&format!("version: 1\n{bad}\n")).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn service_urls_must_be_exposed() {
+        let trig = "triggers:\n  - name: tick\n    http: { url: \"service://worker:3000/tick\" }\n";
+        let err = parse(&format!("version: 1\n{trig}"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("needs `worker:3000` in `expose:`"), "{err}");
+        assert!(parse(&format!("version: 1\nexpose: [worker:3000]\n{trig}")).is_ok());
+        let barrier = "barriers:\n  - name: ready\n    http: { url: \"service://db:80/\" }\n";
+        assert!(parse(&format!("version: 1\nexpose: [worker:3000]\n{barrier}")).is_err());
     }
 
     #[test]

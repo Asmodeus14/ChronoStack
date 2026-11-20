@@ -5,6 +5,7 @@ mod config;
 mod detect;
 mod docker;
 mod engine;
+mod expose;
 mod fault;
 mod init;
 mod mcp;
@@ -361,6 +362,12 @@ fn run(cli: Cli) -> Result<i32> {
             for b in &r.config.barriers {
                 println!("  barrier {}", b.name);
             }
+            for e in &r.expose {
+                match e.host_port {
+                    Some(h) => println!("  expose {}:{} on 127.0.0.1:{h}", e.service, e.port),
+                    None => println!("  expose {}:{} on a free port", e.service, e.port),
+                }
+            }
             Ok(0)
         }
         Cmd::Freeze { json } => {
@@ -541,16 +548,20 @@ fn client(s: &mut Session) -> Client {
 
 /// Host port Compose published for the controller.
 fn resolve_port(compose: &Compose) -> Result<u16> {
-    let out = docker::run(&compose.args(&[
-        "port",
-        paths::CLOCKD_SERVICE,
-        &paths::CLOCKD_PORT.to_string(),
-    ]))?;
-    out.trim()
-        .rsplit(':')
+    published_port(compose, paths::CLOCKD_SERVICE, paths::CLOCKD_PORT)
+}
+
+/// Host port Compose published for a service's container port.
+fn published_port(compose: &Compose, service: &str, port: u16) -> Result<u16> {
+    let out = docker::run(&compose.args(&["port", service, &port.to_string()]))?;
+    // One line per binding (`127.0.0.1:49213`); the first is enough.
+    out.lines()
         .next()
+        .and_then(|l| l.trim().rsplit(':').next())
         .and_then(|p| p.parse().ok())
-        .with_context(|| format!("unexpected `docker compose port` output: {out:?}"))
+        .with_context(|| {
+            format!("unexpected `docker compose port {service} {port}` output: {out:?}")
+        })
 }
 
 fn print_clock(st: &ClockState, json: bool) {
@@ -832,9 +843,12 @@ fn up(
     }
 
     let names: Vec<String> = project.services.iter().map(|s| s.name.clone()).collect();
-    let proxies = match config::find(Path::new(".")) {
-        Some(p) => config::load(&p, &names)?.config.proxies,
-        None => vec![],
+    let (proxies, expose) = match config::find(Path::new(".")) {
+        Some(p) => {
+            let r = config::load(&p, &names)?;
+            (r.config.proxies, r.expose)
+        }
+        None => (vec![], vec![]),
     };
     let proxy_plan = fault::plan(&project, &proxies)?;
 
@@ -862,6 +876,7 @@ fn up(
             env_rewrites: &proxy_plan.rewrites,
         },
         &isolate,
+        &expose,
     );
     let override_path = Path::new(session::DIR).join(OVERRIDE_FILE);
     fs::write(&override_path, yaml::to_compose_yaml(&doc)?)?;
@@ -876,6 +891,16 @@ fn up(
     docker::run_inherit(&cs.args(&["up", "-d"]))?;
 
     let port = resolve_port(&cs)?;
+    let exposed = expose
+        .iter()
+        .map(|e| {
+            Ok(expose::Exposed {
+                service: e.service.clone(),
+                port: e.port,
+                host_port: published_port(&cs, &e.service, e.port)?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     let session = Session {
         version: 1,
@@ -888,6 +913,7 @@ fn up(
         token,
         services: entries,
         shared_mounts: project.shared_mounts.clone(),
+        exposed,
     };
     session.save()?;
     let st = Client::new(session.base_url(), session.token.clone())
@@ -912,6 +938,14 @@ isolated from your own stack (use `up --keep-ports` to keep these):"
                 what.push(format!("container_name `{n}` not used"));
             }
             println!("  {}: {}", i.service, what.join("; "));
+        }
+    }
+    if !session.exposed.is_empty() {
+        println!(
+            "\nreachable from your machine (`service://<service>:<port>` in chronostack.yml):"
+        );
+        for e in &session.exposed {
+            println!("  {}:{}  ->  {}", e.service, e.port, e.url());
         }
     }
     if !proxy_plan.rewrites.is_empty() {
@@ -1074,7 +1108,7 @@ fn doctor(json_out: bool) -> Result<i32> {
     if json_out {
         println!(
             "{}",
-            json!({ "clock": clock.as_ref().ok(), "clockd_reachable": clock.is_ok(), "cli_version": env!("CARGO_PKG_VERSION"), "clockd_version": clockd_version, "services": rows, "shared_mounts": s.shared_mounts, "problems": problem_count })
+            json!({ "clock": clock.as_ref().ok(), "clockd_reachable": clock.is_ok(), "cli_version": env!("CARGO_PKG_VERSION"), "clockd_version": clockd_version, "services": rows, "shared_mounts": s.shared_mounts, "exposed": s.exposed, "problems": problem_count })
         );
     } else {
         match &clock {
@@ -1163,6 +1197,12 @@ fn doctor(json_out: bool) -> Result<i32> {
         if !notes.is_empty() {
             println!("\nnotes:");
             notes.iter().for_each(|n| println!("{n}"));
+        }
+        if !s.exposed.is_empty() {
+            println!("\nreachable from your machine:");
+            for e in &s.exposed {
+                println!("  {}:{}  ->  {}", e.service, e.port, e.url());
+            }
         }
         if !s.shared_mounts.is_empty() {
             println!("\nshared with your own stack (not copied):");

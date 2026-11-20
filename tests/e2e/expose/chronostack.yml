@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../../../docs/schema/chronostack.schema.json
+version: 1
+expose:
+  - web:80
+  - { service: api, port: 80, host_port: 18181 }
+triggers:
+  - name: tick-web
+    schedule: { every: 1d, at: "03:00" }
+    http: { url: "service://web:80/tick", method: GET }
+barriers:
+  - name: api-answers
+    http: { url: "service://api:80/health", method: GET, status: 200 }

@@ -45,7 +45,7 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "Must be reachable from the host running the CLI."
+          "description": "Must be reachable from the host running the CLI. service://<service>:<port>/path goes to a port listed in expose: (chronostack.yml)."
         },
         "method": {
           "type": "string",

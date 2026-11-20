@@ -473,6 +473,30 @@ pub fn check_upstream(upstream: &str) -> Result<(), String> {
 
 /// Marker the CLI turns into Compose's `!reset` YAML tag (JSON cannot carry tags).
 pub const RESET_MARKER: &str = "__chronostack_reset__";
+/// Marker the CLI turns into Compose's `!override` YAML tag: the value replaces
+/// the user's instead of being merged into it.
+pub const OVERRIDE_MARKER: &str = "__chronostack_override__";
+
+/// A container port of the copy published on the host's loopback interface
+/// (`expose:` in chronostack.yml), so host-side tools can reach it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Expose {
+    pub service: String,
+    /// Port inside the container.
+    pub port: u16,
+    /// Fixed host port, or `None` for one Docker picks.
+    pub host_port: Option<u16>,
+}
+
+impl Expose {
+    /// Compose short syntax, bound to 127.0.0.1 only.
+    pub fn compose_port(&self) -> String {
+        match self.host_port {
+            Some(h) => format!("127.0.0.1:{h}:{}", self.port),
+            None => format!("127.0.0.1::{}", self.port),
+        }
+    }
+}
 
 /// Fields removed in the ChronoStack copy so it can run next to the user's own
 /// stack: fixed host ports and `container_name` would collide (R13).
@@ -498,11 +522,13 @@ pub fn isolation_for(project: &Project) -> Vec<Isolation> {
 }
 
 /// Build the override document. `isolate` = services whose host ports and
-/// container names are reset (empty with `--keep-ports`).
+/// container names are reset (empty with `--keep-ports`). `expose` = ports to
+/// publish on 127.0.0.1; for an isolated service they replace its own ports.
 pub fn generate_override(
     plans: &[ServicePlan],
     clockd: &ClockdSpec<'_>,
     isolate: &[Isolation],
+    expose: &[Expose],
 ) -> Value {
     let mut services = Map::new();
     let mut clockd_env = json!({ "CHRONOSTACK_TOKEN": clockd.token });
@@ -558,18 +584,51 @@ pub fn generate_override(
                 json!({ paths::CLOCKD_SERVICE: { "condition": "service_healthy" } });
         }
     }
+    let exposed_ports = |service: &str| -> Vec<String> {
+        expose
+            .iter()
+            .filter(|e| e.service == service)
+            .map(Expose::compose_port)
+            .collect()
+    };
     for iso in isolate {
+        let ports = exposed_ports(&iso.service);
         let entry = services
             .entry(iso.service.clone())
             .or_insert_with(|| json!({}))
             .as_object_mut()
             .expect("service entries are objects");
         if !iso.dropped_ports.is_empty() {
-            entry.insert("ports".into(), json!({ RESET_MARKER: [] }));
+            let value = if ports.is_empty() {
+                json!({ RESET_MARKER: [] })
+            } else {
+                json!({ OVERRIDE_MARKER: ports })
+            };
+            entry.insert("ports".into(), value);
         }
         if iso.dropped_container_name.is_some() {
             entry.insert("container_name".into(), json!({ RESET_MARKER: null }));
         }
+    }
+    // Exposed services whose own ports weren't replaced above: add to them
+    // (Compose merges `ports` lists from several files).
+    let mut seen = std::collections::BTreeSet::new();
+    for e in expose {
+        if !seen.insert(e.service.as_str()) {
+            continue;
+        }
+        let replaced = isolate
+            .iter()
+            .any(|i| i.service == e.service && !i.dropped_ports.is_empty());
+        if replaced {
+            continue;
+        }
+        let entry = services
+            .entry(e.service.clone())
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("service entries are objects");
+        entry.insert("ports".into(), json!(exposed_ports(&e.service)));
     }
     json!({ "services": services, "volumes": { paths::VOLUME: {} } })
 }
@@ -806,6 +865,7 @@ mod tests {
                 env_rewrites: &[],
             },
             &[],
+            &[],
         );
         let svcs = doc["services"].as_object().unwrap();
         assert_eq!(
@@ -863,10 +923,59 @@ mod tests {
                 env_rewrites: &[],
             },
             &iso,
+            &[],
         );
         assert_eq!(doc["services"]["web"]["ports"][RESET_MARKER], json!([]));
         assert!(doc["services"]["web"]["container_name"][RESET_MARKER].is_null());
         assert!(doc["services"].get("db").is_none());
+    }
+
+    #[test]
+    fn exposed_ports_are_published_on_loopback() {
+        let iso = vec![Isolation {
+            service: "web".into(),
+            dropped_ports: vec!["8080".into()],
+            dropped_container_name: None,
+        }];
+        let expose = vec![
+            Expose {
+                service: "web".into(),
+                port: 80,
+                host_port: None,
+            },
+            Expose {
+                service: "api".into(),
+                port: 3000,
+                host_port: Some(13000),
+            },
+            Expose {
+                service: "api".into(),
+                port: 9229,
+                host_port: None,
+            },
+        ];
+        let spec = ClockdSpec {
+            image: "i",
+            token: "t",
+            proxies: &[],
+            networks: &[],
+            env_rewrites: &[],
+        };
+        let doc = generate_override(&[], &spec, &iso, &expose);
+        // web's own host ports are replaced by the exposed one…
+        assert_eq!(
+            doc["services"]["web"]["ports"][OVERRIDE_MARKER],
+            json!(["127.0.0.1::80"])
+        );
+        // …api had none dropped, so its exposed ports are added.
+        assert_eq!(
+            doc["services"]["api"]["ports"],
+            json!(["127.0.0.1:13000:3000", "127.0.0.1::9229"])
+        );
+        // Without `expose`, isolation still resets the ports.
+        let doc = generate_override(&[], &spec, &iso, &[]);
+        assert_eq!(doc["services"]["web"]["ports"][RESET_MARKER], json!([]));
+        assert!(doc["services"].get("api").is_none());
     }
 
     #[test]
@@ -938,6 +1047,7 @@ mod tests {
                 networks: &["back".into(), "default".into(), "back".into()],
                 env_rewrites: std::slice::from_ref(&rw),
             },
+            &[],
             &[],
         );
         let c = &doc["services"]["chronostack-clockd"];
