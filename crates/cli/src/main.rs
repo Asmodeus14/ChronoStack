@@ -1005,7 +1005,6 @@ fn down(volumes: bool) -> Result<()> {
     }
     docker::run_inherit(&s.compose().args(&args))?;
     let _ = fs::remove_file(Path::new(session::DIR).join(OVERRIDE_FILE));
-    let _ = fs::remove_file(Path::new(session::DIR).join("compose.override.json")); // pre-M2 sessions
     fs::remove_file(Session::path())?;
     println!(
         "ChronoStack project `{}` is down.{}",
