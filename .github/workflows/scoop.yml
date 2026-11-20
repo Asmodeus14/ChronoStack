@@ -1,0 +1,65 @@
+# Update the Scoop bucket (Asmodeus14/scoop-bucket) when a release is published.
+# Runs on publish, not on the draft: draft assets can't be downloaded.
+# Needs a token with Contents read and write on Asmodeus14/scoop-bucket:
+# SCOOP_BUCKET_TOKEN, or HOMEBREW_TAP_TOKEN if that token also covers the
+# bucket. Without one the job only warns.
+name: Scoop bucket
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish to the bucket (e.g. 0.1.0-alpha.8)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    env:
+      BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN || secrets.HOMEBREW_TAP_TOKEN }}
+      VERSION_INPUT: ${{ inputs.version }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version
+        id: v
+        run: |
+          v="${VERSION_INPUT:-${TAG#v}}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version $v"
+      - name: Write the manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" -p SHA256SUMS -D /tmp/rel
+          python3 scripts/scoop_manifest.py "$VERSION" /tmp/rel/SHA256SUMS > /tmp/chronostack.json
+          cat /tmp/chronostack.json
+      - name: Push to the bucket
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          if [ -z "$BUCKET_TOKEN" ]; then
+            echo "::warning::no token for Asmodeus14/scoop-bucket; update bucket/chronostack.json by hand"
+            exit 0
+          fi
+          git clone -q "https://x-access-token:${BUCKET_TOKEN}@github.com/Asmodeus14/scoop-bucket.git" /tmp/bucket
+          cp /tmp/chronostack.json /tmp/bucket/bucket/chronostack.json
+          cd /tmp/bucket
+          if git diff --quiet; then
+            # Nothing to commit: still check the token can push (a dry run is
+            # refused without write access), so a manual run tests the setup.
+            git push --dry-run -q origin HEAD:main
+            echo "manifest already at $VERSION; the token can push to the bucket"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "chronostack $VERSION"
+          git push -q origin HEAD:main
+          echo "bucket updated to $VERSION"

@@ -330,6 +330,7 @@ p { text-wrap: pretty; }
 .install { position: relative; isolation: isolate; color: var(--on-paper); }
 .install-flood { position: absolute; inset: 0; z-index: -1; background: var(--paper); clip-path: circle(0% at 50% 0%); }
 .install code { background: var(--on-paper-faint); }
+.install-sub code { overflow-wrap: anywhere; } /* long package-manager URLs on phones */
 .install-inner { max-width: 980px; margin: 0 auto; padding: clamp(120px, 18vh, 200px) var(--gutter) clamp(100px, 16vh, 180px); }
 .install h2 { margin-bottom: 18px; }
 .install-sub { margin: 0 0 clamp(36px, 6vh, 56px); color: var(--on-paper-dim); max-width: 56ch; }

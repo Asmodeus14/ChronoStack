@@ -94,11 +94,46 @@ fn extract(archive: &[u8], zip: bool, name: &str) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Whether `exe` (resolved through symlinks) lives in a Homebrew Cellar, where
-/// `brew` owns the file and replacing it would leave Homebrew out of sync.
-fn installed_by_homebrew(exe: &std::path::Path) -> bool {
+/// A package manager that owns the installed binary: replacing the file would
+/// leave it out of sync, so `update` defers to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PackageManager {
+    Homebrew,
+    Scoop,
+}
+
+impl PackageManager {
+    fn name(self) -> &'static str {
+        match self {
+            PackageManager::Homebrew => "Homebrew",
+            PackageManager::Scoop => "Scoop",
+        }
+    }
+
+    fn upgrade(self) -> &'static str {
+        match self {
+            PackageManager::Homebrew => "brew upgrade chronostack",
+            PackageManager::Scoop => "scoop update chronostack",
+        }
+    }
+}
+
+/// Which package manager installed `exe`, from its path: a Homebrew Cellar
+/// (`…/Cellar/chronostack/<version>/bin/chronostack`, symlinks resolved), or a
+/// Scoop app directory (`…\apps\chronostack\<version or current>\chronostack.exe`,
+/// wherever the Scoop root is).
+fn installed_by(exe: &std::path::Path) -> Option<PackageManager> {
     let real = std::fs::canonicalize(exe).unwrap_or_else(|_| exe.to_path_buf());
-    real.components().any(|c| c.as_os_str() == "Cellar")
+    let parts: Vec<_> = real.components().map(|c| c.as_os_str()).collect();
+    if parts.iter().any(|c| *c == "Cellar") {
+        return Some(PackageManager::Homebrew);
+    }
+    // apps / chronostack / <version or current> / chronostack.exe
+    let n = parts.len();
+    (n >= 4
+        && parts[n - 4].eq_ignore_ascii_case("apps")
+        && parts[n - 3].eq_ignore_ascii_case("chronostack"))
+    .then_some(PackageManager::Scoop)
 }
 
 pub struct Options {
@@ -124,14 +159,8 @@ pub fn run(o: &Options) -> Result<i32> {
         Some(v) => Version::parse(v.trim_start_matches('v')).context("--version")?,
         None => newest(&agent, pre)?,
     };
-    let homebrew = std::env::current_exe()
-        .map(|e| installed_by_homebrew(&e))
-        .unwrap_or(false);
-    let how = if homebrew {
-        "brew upgrade chronostack"
-    } else {
-        "chronostack update"
-    };
+    let manager = std::env::current_exe().ok().and_then(|e| installed_by(&e));
+    let how = manager.map_or("chronostack update", PackageManager::upgrade);
     if o.check {
         if wanted > current {
             println!("update available: {current} → {wanted} (run `{how}`)");
@@ -144,10 +173,11 @@ pub fn run(o: &Options) -> Result<i32> {
         println!("chronostack {current} is up to date");
         return Ok(0);
     }
-    if homebrew {
+    if let Some(m) = manager {
         bail!(
-            "this chronostack was installed with Homebrew; run `brew upgrade chronostack` instead \
-             (replacing Homebrew's copy would leave brew out of sync)"
+            "this chronostack was installed with {name}; run `{how}` instead \
+             (replacing {name}'s copy would leave it out of sync)",
+            name = m.name()
         );
     }
 
@@ -253,17 +283,40 @@ mod tests {
     }
 
     #[test]
-    fn detects_a_homebrew_cellar() {
+    fn detects_package_manager_installs() {
         use std::path::Path;
-        assert!(installed_by_homebrew(Path::new(
-            "/opt/homebrew/Cellar/chronostack/0.1.0-alpha.6/bin/chronostack"
-        )));
-        assert!(installed_by_homebrew(Path::new(
-            "/home/linuxbrew/.linuxbrew/Cellar/chronostack/0.1.0/bin/chronostack"
-        )));
-        assert!(!installed_by_homebrew(Path::new(
-            "/home/me/.local/bin/chronostack"
-        )));
+        let by = |p: &str| installed_by(Path::new(p));
+        assert_eq!(
+            by("/opt/homebrew/Cellar/chronostack/0.1.0-alpha.6/bin/chronostack"),
+            Some(PackageManager::Homebrew)
+        );
+        assert_eq!(
+            by("/home/linuxbrew/.linuxbrew/Cellar/chronostack/0.1.0/bin/chronostack"),
+            Some(PackageManager::Homebrew)
+        );
+        assert_eq!(by("/home/me/.local/bin/chronostack"), None);
+        // Scoop paths are Windows paths; `/` also separates components on Windows,
+        // so the same strings work on every platform.
+        assert_eq!(
+            by("C:/Users/me/scoop/apps/chronostack/current/chronostack.exe"),
+            Some(PackageManager::Scoop)
+        );
+        assert_eq!(
+            by("D:/tools/apps/chronostack/0.1.0-alpha.7/chronostack.exe"),
+            Some(PackageManager::Scoop)
+        );
+        assert_eq!(
+            by("C:/Users/me/AppData/Local/Programs/chronostack/chronostack.exe"),
+            None
+        );
+        assert_eq!(
+            by("C:/Users/me/scoop/apps/other/current/chronostack.exe"),
+            None
+        );
+        assert_eq!(
+            by("C:/Users/me/scoop/apps/chronostack/current/x/y.exe"),
+            None
+        );
     }
 
     #[test]

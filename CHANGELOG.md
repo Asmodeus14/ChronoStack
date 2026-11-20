@@ -9,13 +9,15 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
-### Changed
-
-- A CLI built from source in release mode (as `cargo install` does) now uses the published controller image for its version, `ghcr.io/asmodeus14/chronostack-clockd:<version>`, instead of a locally built `chronostack/clockd:dev` it can't find. Debug builds still use the local image. Release downloads are unchanged (pinned by digest).
-
 ### Added
 
 - Publishing to crates.io: `chronostack` and `chronostack-core` are published from each release's tag (`cargo install chronostack@<version>`), starting with the next release.
+- Scoop (Windows): `scoop bucket add chronostack https://github.com/Asmodeus14/scoop-bucket`, then `scoop install chronostack/chronostack`. The bucket is updated when a release is published.
+
+### Changed
+
+- A CLI built from source in release mode (as `cargo install` does) now uses the published controller image for its version, `ghcr.io/asmodeus14/chronostack-clockd:<version>`, instead of a locally built `chronostack/clockd:dev` it can't find. Debug builds still use the local image. Release downloads are unchanged (pinned by digest).
+- `chronostack update` also refuses to replace a Scoop install and says to run `scoop update chronostack`, as it does for Homebrew.
 
 ## [0.1.0-alpha.7] - 2026-11-19
 
