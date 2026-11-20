@@ -9,6 +9,14 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Changed
+
+- A CLI built from source in release mode (as `cargo install` does) now uses the published controller image for its version, `ghcr.io/asmodeus14/chronostack-clockd:<version>`, instead of a locally built `chronostack/clockd:dev` it can't find. Debug builds still use the local image. Release downloads are unchanged (pinned by digest).
+
+### Added
+
+- Publishing to crates.io: `chronostack` and `chronostack-core` are published from each release's tag (`cargo install chronostack@<version>`), starting with the next release.
+
 ## [0.1.0-alpha.7] - 2026-11-19
 
 ### Added

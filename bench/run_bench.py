@@ -294,6 +294,9 @@ def main():
     ap.add_argument("--only", choices=["b1", "b2"])
     ap.add_argument("--label", default=f"{platform.system().lower()}-{platform.machine().lower()}")
     a = ap.parse_args()
+    # Benchmark the controller built from this checkout (release builds of the
+    # CLI would otherwise default to the published image for their version).
+    os.environ.setdefault("CHRONOSTACK_CLOCKD_IMAGE", "chronostack/clockd:dev")
     exe = "chronostack" + (".exe" if os.name == "nt" else "")
     cli = os.path.abspath(a.cli) if a.cli else os.path.join(ROOT, "target", "release", exe)
     if not os.path.exists(cli):
