@@ -54,7 +54,14 @@ It works in the same window straight away.
 brew install asmodeus14/tap/chronostack
 ```
 
-Upgrade with `brew upgrade chronostack`; `chronostack update` is for the script installs.
+**Scoop (Windows)**
+
+```powershell
+scoop bucket add chronostack https://github.com/Asmodeus14/scoop-bucket
+scoop install chronostack/chronostack
+```
+
+Upgrade with `brew upgrade chronostack` or `scoop update chronostack`; `chronostack update` is for the script installs.
 
 **Check it worked:**
 
