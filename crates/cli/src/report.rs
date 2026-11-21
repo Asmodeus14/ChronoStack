@@ -1,4 +1,4 @@
-//! Scenario reports: `.chronostack/reports/<time>-<scenario>.json` (complete,
+//! Scenario reports: `.chronostack/reports/<time>-<scenario>-<run id>.json` (complete,
 //! machine-readable) and `.md` (for people). Nothing is sent anywhere.
 //!
 //! Text that comes from your services (command output, request paths) is
@@ -98,12 +98,8 @@ pub fn write(
 ) -> Result<(PathBuf, PathBuf)> {
     let dir = PathBuf::from(session::DIR).join("reports");
     fs::create_dir_all(&dir)?;
-    let stamp = chronostack_core::duration::format_utc(real_ns)
-        .replace(['-', ':'], "")
-        .replace('T', "-")
-        .trim_end_matches('Z')
-        .to_string();
-    let base = format!("{stamp}-{}", slug(scenario_name));
+    let run_id = report["run_id"].as_str().unwrap_or("run");
+    let base = report_base(real_ns, scenario_name, run_id);
     let json_path = dir.join(format!("{base}.json"));
     let md_path = dir.join(format!("{base}.md"));
     fs::write(&json_path, serde_json::to_string_pretty(report)? + "\n")?;
@@ -111,6 +107,18 @@ pub fn write(
     session::restrict(&json_path);
     session::restrict(&md_path);
     Ok((json_path, md_path))
+}
+
+/// `YYYYMMDD-HHMMSS.mmm-<scenario>-<run id>`: unique for every run (two runs of a
+/// scenario can start within the same second), and file names sort by start time.
+fn report_base(real_ns: i64, scenario_name: &str, run_id: &str) -> String {
+    let stamp = chronostack_core::duration::format_utc(real_ns)
+        .replace(['-', ':'], "")
+        .replace('T', "-")
+        .trim_end_matches('Z')
+        .to_string();
+    let ms = real_ns.rem_euclid(1_000_000_000) / 1_000_000;
+    format!("{stamp}.{ms:03}-{}-{run_id}", slug(scenario_name))
 }
 
 /// Escape text for XML 1.0 attributes and content, dropping characters XML
@@ -455,6 +463,20 @@ pub fn markdown(r: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_names_are_unique_and_sort_by_time() {
+        // 2026-11-21T07:49:37.512Z and .901Z: two runs in the same second.
+        let t = 1_795_247_377_512_000_000;
+        let a = report_base(t, "Users over three days", "aaaa1111");
+        let b = report_base(t + 389_000_000, "Users over three days", "bbbb2222");
+        assert_ne!(a, b, "same scenario, same second: still two files");
+        assert!(a < b, "{a} sorts before {b}");
+        assert!(a.ends_with("-aaaa1111"), "{a}");
+        assert!(a.contains(".512-"), "{a}");
+        // A later second still sorts after, whatever the milliseconds.
+        assert!(b < report_base(t + 1_000_000_000 - 512_000_000, "a", "z"));
+    }
 
     #[test]
     fn redacts_common_secrets() {
