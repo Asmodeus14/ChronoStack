@@ -159,6 +159,11 @@ impl VirtualUsers {
     }
 
     /// Let every user due at or before `now_ns` act. Returns how many acted.
+    ///
+    /// Each user is timed by its own due time, not by `now_ns`: the clock keeps
+    /// running in real time while a stop's triggers and barriers run, so the
+    /// time it reads when the users act drifts by fractions of a second. Due
+    /// times depend only on the seed, so the timeline does too.
     pub fn run_due(&mut self, now_ns: i64) -> usize {
         let mut due = Vec::new();
         while let Some(entry) = self.pending.first_entry() {
@@ -174,7 +179,6 @@ impl VirtualUsers {
         let started = Instant::now();
         self.stops += 1;
         self.actions += due.len() as u64;
-        let stamp = format_utc(now_ns);
         let users: Vec<(Key, Box<User>)> = due
             .into_iter()
             .map(|(k, slot)| {
@@ -200,14 +204,13 @@ impl VirtualUsers {
             let handles: Vec<_> = (0..workers)
                 .map(|_| {
                     let queue = &queue;
-                    let stamp = &stamp;
                     s.spawn(move || {
                         let mut stats = Stats::default();
                         let mut out = Vec::new();
                         loop {
                             let next = queue.lock().expect("queue lock").next();
                             let Some((k, mut user)) = next else { break };
-                            user.note(|| format!("@ {stamp}"));
+                            user.note(|| format!("@ {}", format_utc(k.0)));
                             let pause = user.resume(&mut stats, None);
                             out.push((k, user, pause));
                         }
@@ -226,14 +229,13 @@ impl VirtualUsers {
             done.extend(out);
         }
         let acted = done.len();
-        // Reschedule in issue order, from the stop's virtual time.
+        // Reschedule in issue order, from each user's own due time.
         done.sort_by_key(|(k, _, _)| *k);
-        for ((_, ci, u), user, pause) in done {
+        for ((at, ci, u), user, pause) in done {
             match pause {
                 Pause::Think(ns) => {
-                    let due =
-                        round_up(self.start_ns, now_ns.saturating_add(ns), self.resolution_ns)
-                            .max(now_ns + self.resolution_ns);
+                    let due = round_up(self.start_ns, at.saturating_add(ns), self.resolution_ns)
+                        .max(at + self.resolution_ns);
                     self.pending.insert((due, ci, u), Slot::Resume(user));
                 }
                 Pause::Finished(o) => {
@@ -407,6 +409,26 @@ mod tests {
         assert_eq!(first["cohort"], "c");
         assert_eq!(first["user"], 1);
         assert!(first["event"].as_str().unwrap().contains("think"));
+    }
+
+    #[test]
+    fn clock_drift_at_a_stop_does_not_change_the_timeline() {
+        // The clock reads a little later than the due time when users act
+        // (it runs while a stop's triggers and barriers run). Users must be
+        // timed by their due time, so the timeline is the same either way. The
+        // last step records an event, so a resume at the wrong time shows.
+        let text = "version: 1\ncohorts: [{ name: c, users: 5, arrive: { over: 5h }, journey: j }]\n\
+                    journeys:\n  j:\n    - think: { between: [59s, 61s] }\n    - think: 30m\n    - branch: { p: 1.0 }\n";
+        let run = |drift: &dyn Fn(i64) -> i64| {
+            let mut v = VirtualUsers::new(plan(text), &BTreeMap::new(), 9, "r", MIN, 0);
+            while let Some(t) = v.next_due() {
+                v.run_due(t + drift(t));
+            }
+            v.finish().1["timeline"].clone()
+        };
+        let exact = run(&|_| 0);
+        let drifted = run(&|t| 100_000_000 + t % 800_000_000); // 0.1–0.9 s late
+        assert_eq!(exact, drifted);
     }
 
     #[test]
