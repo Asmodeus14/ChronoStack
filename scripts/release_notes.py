@@ -24,8 +24,9 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     version = sys.argv[1]
     changelog = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
-    pre = "-" in version
-    print(f"""ChronoStack {version}{" (pre-release)" if pre else ""}: Stripe Test Clocks for your Docker Compose stack.
+    # The stage from the version (0.1.0-alpha.9 -> alpha); nothing for a stable release.
+    stage = version.split("-", 1)[1].split(".")[0] if "-" in version else ""
+    print(f"""ChronoStack {version}{f" ({stage})" if stage else ""}: Stripe Test Clocks for your Docker Compose stack.
 
 ## Install
 

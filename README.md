@@ -24,7 +24,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Alpha.** The latest pre-release, [`v0.1.0-alpha.8`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.8), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest release, [`v0.1.0-alpha.8`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.8), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 

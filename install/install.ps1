@@ -2,7 +2,7 @@
 # Install the ChronoStack CLI on Windows (x64).
 #
 #   irm https://github.com/Asmodeus14/ChronoStack/releases/download/v<VERSION>/install.ps1 | iex
-#   (or .../releases/latest/download/install.ps1 once a stable release exists)
+#   (or .../releases/latest/download/install.ps1, which follows the release marked Latest)
 #
 # Options (environment variables):
 #   CHRONOSTACK_VERSION        version to install (default: the newest release, including pre-releases)
