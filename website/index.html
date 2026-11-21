@@ -137,7 +137,8 @@
           "Advance Postgres, Redis, Node.js and Python services in virtual time with no code changes",
           "Scheduler-aware stepping: triggers, barriers, pg_cron, BullMQ and Celery beat",
           "Outages of HTTP dependencies scheduled on the virtual timeline",
-          "YAML scenarios with SQL, Redis, HTTP and exec assertions, and JSON or Markdown reports",
+          "YAML scenarios with SQL, Redis, HTTP and exec assertions, and JSON, Markdown or JUnit reports",
+          "Seeded simulated users on the virtual clock",
           "GitHub Action and CI exit codes",
           "MCP server for AI coding agents"
         ]
@@ -208,14 +209,6 @@
       <a href="#install">Install</a>
       <a href="https://github.com/Asmodeus14/ChronoStack">GitHub</a>
     </nav>
-  </div>
-
-  <div class="scroll-clock" aria-hidden="true">
-    <span class="scroll-clock-hands" data-hands></span>
-    <span class="scroll-clock-text">
-      <span class="scroll-clock-name">virtual time</span>
-      <span class="scroll-clock-value" id="scroll-time">+00d 00:00</span>
-    </span>
   </div>
 
   <p class="sr-only" id="copy-status" aria-live="polite"></p>
@@ -413,9 +406,11 @@
         <div><dt>Scheduler-aware stepping</dt><dd>Triggers run at their exact virtual times. BullMQ and Celery beat fire on their own. For pg_cron, the clock stops on each job&rsquo;s minute so fixed-time jobs run; jobs like <code>*/5 * * * *</code> run once per stop unless you pass <code>--pg-cron-all</code>.</dd></div>
         <div><dt>Waits for your jobs</dt><dd>Built-in <code>bullmq</code> and <code>sidekiq</code> barriers hold each step until the queues are drained, and running jobs finish before the clock moves.</dd></div>
         <div><dt>Outages in virtual time</dt><dd>A small proxy in front of HTTP dependencies makes “the payment API is down on day 3 from 09:00 to 11:00” a one-liner.</dd></div>
-        <div><dt>Scenarios and reports</dt><dd>YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports.</dd></div>
+        <div><dt>Scenarios and reports</dt><dd>YAML steps with SQL, Redis, HTTP and exec checks. JSON, Markdown and JUnit reports.</dd></div>
+        <div><dt>Simulated users</dt><dd>Seeded cohorts of users follow scripted journeys: sign up, think for days, come back, branch. In a scenario they act on the virtual clock, so 20 trialists over 30 days takes minutes, and the same seed gives the same timeline.</dd></div>
+        <div><dt>Reach the copy</dt><dd><code>expose: [api:3000]</code> publishes chosen ports of the copy on 127.0.0.1, and <code>service://api:3000</code> works in triggers, checks and journeys.</dd></div>
         <div><dt>CI ready</dt><dd>Exit codes, a GitHub Action, and a strict mode.</dd></div>
-        <div><dt>AI agents</dt><dd><code>chronostack mcp</code> is an MCP server with a fixed, safe tool set.</dd></div>
+        <div><dt>AI agents</dt><dd><code>chronostack mcp</code> is an MCP server with a fixed, safe tool set: inspect the stack, move time, schedule outages, run scenarios with simulated users, and compare two runs.</dd></div>
         <div><dt>Host-native Node</dt><dd><code>node -r sdk/node/register.js app.js</code> puts a Node process outside Docker on the same clock.</dd></div>
         <div><dt>Safe by design</dt><dd>Never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.</dd></div>
       </dl>
