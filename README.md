@@ -16,6 +16,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 [![CI](https://github.com/Asmodeus14/ChronoStack/actions/workflows/ci.yml/badge.svg)](https://github.com/Asmodeus14/ChronoStack/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 ![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey)
+[![ChronoStack MCP server](https://glama.ai/mcp/servers/Asmodeus14/ChronoStack/badges/score.svg)](https://glama.ai/mcp/servers/Asmodeus14/ChronoStack)
 
 [Getting started](docs/GETTING_STARTED.md) · [Guide](docs/GUIDE.md) · [Demo](examples/saas-trial-demo/README.md) · [Docs](docs/README.md)
 
