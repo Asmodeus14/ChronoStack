@@ -1,0 +1,27 @@
+# Simulated users against the expose fixture (traefik/whoami echoes requests as
+# JSON at /api). run_expose.py runs this with a fixed seed, twice.
+version: 1
+max_parallel: 6
+targets:
+  api: service://api:80
+  web: service://web:80
+cohorts:
+  - { name: browsers, users: 8, arrive: { over: 2s }, journey: browse }
+  - { name: buyers, users: 4, arrive: { over: 2s, model: poisson }, journey: buy }
+journeys:
+  browse:
+    - name: who am i
+      http: { url: "${api}/api", headers: { X-User: "${user}" } }
+      expect: { json: { /method: GET, /url: /api, /headers/X-User/0: "${user}" } }
+      save: { host: /hostname }
+    - think: { between: [10ms, 50ms] }
+    - branch: { p: 0.5 }
+    - repeat:
+        times: 2
+        steps:
+          - name: page
+            http: { url: "${web}/u/${user}?seen=${host}" }
+  buy:
+    - name: order
+      http: { method: POST, url: "${api}/api", json: { user: "${user}", run: "${run_id}" } }
+      expect: { status: 200, json: { /method: POST } }

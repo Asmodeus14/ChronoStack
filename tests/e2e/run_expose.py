@@ -108,6 +108,39 @@ def main():
 
         p = run([cli, "run", "scenarios/reach.yml"], timeout=600)
         check("scenario http steps reach service:// URLs", p.returncode == 0, p.stdout + p.stderr)
+
+        # Simulated users (chronostack users) through the same service:// targets.
+        p = run([cli, "users", "validate", "journeys.yml"])
+        check("users validate", p.returncode == 0 and "is valid: 2 cohort(s), 12 user(s)" in p.stdout,
+              p.stdout + p.stderr)
+        junit = os.path.join(DIR, ".chronostack", "users-junit.xml")
+        reports = []
+        for _ in range(2):
+            p = run([cli, "users", "run", "journeys.yml", "--seed", "7", "--json", "--trace",
+                     "--junit", junit], timeout=300)
+            try:
+                reports.append(json.loads(p.stdout.strip().splitlines()[-1]))
+            except (ValueError, IndexError):
+                reports.append(None)
+            check("users run passes", p.returncode == 0 and reports[-1] is not None
+                  and reports[-1]["users"]["failed"] == 0, p.stdout[-2000:] + p.stderr)
+        r = reports[0] or {}
+        steps = {s["name"]: s for s in r.get("steps", [])}
+        u = r.get("users", {})
+        check("every user ran, and the branch split the browsers",
+              u.get("total") == 12 and steps.get("who am i", {}).get("runs") == 8
+              and steps.get("order", {}).get("runs") == 4
+              and steps.get("page", {}).get("runs") == 2 * (u.get("completed", 0) - 4)
+              and u.get("completed", 0) + u.get("left_at_branch", 0) == 12, json.dumps(r)[:2000])
+        check("the same seed gives the same users and choices",
+              reports[0] and reports[1] and reports[0]["trace"] == reports[1]["trace"],
+              "traces differ")
+        xml = open(junit, encoding="utf-8").read() if os.path.exists(junit) else ""
+        check("users JUnit report", 'tests="6" failures="0"' in xml and 'name="browse / 1. who am i"' in xml,
+              xml[:1500])
+        p = run([cli, "users", "run", "journeys-fail.yml"], timeout=300)
+        check("a failing journey exits 6 and says why", p.returncode == 6
+              and "unexpected HTTP 200" in p.stdout and "FAILED" in p.stdout, p.stdout + p.stderr)
     finally:
         run([cli, "down", "-v"], timeout=300)
 

@@ -15,6 +15,7 @@ mod report;
 mod scenario;
 mod session;
 mod update;
+mod users;
 mod yaml;
 
 use std::fs;
@@ -208,6 +209,11 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
+    /// Simulated users: seeded journeys (HTTP requests, think times, branches).
+    Users {
+        #[command(subcommand)]
+        cmd: UsersCmd,
+    },
     /// Run a scenario file and write a report to .chronostack/reports/.
     Run {
         /// Scenario file (YAML).
@@ -222,6 +228,40 @@ enum Cmd {
         /// many nanoseconds past the scenario's start (set by `chronostack mcp`).
         #[arg(long, hide = true)]
         max_advance_ns: Option<i64>,
+    },
+}
+
+#[derive(Subcommand)]
+enum UsersCmd {
+    /// Check a journey file without running it.
+    Validate {
+        /// Journey file (YAML).
+        file: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a journey file against your stack, in real time.
+    ///
+    /// `service://` targets go to ports listed under `expose:` in
+    /// chronostack.yml; plain http:// targets work without a session.
+    Run {
+        /// Journey file (YAML).
+        file: String,
+        /// Fix every random choice (overrides `seed:` in the file).
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Stop after this much real time (e.g. 60s, 10m).
+        #[arg(long)]
+        duration: Option<String>,
+        /// Print the report JSON instead of the summary.
+        #[arg(long)]
+        json: bool,
+        /// Also write a JUnit XML report to this path.
+        #[arg(long, value_name = "PATH")]
+        junit: Option<PathBuf>,
+        /// Include every user's steps in the JSON report.
+        #[arg(long)]
+        trace: bool,
     },
 }
 
@@ -498,6 +538,33 @@ fn run(cli: Cli) -> Result<i32> {
             pre,
             force,
         }),
+        Cmd::Users { cmd } => match cmd {
+            UsersCmd::Validate { file, json } => users::validate(Path::new(&file), json),
+            UsersCmd::Run {
+                file,
+                seed,
+                duration,
+                json,
+                junit,
+                trace,
+            } => {
+                let duration_ns = duration
+                    .as_deref()
+                    .map(|d| parse_duration(d).map_err(anyhow::Error::msg))
+                    .transpose()
+                    .context("--duration")?;
+                users::run(
+                    Path::new(&file),
+                    &users::RunOptions {
+                        seed,
+                        duration_ns,
+                        json,
+                        junit,
+                        trace,
+                    },
+                )
+            }
+        },
         Cmd::Run {
             file,
             json,

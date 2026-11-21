@@ -134,6 +134,7 @@ version = "0.1.0-alpha.7"
 dependencies = [
  "anyhow",
  "chronostack-core",
+ "chronostack-users",
  "clap",
  "flate2",
  "getrandom 0.4.3",
@@ -178,6 +179,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_norway",
+ "tiny_http",
+ "ureq",
 ]
 
 [[package]]
