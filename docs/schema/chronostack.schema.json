@@ -159,6 +159,50 @@
           "description": "A redis-namespace prefix, if the app uses one."
         }
       }
+    },
+    "celery": {
+      "type": "object",
+      "required": [
+        "service"
+      ],
+      "additionalProperties": false,
+      "description": "Celery with a Redis broker: satisfied when the queues are empty and, with worker, the worker has nothing running, prefetched, or scheduled and already due (asked with Celery's inspect).",
+      "properties": {
+        "service": {
+          "type": "string",
+          "description": "The Redis service Celery uses as its broker."
+        },
+        "queues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "default": [
+            "celery"
+          ]
+        },
+        "worker": {
+          "type": "object",
+          "required": [
+            "service",
+            "app"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "service": {
+              "type": "string",
+              "description": "The service running celery worker."
+            },
+            "app": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The app, as given to celery -A (e.g. proj or proj.celery:app)."
+            }
+          }
+        }
+      }
     }
   },
   "properties": {
@@ -277,6 +321,11 @@
             "required": [
               "sidekiq"
             ]
+          },
+          {
+            "required": [
+              "celery"
+            ]
           }
         ],
         "properties": {
@@ -304,6 +353,9 @@
           },
           "sidekiq": {
             "$ref": "#/$defs/sidekiq"
+          },
+          "celery": {
+            "$ref": "#/$defs/celery"
           },
           "settle": {
             "$ref": "#/$defs/duration",

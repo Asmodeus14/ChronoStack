@@ -123,7 +123,7 @@ To find the command for a job, look for how your scheduler calls it. Most projec
 
 ## 5. Wait for the work to finish: barriers
 
-Without barriers, ChronoStack moves on as soon as a trigger's command returns. If the job only *enqueues* work for a worker, wait for that work too. For BullMQ and Sidekiq there are built-in barriers:
+Without barriers, ChronoStack moves on as soon as a trigger's command returns. If the job only *enqueues* work for a worker, wait for that work too. For BullMQ, Sidekiq and Celery there are built-in barriers:
 
 ```yaml
 barriers:
@@ -131,10 +131,13 @@ barriers:
     bullmq: { service: redis, queues: [emails, reports] }    # prefix: "bull" by default
   - name: sidekiq-idle
     sidekiq: { service: redis }                               # namespace: myapp, if you use redis-namespace
+  - name: celery-idle
+    celery: { service: redis, worker: { service: worker, app: proj } }   # queues: [celery] by default
 ```
 
 - **`bullmq`** (also Bull) waits until the queues have nothing waiting, paused, running or prioritized, and no delayed job that is already due. It reads Redis's own clock, so jobs that became due with the jump count until a worker has finished them. Set `prefix` if your queues use BullMQ's `prefix` option.
 - **`sidekiq`** waits until every queue is empty, no scheduled or retry job is due, and no job is running. Sidekiq only reports running jobs on its heartbeat (every 10 s), so once the queues look empty the barrier waits for one more heartbeat before it trusts "nothing running". Expect up to about 10 s per stop.
+- **`celery`** (Redis broker) waits until the queues are empty, including Celery's per-priority queues. With `worker` (the service running `celery worker`, and the app as given to `celery -A`) it also asks the worker, with Celery's own `inspect`, what it holds: tasks running, tasks prefetched, and scheduled (ETA/countdown) tasks whose time has come. A task scheduled for later doesn't hold up the barrier. Without `worker`, a task already taken off the queue isn't seen; a worker that doesn't answer `inspect` fails the check.
 - **`settle: 3s`** on any barrier waits that long at each stop before the first check, for schedulers that only enqueue work when they next poll (sidekiq-cron, Clockwork).
 
 For anything else, use a query:
