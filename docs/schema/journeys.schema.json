@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Asmodeus14/ChronoStack/blob/main/docs/schema/journeys.schema.json",
+  "title": "ChronoStack journey file",
+  "description": "Simulated users for `chronostack users run`: cohorts of users and the journeys they follow. See docs/GUIDE.md section 8.",
+  "type": "object",
+  "required": [
+    "version",
+    "cohorts",
+    "journeys"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^([0-9]+(w|d|h|m|s|ms))+$|^[0-9]+$",
+      "description": "e.g. 500ms, 2s, 5m, 13d"
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Exactly one of http, think, branch or repeat. expect and save go with http.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Shown in the summary and JUnit report; defaults to a description of the step."
+        },
+        "http": {
+          "type": "object",
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "default": "GET",
+              "description": "GET, POST, PUT, PATCH, DELETE, HEAD or OPTIONS."
+            },
+            "url": {
+              "type": "string",
+              "description": "Usually \"${target}/path\". ${user}, ${cohort}, ${run_id} and saved values work here."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "json": {
+              "description": "JSON body, sent as application/json."
+            },
+            "body": {
+              "type": "string",
+              "description": "Raw body; set Content-Type in headers."
+            }
+          }
+        },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "description": "Expected status, or a list; default any 2xx.",
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 1
+                }
+              ]
+            },
+            "json": {
+              "type": "object",
+              "description": "JSON pointer (e.g. /plan) to the value the response body must have there.",
+              "propertyNames": {
+                "pattern": "^(/.*)?$"
+              }
+            }
+          }
+        },
+        "save": {
+          "type": "object",
+          "description": "variable: JSON pointer into the response body (e.g. token: /token), usable as ${variable} in later steps.",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(/.*)?$"
+          }
+        },
+        "think": {
+          "description": "Pause: a duration, or { between: [min, max] } chosen with the seed. Real time, capped by max_think.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/duration"
+            },
+            {
+              "type": "object",
+              "required": [
+                "between"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "between": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/duration"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            }
+          ]
+        },
+        "branch": {
+          "type": "object",
+          "required": [
+            "p"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "p": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Probability the user goes on (chosen with the seed); otherwise the journey ends here."
+            }
+          }
+        },
+        "repeat": {
+          "type": "object",
+          "required": [
+            "times",
+            "steps"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "times": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/step"
+              },
+              "minItems": 1
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "http"
+          ]
+        },
+        {
+          "required": [
+            "think"
+          ]
+        },
+        {
+          "required": [
+            "branch"
+          ]
+        },
+        {
+          "required": [
+            "repeat"
+          ]
+        }
+      ]
+    }
+  },
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Fixes every random choice of the run. Without it, a seed is picked and printed; --seed overrides it."
+    },
+    "max_parallel": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 256,
+      "default": 32,
+      "description": "Most users active at once."
+    },
+    "max_think": {
+      "$ref": "#/$defs/duration",
+      "description": "Cap on each think in real time (default 30s)."
+    },
+    "targets": {
+      "type": "object",
+      "description": "Base URLs used as ${name}: http://, https://, or service://<service>:<port> for a port listed under expose: in chronostack.yml.",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(https?|service)://"
+      }
+    },
+    "cohorts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "users",
+          "journey"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "users": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "journey": {
+            "type": "string",
+            "description": "A key of journeys."
+          },
+          "arrive": {
+            "type": "object",
+            "required": [
+              "over"
+            ],
+            "additionalProperties": false,
+            "description": "Spread the users' start times; without it they all start at once.",
+            "properties": {
+              "over": {
+                "$ref": "#/$defs/duration"
+              },
+              "model": {
+                "enum": [
+                  "uniform",
+                  "poisson"
+                ],
+                "default": "uniform"
+              }
+            }
+          }
+        }
+      }
+    },
+    "journeys": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/$defs/step"
+        }
+      }
+    }
+  }
+}

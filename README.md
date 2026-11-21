@@ -120,7 +120,8 @@ When something breaks, the Markdown report says what was expected, what happened
 - **Waits for your jobs:** built-in `bullmq` and `sidekiq` barriers hold each step until the queues are drained, and running jobs finish before the clock moves.
 - **Outages in virtual time:** a small proxy in front of HTTP dependencies (`http` or `https`) makes "the payment API is down on day 3 from 09:00 to 11:00" a one-liner.
 - **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports, with secrets redacted.
-- **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#8-in-ci), and a strict mode.
+- **Simulated users:** `chronostack users run` sends seeded cohorts of users through scripted journeys (requests, think times, branches) and reports failures and latency per step ([guide](docs/GUIDE.md#8-simulated-users)).
+- **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#9-in-ci), and a strict mode.
 - **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe tool set (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`).
 - **Host-native Node:** `node -r sdk/node/register.js app.js` puts a Node process outside Docker on the same clock ([details](sdk/node/README.md)).
 - **Safe by design:** never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.

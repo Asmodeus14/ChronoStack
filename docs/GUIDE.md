@@ -9,8 +9,9 @@ This guide takes you from "installed" to "my time-dependent flow is tested", and
 - [5. Wait for the work to finish: barriers](#5-wait-for-the-work-to-finish-barriers)
 - [6. Outages for HTTP dependencies](#6-outages-for-http-dependencies)
 - [7. Turn it into a test: scenarios](#7-turn-it-into-a-test-scenarios)
-- [8. In CI](#8-in-ci)
-- [9. Troubleshooting](#9-troubleshooting)
+- [8. Simulated users](#8-simulated-users)
+- [9. In CI](#9-in-ci)
+- [10. Troubleshooting](#10-troubleshooting)
 
 ## 1. Start the copy
 
@@ -199,7 +200,54 @@ chronostack run scenarios/trial.yml      # exit 0 = passed, 6 = a step failed
 - A value saved by an earlier step works as an advance target, for times that depend on data (calendar months differ in length): save `ends_at` as a UTC timestamp like `2026-12-14T17:10:00Z`, then `advance: { to: "${ends_at}" }`.
 - Every step type: [scenario schema](schema/scenario.schema.json). A complete example: [the demo](../examples/saas-trial-demo/scenarios/trial.yml).
 
-## 8. In CI
+## 8. Simulated users
+
+A scenario is one script. `chronostack users` runs many simulated users at once, each following a **journey**, with every random choice fixed by a seed so a run can be repeated.
+
+```yaml
+# journeys.yml
+version: 1
+seed: 42                          # same seed: same users, same arrivals, same choices
+max_parallel: 32                  # most users active at once (up to 256)
+targets:
+  api: service://api:8080         # a port under `expose:` in chronostack.yml, or any http(s):// URL
+cohorts:
+  - name: trialists
+    users: 50
+    arrive: { over: 5m }          # evenly; add `model: poisson` for random gaps
+    journey: trial_to_paid
+journeys:
+  trial_to_paid:
+    - name: sign up
+      http: { method: POST, url: "${api}/signup", json: { email: "u${user}+${run_id}@example.com" } }
+      expect: { status: 201, json: { /plan: trial } }
+      save: { token: /token }     # a JSON pointer into the response
+    - think: { between: [2s, 10s] }
+    - branch: { p: 0.3 }          # 30% of users go on; the others stop here
+    - name: add a card
+      http: { method: POST, url: "${api}/billing/card", headers: { Authorization: "Bearer ${token}" } }
+      expect: { status: [200, 204] }
+    - repeat:
+        times: 3
+        steps:
+          - http: { url: "${api}/dashboard", headers: { Authorization: "Bearer ${token}" } }
+          - think: 1s
+```
+
+```sh
+chronostack users validate journeys.yml    # checks the file, runs nothing
+chronostack users run journeys.yml         # exit 0 = passed, 6 = a step failed
+```
+
+- **Steps:** `http` (with `expect` and `save`), `think` (fixed or `between`), `branch` and `repeat`. There's no scripting language; use a scenario `exec` step for anything else.
+- **Variables:** `${user}` (1, 2, … within a cohort), `${cohort}`, `${run_id}`, each target, and values saved by earlier steps. A variable used before it's saved is an error when the file is checked.
+- **A failed step stops that user:** an unexpected status, a JSON value that doesn't match, or a missing value to save. Other users carry on. The summary lists runs, failures and p50/p90/p99/max latency per step, and the errors.
+- **Reports:** `--json` prints the report, `--junit out.xml` writes one test case per step, and `--trace` adds every user's steps to the JSON.
+- **Reproducible:** `--seed` (or `seed:`) fixes arrivals, `between` thinks and branches. Without one, a seed is picked and printed, so you can repeat that run.
+- **Real time, for now:** users run on your machine's clock, and each think is capped at `max_think` (default 30s), so `think: 13d` doesn't hang. `--duration 10m` stops a run early. Running users along the virtual clock (thirteen days in seconds) is planned.
+- **Not a load tester:** it simulates behaviour, with up to 256 users active at once. For high request rates, use k6 or similar.
+
+## 9. In CI
 
 On GitHub Actions, use a Linux runner. GitHub's macOS and Windows runners don't come with Docker; ChronoStack's own macOS CI starts Docker in a Linux VM with Colima on the Intel runners, which works but is slow.
 
@@ -230,7 +278,7 @@ chronostack up --wait && chronostack run scenarios/trial.yml --junit junit.xml
 
 Keep `.chronostack/reports/` as a build artifact, so a failed run can be read later.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
