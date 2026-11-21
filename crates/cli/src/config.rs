@@ -76,6 +76,8 @@ pub struct McpCfg {
     /// Longest real time one MCP tool call may run before it is stopped
     /// (default 10m).
     pub max_wall: Option<String>,
+    /// Most simulated users one `users_run` may start (default 1000).
+    pub max_users: Option<u64>,
 }
 
 /// An HTTP egress target routed through the `clockd` fault proxy.
@@ -221,12 +223,15 @@ pub struct Resolved {
     pub mcp_max_advance_ns: i64,
     /// `mcp.max_wall` (default 10 minutes).
     pub mcp_max_wall_ns: i64,
+    /// `mcp.max_users` (default 1000).
+    pub mcp_max_users: u64,
     /// `expose:` entries, validated.
     pub expose: Vec<chronostack_core::compose::Expose>,
 }
 
 pub const DEFAULT_MCP_MAX_ADVANCE_NS: i64 = 400 * 86_400_000_000_000;
 pub const DEFAULT_MCP_MAX_WALL_NS: i64 = 600_000_000_000;
+pub const DEFAULT_MCP_MAX_USERS: u64 = 1000;
 
 const DEFAULT_TIMEOUT_NS: i64 = 60_000_000_000;
 const DEFAULT_BARRIER_TIMEOUT_NS: i64 = 30_000_000_000;
@@ -255,6 +260,7 @@ impl Resolved {
             barrier_timeouts_ns: vec![],
             mcp_max_advance_ns: DEFAULT_MCP_MAX_ADVANCE_NS,
             mcp_max_wall_ns: DEFAULT_MCP_MAX_WALL_NS,
+            mcp_max_users: DEFAULT_MCP_MAX_USERS,
             expose: vec![],
         }
     }
@@ -478,9 +484,14 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
     if mcp_max_wall_ns <= 0 {
         bail!("mcp.max_wall must be positive");
     }
+    let mcp_max_users = config.mcp.max_users.unwrap_or(DEFAULT_MCP_MAX_USERS);
+    if mcp_max_users == 0 {
+        bail!("mcp.max_users must be at least 1");
+    }
     Ok(Resolved {
         path: None,
         expose,
+        mcp_max_users,
         mcp_max_advance_ns,
         mcp_max_wall_ns,
         config,
