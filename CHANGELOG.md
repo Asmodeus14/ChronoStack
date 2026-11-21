@@ -9,10 +9,16 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.9] - 2026-11-21
+
 ### Added
 
 - A built-in `celery` barrier (Redis broker): `celery: { service: redis, worker: { service: worker, app: proj } }` waits until Celery's queues are empty (including per-priority queues) and, with `worker`, until the worker has nothing running, prefetched, or scheduled and already due, asked with Celery's own `inspect`. A task scheduled for later doesn't hold it up. `restart_on_jump: true` restarts the worker after each jump: Celery holds ETA/countdown tasks on a real-time timer, so without a restart a jump past their time doesn't run them (and with Redis, a jump of more than the visibility timeout delivers them again, so they would run twice). `chronostack init` suggests the barrier for Celery workers, with the app taken from `-A`.
 - `chronostack report list`, `report show [RUN_ID]` and `report diff [A] [B]`: read scenario reports back, and see what changed between two runs (result, step outcomes, simulated users and whether their timeline is the same). The same code backs the MCP `report_get` and `report_diff` tools.
+
+### Changed
+
+- `chronostack init` suggests the `celery` barrier for Celery workers instead of a Redis `LLEN` query, which didn't see tasks a worker had already taken.
 
 ### Fixed
 

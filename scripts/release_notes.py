@@ -59,7 +59,7 @@ The CLI pulls the matching controller image (`ghcr.io/asmodeus14/chronostack-clo
 
 ## Verified for this release
 
-- Automated: unit tests on Linux, Windows and macOS; end-to-end tests (M1–M4, `init`, shared mounts, `expose` and simulated users) on Linux x86_64 and arm64; a nightly check that simulated users on the virtual clock give the same timeline run after run; M1 and M2 with the native macOS CLI on an Intel macOS runner (Docker in a Linux VM); a smoke test that installs from these files on fresh Linux x86_64 and arm64 runners and runs the demo scenario; an install test on Apple-silicon and Intel macOS runners (installer, native binary, `init` and `config`; no Docker engine).
+- Automated: unit tests on Linux, Windows and macOS; end-to-end tests (M1–M4, `init`, shared mounts, `expose` and simulated users) on Linux x86_64 and arm64; a nightly check that simulated users on the virtual clock give the same timeline run after run; nightly queue-barrier tests against real BullMQ, Sidekiq and Celery workers; M1 and M2 with the native macOS CLI on an Intel macOS runner (Docker in a Linux VM); a smoke test that installs from these files on fresh Linux x86_64 and arm64 runners and runs the demo scenario; an install test on Apple-silicon and Intel macOS runners (installer, native binary, `init` and `config`; no Docker engine).
 - Manual checklist (not automated):
   - [ ] macOS on Apple silicon with a running Docker engine (Docker Desktop or OrbStack): not yet tested, see issue #5
   - [x] Windows 11 + Docker Desktop (WSL2): tested by the maintainers during development
