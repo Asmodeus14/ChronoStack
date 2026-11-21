@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=../../../docs/schema/journeys.schema.json
+# 20 people sign up over a week and use the app a little. Used by
+# scenarios/cohort.yml, which runs them on the virtual clock.
+version: 1
+seed: 2026
+targets:
+  api: service://api:3000         # `expose: [api:3000]` in chronostack.yml
+cohorts:
+  - name: trialists
+    users: 20
+    arrive: { over: 7d }
+    journey: trial
+journeys:
+  trial:
+    - name: sign up
+      http: { method: POST, url: "${api}/signup?email=u${user}-${run_id}@example.com" }
+      expect: { status: 201, json: { /user/plan: trial } }
+      save: { token: /token }
+    - think: { between: [1h, 20h] }
+    - name: comes back the same day (session still valid)
+      http: { url: "${api}/me", headers: { x-session: "${token}" } }
+      expect: { status: 200, json: { /plan: trial } }
+    - think: 2d
+    - name: comes back two days later (the 24h session expired)
+      http: { url: "${api}/me", headers: { x-session: "${token}" } }
+      expect: { status: 401 }
