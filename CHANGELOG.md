@@ -9,6 +9,14 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Added
+
+- `chronostack report list`, `report show [RUN_ID]` and `report diff [A] [B]`: read scenario reports back, and see what changed between two runs (result, step outcomes, simulated users and whether their timeline is the same). The same code backs the MCP `report_get` and `report_diff` tools.
+
+### Fixed
+
+- Simulated users on the virtual clock were timed from the clock reading when they acted, which runs a fraction of a second past their due time while a stop's triggers and barriers run. A think could then land on the next grid point, so two runs with the same seed could differ by a minute. Users are now timed by their own due times, so the timeline depends only on the seed.
+
 ## [0.1.0-alpha.8] - 2026-11-21
 
 ### Added
