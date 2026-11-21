@@ -18,9 +18,7 @@ const fmt = (minutes) => {
 // ------------------------------------------------------------ hands everywhere
 $$('[data-hands]').forEach((el) => { el.innerHTML = handsSVG(); });
 const navHands = $('.nav-mark .hands');
-const clockHands = $('.scroll-clock-hands .hands');
 setHands(navHands, 0);
-setHands(clockHands, 0);
 setHands($('.foot-mark .hands'), 180);         // 03:00, the nightly job
 setHands($('.hero-cue-hand .hands'), 0);
 $$('.glyph-sync .hands').forEach((h, i) => setHands(h, [130, 470, 260, 610][i]));
@@ -90,11 +88,6 @@ $$('video.demo-video').forEach((v) => {
     if (entry.isIntersecting) { v.preload = 'auto'; v.play().catch(() => {}); } else v.pause();
   }, { threshold: 0.35 }).observe(v);
 });
-
-// ------------------------------------------------------------ the scroll clock steps aside while you type in the terminal
-const scrollClock = $('.scroll-clock');
-new IntersectionObserver(([entry]) => scrollClock.classList.toggle('is-hidden', entry.isIntersecting), { threshold: 0.25 })
-  .observe($('.try-stage'));
 
 // ------------------------------------------------------------ the hero keeps the intro's hands turning
 // They start where the intro left them (03:00), run a virtual minute per second, and spin with the scroll.
@@ -257,8 +250,7 @@ function showEverything() {
   const update = () => {
     const max = document.documentElement.scrollHeight - innerHeight;
     const m = TOTAL * (max > 0 ? scrollY / max : 0);
-    setHands(clockHands, m); setHands(navHands, m);
-    $('#scroll-time').textContent = fmt(m);
+    setHands(navHands, m);
   };
   addEventListener('scroll', update, { passive: true });
   update();
@@ -319,15 +311,10 @@ function animate() {
     scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true },
   });
 
-  // ---- the scroll clock: the whole page is fourteen days
+  // ---- the nav mark's hands: the whole page is fourteen days
   ScrollTrigger.create({
     start: 0, end: 'max',
-    onUpdate: (self) => {
-      const m = TOTAL * self.progress;
-      setHands(clockHands, m);
-      setHands(navHands, m);
-      $('#scroll-time').textContent = fmt(m);
-    },
+    onUpdate: (self) => setHands(navHands, TOTAL * self.progress),
   });
 
   // ---- headline and paragraph reveals
