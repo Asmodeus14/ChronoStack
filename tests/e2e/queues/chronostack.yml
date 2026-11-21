@@ -6,4 +6,4 @@ barriers:
   - name: sidekiq-idle
     sidekiq: { service: redis }
   - name: celery-idle
-    celery: { service: redis, worker: { service: celery, app: celery_tasks } }
+    celery: { service: redis, worker: { service: celery, app: celery_tasks, restart_on_jump: true } }

@@ -202,6 +202,11 @@ pub struct CeleryWorker {
     pub service: String,
     /// The app, as given to `celery -A` (e.g. `proj` or `proj.celery:app`).
     pub app: String,
+    /// Restart this worker after every clock jump. Celery holds ETA/countdown
+    /// tasks on a real-time timer, so a jump past their time doesn't run them;
+    /// a restarted worker gets them back from the broker and runs the due ones.
+    #[serde(default)]
+    pub restart_on_jump: bool,
 }
 
 fn default_celery_queues() -> Vec<String> {
@@ -604,6 +609,24 @@ mod tests {
         let c = r.config.barriers[0].celery.as_ref().unwrap();
         assert_eq!(c.queues, ["celery"], "default queue");
         assert_eq!(c.worker.as_ref().unwrap().app, "proj");
+        assert!(
+            !c.worker.as_ref().unwrap().restart_on_jump,
+            "off by default"
+        );
+        let r = parse(
+            "version: 1\nbarriers:\n  - name: c\n    celery: { service: cache, worker: { service: worker, app: proj, restart_on_jump: true } }\n",
+        )
+        .unwrap();
+        assert!(
+            r.config.barriers[0]
+                .celery
+                .as_ref()
+                .unwrap()
+                .worker
+                .as_ref()
+                .unwrap()
+                .restart_on_jump
+        );
         for bad in [
             "celery: { service: nope }",
             "celery: { service: cache, queues: [] }",

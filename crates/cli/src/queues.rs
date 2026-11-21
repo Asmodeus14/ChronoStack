@@ -96,6 +96,7 @@ reserved = i.reserved() or {}
 scheduled = i.scheduled() or {}
 now = datetime.datetime.now(datetime.timezone.utc)
 n = sum(len(v) for v in active.values()) + sum(len(v) for v in reserved.values())
+held = 0
 for tasks in scheduled.values():
     for t in tasks:
         try:
@@ -103,10 +104,10 @@ for tasks in scheduled.values():
             if eta.tzinfo is None:
                 eta = eta.replace(tzinfo=datetime.timezone.utc)
             if eta <= now:
-                n += 1
+                held += 1
         except Exception:
-            n += 1
-print(json.dumps({"pending": n, "workers": len(set(active) | set(reserved) | set(scheduled))}))
+            held += 1
+print(json.dumps({"pending": n + held, "held": held, "workers": len(set(active) | set(reserved) | set(scheduled))}))
 "#;
 
 /// `redis-cli` arguments for a Celery barrier's broker check.
@@ -130,6 +131,8 @@ pub fn celery_inspect_command(worker: &CeleryWorker) -> Vec<String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CeleryWorkers {
     pub pending: u64,
+    /// Of those, ETA/countdown tasks already due that the worker still holds.
+    pub held: u64,
     /// Workers that answered.
     pub workers: u64,
 }
@@ -143,6 +146,7 @@ pub fn celery_workers(stdout: &str) -> Option<CeleryWorkers> {
     let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
     Some(CeleryWorkers {
         pending: v["pending"].as_u64()?,
+        held: v["held"].as_u64().unwrap_or(0),
         workers: v["workers"].as_u64()?,
     })
 }
@@ -273,6 +277,7 @@ mod tests {
         let cmd = celery_inspect_command(&CeleryWorker {
             service: "worker".into(),
             app: "proj".into(),
+            restart_on_jump: false,
         });
         assert_eq!(
             (cmd[0].as_str(), cmd[1].as_str(), cmd[3].as_str()),
@@ -287,7 +292,16 @@ mod tests {
             celery_workers("some warning\n{\"pending\": 2, \"workers\": 1}\n"),
             Some(CeleryWorkers {
                 pending: 2,
+                held: 0,
                 workers: 1
+            })
+        );
+        assert_eq!(
+            celery_workers("{\"pending\": 3, \"held\": 1, \"workers\": 2}"),
+            Some(CeleryWorkers {
+                pending: 3,
+                held: 1,
+                workers: 2
             })
         );
         assert_eq!(celery_workers("Error: no app\n"), None);

@@ -199,6 +199,11 @@
               "type": "string",
               "minLength": 1,
               "description": "The app, as given to celery -A (e.g. proj or proj.celery:app)."
+            },
+            "restart_on_jump": {
+              "type": "boolean",
+              "default": false,
+              "description": "Restart the worker after every clock jump, so ETA/countdown tasks whose time has passed run (once)."
             }
           }
         }

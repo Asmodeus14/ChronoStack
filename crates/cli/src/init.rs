@@ -212,7 +212,7 @@ pub fn generate(project: &Project, sources: &[String]) -> Generated {
                         "  # Celery ({name}) with a Redis broker: wait until nothing is queued, running\n  \
                          # or due on the worker. `queues` defaults to [celery].\n  \
                          # - name: {name}-idle\n  \
-                         #   celery: {{ service: {redis_or_placeholder}, worker: {{ service: {name}, app: {app} }} }}\n"
+                         #   celery: {{ service: {redis_or_placeholder}, worker: {{ service: {name}, app: {app}, restart_on_jump: true }} }}\n"
                     ));
                 }
             }
@@ -374,7 +374,7 @@ mod tests {
         assert!(g.warnings[0].starts_with("beat:") && g.warnings[0].contains("--max-interval 1"));
         assert!(
             g.yaml
-                .contains("#   celery: { service: redis, worker: { service: worker, app: app } }"),
+                .contains("#   celery: { service: redis, worker: { service: worker, app: app, restart_on_jump: true } }"),
             "{}",
             g.yaml
         );
