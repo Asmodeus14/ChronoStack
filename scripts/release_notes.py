@@ -41,17 +41,24 @@ Windows (PowerShell):
 $env:CHRONOSTACK_VERSION = "{version}"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v{version}/install.ps1 | iex
 ```
 
-Homebrew (macOS, Linux; the tap is updated a few minutes after this release is published):
+Homebrew (macOS, Linux) or Scoop (Windows); both are updated a few minutes after this release is published:
 
 ```sh
 brew install asmodeus14/tap/chronostack
 ```
 
+```powershell
+scoop bucket add chronostack https://github.com/Asmodeus14/scoop-bucket
+scoop install chronostack/chronostack
+```
+
+crates.io: `cargo install chronostack@{version}`.
+
 The CLI pulls the matching controller image (`ghcr.io/asmodeus14/chronostack-clockd:{version}`, pinned by digest) on first `chronostack up`. Every file below is listed in `SHA256SUMS`; the SBOM is SPDX JSON.
 
 ## Verified for this release
 
-- Automated: unit tests on Linux, Windows and macOS; end-to-end tests (M1–M4, `init`, shared mounts) on Linux x86_64 and arm64; M1 and M2 with the native macOS CLI on an Intel macOS runner (Docker in a Linux VM); a smoke test that installs from these files on fresh Linux x86_64 and arm64 runners and runs the demo scenario; an install test on Apple-silicon and Intel macOS runners (installer, native binary, `init` and `config`; no Docker engine).
+- Automated: unit tests on Linux, Windows and macOS; end-to-end tests (M1–M4, `init`, shared mounts, `expose` and simulated users) on Linux x86_64 and arm64; a nightly check that simulated users on the virtual clock give the same timeline run after run; M1 and M2 with the native macOS CLI on an Intel macOS runner (Docker in a Linux VM); a smoke test that installs from these files on fresh Linux x86_64 and arm64 runners and runs the demo scenario; an install test on Apple-silicon and Intel macOS runners (installer, native binary, `init` and `config`; no Docker engine).
 - Manual checklist (not automated):
   - [ ] macOS on Apple silicon with a running Docker engine (Docker Desktop or OrbStack): not yet tested, see issue #5
   - [x] Windows 11 + Docker Desktop (WSL2): tested by the maintainers during development
