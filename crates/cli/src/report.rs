@@ -115,7 +115,7 @@ pub fn write(
 
 /// Escape text for XML 1.0 attributes and content, dropping characters XML
 /// can't carry (control characters other than tab, newline and carriage return).
-fn xml(s: &str) -> String {
+pub(crate) fn xml(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
         match c {

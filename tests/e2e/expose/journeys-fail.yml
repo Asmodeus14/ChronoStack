@@ -1,0 +1,11 @@
+# A journey that must fail: whoami answers 200, not 201.
+version: 1
+targets: { api: service://api:80 }
+cohorts: [{ name: c, users: 2, journey: j }]
+journeys:
+  j:
+    - name: create
+      http: { method: POST, url: "${api}/api" }
+      expect: { status: 201 }
+    - name: never reached
+      http: { url: "${api}/api" }

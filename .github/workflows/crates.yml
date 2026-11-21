@@ -1,4 +1,4 @@
-# Publish chronostack-core and chronostack to crates.io when a release is
+# Publish chronostack-core, chronostack-users and chronostack to crates.io when a release is
 # published, from that release's tag. Needs a CARGO_REGISTRY_TOKEN secret (a
 # crates.io token with the publish-new and publish-update scopes). Without it
 # the job only warns.
@@ -37,9 +37,9 @@ jobs:
       - name: Publish
         run: |
           if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
-            echo "::warning::CARGO_REGISTRY_TOKEN is not set; publish by hand with: cargo publish -p chronostack-core -p chronostack"
+            echo "::warning::CARGO_REGISTRY_TOKEN is not set; publish by hand with: cargo publish -p chronostack-core -p chronostack-users -p chronostack"
             exit 0
           fi
-          # Both crates in one call: cargo publishes chronostack-core first and
-          # waits for it to be available before publishing chronostack.
-          cargo publish --locked -p chronostack-core -p chronostack
+          # All crates in one call: cargo publishes the libraries first and waits
+          # for them to be available before publishing chronostack.
+          cargo publish --locked -p chronostack-core -p chronostack-users -p chronostack

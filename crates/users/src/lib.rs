@@ -11,8 +11,10 @@
 //! - [`arrival`]: when each user of a cohort starts (uniform or Poisson).
 //! - [`template`]: `${name}` substitution, the same syntax as scenarios.
 //! - [`histogram`]: latency percentiles from log-scaled buckets.
+//! - [`engine`]: runs a validated file in real time over HTTP.
 
 pub mod arrival;
+pub mod engine;
 pub mod histogram;
 pub mod model;
 pub mod rng;
