@@ -250,7 +250,7 @@ jobs:
       - name: Install with install.sh (served locally)
         run: |
           (cd dl/release && python3 -m http.server 8765 >/dev/null 2>&1 &)
-          sleep 1
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8765/ && break; sleep 1; done
           CHRONOSTACK_VERSION="$VERSION" CHRONOSTACK_DOWNLOAD_BASE=http://127.0.0.1:8765 sh dl/release/install.sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Demo from zero (< 5 minutes)
@@ -293,7 +293,7 @@ jobs:
       - name: Install with install.sh (served locally)
         run: |
           (cd dl/release && python3 -m http.server 8765 >/dev/null 2>&1 &)
-          sleep 1
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8765/ && break; sleep 1; done
           CHRONOSTACK_VERSION="$VERSION" CHRONOSTACK_DOWNLOAD_BASE=http://127.0.0.1:8765 sh dl/release/install.sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: The installed binary is native and runs
