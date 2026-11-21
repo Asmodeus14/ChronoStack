@@ -15,6 +15,7 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ### Fixed
 
+- Two runs of the same scenario that started within the same second wrote the same report file, so the first run's report was lost (and `report diff` compared the wrong runs). Report files are now named `<time to the millisecond>-<scenario>-<run id>`.
 - Simulated users on the virtual clock were timed from the clock reading when they acted, which runs a fraction of a second past their due time while a stop's triggers and barriers run. A think could then land on the next grid point, so two runs with the same seed could differ by a minute. Users are now timed by their own due times, so the timeline depends only on the seed.
 
 ## [0.1.0-alpha.8] - 2026-11-21
