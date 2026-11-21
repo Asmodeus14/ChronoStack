@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/core", "crates/clockd", "crates/cli", "crates/users"]
 
 [workspace.package]
-version = "0.1.0-alpha.8"
+version = "0.1.0-alpha.9"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -13,8 +13,8 @@ authors = ["The ChronoStack Contributors"]
 
 [workspace.dependencies]
 # The exact version is needed to publish to crates.io; bump it with the workspace version.
-chronostack-core = { path = "crates/core", version = "=0.1.0-alpha.8" }
-chronostack-users = { path = "crates/users", version = "=0.1.0-alpha.8" }
+chronostack-core = { path = "crates/core", version = "=0.1.0-alpha.9" }
+chronostack-users = { path = "crates/users", version = "=0.1.0-alpha.9" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
