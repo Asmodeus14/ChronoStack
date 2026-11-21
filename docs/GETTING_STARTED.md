@@ -35,7 +35,7 @@ You need **Docker with Compose v2**: Docker Desktop on Windows or macOS, Docker 
 **Linux / macOS**
 
 ```sh
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.7/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.7 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.8/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.8 sh
 ```
 
 The installer prints one `export PATH=…` line. Run it, or open a new terminal.
@@ -43,7 +43,7 @@ The installer prints one `export PATH=…` line. Run it, or open a new terminal.
 **Windows (PowerShell)**
 
 ```powershell
-$env:CHRONOSTACK_VERSION = "0.1.0-alpha.7"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.7/install.ps1 | iex
+$env:CHRONOSTACK_VERSION = "0.1.0-alpha.8"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.8/install.ps1 | iex
 ```
 
 It works in the same window straight away.
@@ -66,7 +66,7 @@ Upgrade with `brew upgrade chronostack` or `scoop update chronostack`; `chronost
 **Check it worked:**
 
 ```sh
-chronostack --version      # chronostack 0.1.0-alpha.7
+chronostack --version      # chronostack 0.1.0-alpha.8
 ```
 
 **Update later:** `chronostack update` (or `chronostack update --check` to only look).
@@ -76,7 +76,7 @@ chronostack --version      # chronostack 0.1.0-alpha.7
 
 - **Linux / macOS:** `rm ~/.local/bin/chronostack`, then delete the two lines starting with `# Added by the ChronoStack installer` from your shell's startup file (`~/.zshrc`, `~/.bashrc`, `~/.bash_profile`, `~/.profile`, or `~/.config/fish/conf.d/chronostack.fish`).
 - **Windows:** delete `%LOCALAPPDATA%\chronostack`, then remove that folder from your user PATH (Settings → "Edit environment variables for your account").
-- **Controller image:** `docker image rm ghcr.io/asmodeus14/chronostack-clockd:0.1.0-alpha.7`.
+- **Controller image:** `docker image rm ghcr.io/asmodeus14/chronostack-clockd:0.1.0-alpha.8`.
 
 </details>
 
@@ -217,7 +217,7 @@ It's most likely a Go or static binary, which ChronoStack can't reach. Services 
 It should: everything runs in Docker's Linux VM, the same as on Windows. It hasn't been tested yet, though. If you have a Mac, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 **Can I use it in CI?**
-Yes, on Linux runners. There's a GitHub Action (`uses: Asmodeus14/ChronoStack@v0.1.0-alpha.7`); see the [CI section](GUIDE.md#9-in-ci).
+Yes, on Linux runners. There's a GitHub Action (`uses: Asmodeus14/ChronoStack@v0.1.0-alpha.8`); see the [CI section](GUIDE.md#9-in-ci).
 
 **Can an AI agent drive it?**
 Yes. `chronostack mcp` is an MCP server with a fixed, safe set of tools: `claude mcp add chronostack -- chronostack mcp --project-dir <your project>`. Three limits in `chronostack.yml` bound what an agent can do:
