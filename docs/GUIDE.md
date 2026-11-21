@@ -245,7 +245,7 @@ chronostack users run journeys.yml         # exit 0 = passed, 6 = a step failed
 - **Reports:** `--json` prints the report, `--junit out.xml` writes one test case per step, and `--trace` adds every user's steps to the JSON.
 - **Reproducible:** `--seed` (or `seed:`) fixes arrivals, `between` thinks and branches. Without one, a seed is picked and printed, so you can repeat that run.
 - **Real time, for now:** users run on your machine's clock, and each think is capped at `max_think` (default 30s), so `think: 13d` doesn't hang. `--duration 10m` stops a run early. Running users along the virtual clock (thirteen days in seconds) is planned.
-- **Not a load tester:** it simulates behaviour, with up to 256 users active at once. For high request rates, use k6 or similar.
+- **Not a load tester:** it simulates behaviour, with up to 256 users active at once. Against a trivial local server it drives about 8,000–24,000 requests per second depending on the machine ([benchmark](../bench/README.md#b3-simulated-users)); for high request rates against a real app, use k6 or similar.
 
 ## 9. In CI
 

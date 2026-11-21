@@ -4,11 +4,14 @@ These are reproducible measurements behind the performance numbers in the README
 
 ## Results
 
-| Folder | Machine | B1 | B2 |
-|---|---|---|---|
-| [2026-11-18-windows11-wsl2-ryzen7840hs](results/2026-11-18-windows11-wsl2-ryzen7840hs/README.md) | Windows 11 laptop, Docker Desktop (WSL2), AMD Ryzen 7 7840HS | ✅ | ✅ |
-| [2026-11-18-github-ubuntu-latest](results/2026-11-18-github-ubuntu-latest/README.md) | GitHub-hosted runner, x86_64, 4 vCPUs, Intel Xeon Platinum 8573C | ✅ | ✅ |
-| [2026-11-18-github-ubuntu-24.04-arm](results/2026-11-18-github-ubuntu-24.04-arm/README.md) | GitHub-hosted runner, arm64, 4 vCPUs, Arm Neoverse N2 (CPU part `0xd49`) | ✅ | ✅ |
+| Folder | Machine | B1 | B2 | B3 |
+|---|---|---|---|---|
+| [2026-11-18-windows11-wsl2-ryzen7840hs](results/2026-11-18-windows11-wsl2-ryzen7840hs/README.md) | Windows 11 laptop, Docker Desktop (WSL2), AMD Ryzen 7 7840HS | ✅ | ✅ | |
+| [2026-11-18-github-ubuntu-latest](results/2026-11-18-github-ubuntu-latest/README.md) | GitHub-hosted runner, x86_64, 4 vCPUs, Intel Xeon Platinum 8573C | ✅ | ✅ | |
+| [2026-11-18-github-ubuntu-24.04-arm](results/2026-11-18-github-ubuntu-24.04-arm/README.md) | GitHub-hosted runner, arm64, 4 vCPUs, Arm Neoverse N2 (CPU part `0xd49`) | ✅ | ✅ | |
+| [2026-11-21-windows11-wsl2-ryzen7840hs](results/2026-11-21-windows11-wsl2-ryzen7840hs/README.md) | Windows 11 laptop, Docker Desktop (WSL2), AMD Ryzen 7 7840HS | | | ✅ |
+| [2026-11-21-github-ubuntu-latest](results/2026-11-21-github-ubuntu-latest/README.md) | GitHub-hosted runner, x86_64, 4 vCPUs, Intel Xeon Platinum 8573C | | | ✅ |
+| [2026-11-21-github-ubuntu-24.04-arm](results/2026-11-21-github-ubuntu-24.04-arm/README.md) | GitHub-hosted runner, arm64, 4 vCPUs, Arm Neoverse N2 (CPU part `0xd49`) | | | ✅ |
 
 **Summary across the three machines** (median overhead per wall-clock read, compared with native in the same container):
 
@@ -19,6 +22,8 @@ These are reproducible measurements behind the performance numbers in the README
 | Node | +12 to +22 ns | +44 to +68 ns | +3.8 to +15 µs |
 
 `advance 1h` without probes takes 3 ms on the Linux runners and 28 ms under Docker Desktop. With probes it takes 0.15–0.56 s for one service and 0.64–1.16 s for 20.
+
+`chronostack users run` with 200 users against a local echo server handles about 8,000 (laptop, Docker Desktop), 10,700 (arm64 runner) and 24,000 (x86_64 runner) requests per second at `max_parallel` 32, with a median request latency of 0.8–3.6 ms. At `max_parallel` 200 the rate stays about the same and latency goes up, as requests queue at the server.
 
 Runs on GitHub's Linux runners (x86_64 and arm64) can be started from the **Benchmarks** workflow (`.github/workflows/bench.yml`). Each run uploads its results folder as an artifact.
 
@@ -65,6 +70,18 @@ Runs on GitHub's Linux runners (x86_64 and arm64) can be started from the **Benc
 
 The results show the floor of the advance cost. Real projects add the time their triggers and barriers take.
 
+## B3: simulated users
+
+**What it measures:** how fast `chronostack users run` drives requests, and the request latency it reports. 200 users each make 20 GET requests (4,000 per run) to `traefik/whoami`, a tiny Go server, published on 127.0.0.1. It runs at `max_parallel` 32 and 200.
+
+**Method:**
+- One warm-up run per configuration.
+- 10 timed runs. Each must finish with every request made and none failed.
+- Requests per second = 4,000 / the run's real time, including starting the worker threads.
+- Latency is the engine's own per-request measurement: the p50 and p99 of each run, then the median across runs.
+
+**What it doesn't show:** the server does almost nothing and the requests stay on one machine, so this is a ceiling for the engine, not a load-testing result. Real applications are slower than whoami. The two runs on GitHub's shared runners gave 19,400 and 24,000 requests per second on x86_64; compare configurations within one run.
+
 ## Running it
 
 **Requirements:** Docker with Compose v2 and Python 3.
@@ -72,12 +89,12 @@ The results show the floor of the advance cost. Real projects add the time their
 ```sh
 docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
 cargo build --release -p chronostack
-python bench/run_bench.py --label my-machine            # both benchmarks, 10 repetitions
+python bench/run_bench.py --label my-machine            # all benchmarks, 10 repetitions
 python bench/run_bench.py --only b1 --reps 20           # one benchmark, more repetitions
 ```
 
 Results are written to `bench/results/<date>-<label>/`:
-- `b1-clock.json` and `b2-advance.json` hold the raw samples, summaries, environment and clock checks.
+- `b1-clock.json`, `b2-advance.json` and `b3-users.json` hold the raw samples, summaries, environment and clock checks.
 - `README.md` holds the tables.
 
 A full run takes about 15 minutes on a laptop.
