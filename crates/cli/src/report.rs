@@ -144,11 +144,24 @@ pub fn junit(r: &Value) -> String {
     let name = str_of(sc, "name");
     let class = format!("chronostack.{}", slug(name));
     let steps: &[Value] = r["steps"].as_array().map(Vec::as_slice).unwrap_or(&[]);
-    let count = |s: &str| steps.iter().filter(|x| x["status"] == s).count();
+    // Simulated users: one test case per journey step.
+    let user_steps: &[Value] = r["users"]["steps"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let user_failed = user_steps
+        .iter()
+        .filter(|s| s["failed"].as_u64().unwrap_or(0) > 0)
+        .count();
+    let count = |s: &str| {
+        steps.iter().filter(|x| x["status"] == s).count()
+            + if s == "failed" { user_failed } else { 0 }
+    };
+    let total = steps.len() + user_steps.len();
     let mut x = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     x += &format!(
         "<testsuites name=\"chronostack\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"0\" time=\"{}\">\n",
-        steps.len(),
+        total,
         count("failed"),
         count("skipped"),
         secs(&r["real_elapsed_ms"])
@@ -156,7 +169,7 @@ pub fn junit(r: &Value) -> String {
     x += &format!(
         "  <testsuite name=\"{}\" tests=\"{}\" failures=\"{}\" skipped=\"{}\" errors=\"0\" time=\"{}\" timestamp=\"{}\">\n",
         xml(name),
-        steps.len(),
+        total,
         count("failed"),
         count("skipped"),
         secs(&r["real_elapsed_ms"]),
@@ -221,6 +234,38 @@ pub fn junit(r: &Value) -> String {
                     xml(detail)
                 );
             }
+        }
+    }
+    for s in user_steps {
+        let case = format!(
+            "users / {} / {}. {}",
+            str_of(s, "journey"),
+            s["index"].as_u64().unwrap_or(0),
+            str_of(s, "name")
+        );
+        let open = format!(
+            "    <testcase name=\"{}\" classname=\"{}\" time=\"0\"",
+            xml(&case),
+            xml(&format!("{class}.users"))
+        );
+        let failed = s["failed"].as_u64().unwrap_or(0);
+        if failed > 0 {
+            let errs: Vec<&str> = s["errors"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            x += &format!(
+                "{open}>\n      <failure message=\"{}\" type=\"users\">{}</failure>\n    </testcase>\n",
+                xml(&format!("{failed} of {} run(s) failed", s["runs"])),
+                xml(&errs.join("\n"))
+            );
+        } else {
+            x += &format!(
+                "{open}>\n      <system-out>{} run(s)</system-out>\n    </testcase>\n",
+                s["runs"]
+            );
         }
     }
     x += "  </testsuite>\n</testsuites>\n";
@@ -295,6 +340,47 @@ pub fn markdown(r: &Value) -> String {
             status,
             cell(str_of(s, "detail"))
         );
+    }
+
+    if let Some(u) = r.get("users").filter(|u| u.is_object()) {
+        let t = &u["users"];
+        m += &format!(
+            "\n## Simulated users\n\nSeed {}, actions on a {} s grid: {} action(s) at {} stop(s). {} completed, {} left at a branch, {} failed, {} stopped when the scenario ended, {} not started.\n\n",
+            u["seed"],
+            u["resolution_s"],
+            u["actions"],
+            u["stops"],
+            t["completed"],
+            t["left_at_branch"],
+            t["failed"],
+            t["stopped"],
+            t["not_started"]
+        );
+        m += "| Journey / step | Runs | Failed | p50 | p99 | Errors |\n|---|---|---|---|---|---|\n";
+        for s in u["steps"].as_array().into_iter().flatten() {
+            let ms = |k: &str| {
+                s["latency_us"][k]
+                    .as_u64()
+                    .map_or("-".to_string(), |v| format!("{:.1} ms", v as f64 / 1000.0))
+            };
+            let errs: Vec<&str> = s["errors"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            m += &format!(
+                "| {} / {} | {} | {} | {} | {} | {} |\n",
+                cell(str_of(s, "journey")),
+                cell(str_of(s, "name")),
+                s["runs"],
+                s["failed"],
+                ms("p50"),
+                ms("p99"),
+                cell(&errs.join("; "))
+            );
+        }
+        m += "\nThe full issue timeline (who did what at which virtual time) is in the JSON report under `users.timeline`.\n";
     }
 
     let events: Vec<&Value> = r["events"].as_array().into_iter().flatten().collect();

@@ -16,6 +16,7 @@ mod scenario;
 mod session;
 mod update;
 mod users;
+mod vusers;
 mod yaml;
 
 use std::fs;

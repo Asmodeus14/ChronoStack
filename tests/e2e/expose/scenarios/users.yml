@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=../../../../docs/schema/scenario.schema.json
+version: 1
+name: Users over three virtual days
+users: ../journeys-virtual.yml
+steps:
+  - advance: 3d

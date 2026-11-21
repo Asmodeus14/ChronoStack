@@ -11,6 +11,7 @@
 """
 
 import argparse
+import datetime as dt
 import json
 import os
 import subprocess
@@ -141,6 +142,37 @@ def main():
         p = run([cli, "users", "run", "journeys-fail.yml"], timeout=300)
         check("a failing journey exits 6 and says why", p.returncode == 6
               and "unexpected HTTP 200" in p.stdout and "FAILED" in p.stdout, p.stdout + p.stderr)
+
+        # The same kind of users on the virtual clock, inside a scenario.
+        timelines = []
+        for _ in range(2):
+            p = run([cli, "run", "scenarios/users.yml", "--json"], timeout=900)
+            try:
+                rep = json.loads(p.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                rep = {}
+            u = rep.get("users", {})
+            check("scenario with users passes", p.returncode == 0 and rep.get("result") == "passed",
+                  p.stdout[-2500:] + p.stderr)
+            t = u.get("users", {})
+            check("every user arrived and finished within 3 virtual days",
+                  t.get("total") == 6 and t.get("completed", 0) + t.get("left_at_branch", 0) == 6
+                  and t.get("failed") == 0 and t.get("stopped") == 0 and t.get("not_started") == 0, json.dumps(u)[:1500])
+            start = dt.datetime.fromisoformat(rep["virtual_start"].replace("Z", "+00:00"))
+            rel = []
+            for e in u.get("timeline", []):
+                at = dt.datetime.fromisoformat(e["virtual_time"].replace("Z", "+00:00"))
+                off = (at - start).total_seconds()
+                rel.append((off, e["cohort"], e["user"], e["event"].split(" -> ")[0].split("?")[0]))
+            check("user actions sit on the 1-minute grid inside the scenario",
+                  rel and all(o % 60 == 0 and 0 <= o <= 3 * 86400 for o, *_ in rel), rel[:10])
+            timelines.append([r[:3] + (r[3].split(" ", 1)[0],) for r in rel])
+        check("the same seed gives the same virtual timeline", timelines[0] == timelines[1],
+              f"{timelines[0][:6]} vs {timelines[1][:6]}")
+        p = run([cli, "run", "scenarios/users-fail.yml"], timeout=600)
+        check("a scenario whose users fail exits 6 and names the users",
+              p.returncode == 6 and "simulated users" in p.stdout and "unexpected HTTP 200" in p.stdout,
+              p.stdout[-2500:] + p.stderr)
     finally:
         run([cli, "down", "-v"], timeout=300)
 

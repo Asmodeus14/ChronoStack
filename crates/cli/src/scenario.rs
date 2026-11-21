@@ -50,6 +50,8 @@ pub struct Scenario {
     pub version: u32,
     pub name: String,
     pub description: Option<String>,
+    /// Simulated users that act on the virtual clock during `advance` steps.
+    pub users: Option<crate::vusers::UsersRef>,
     pub steps: Vec<Step>,
     /// Steps as written (with `${…}` unresolved), re-read at run time after
     /// substituting variables.
@@ -332,6 +334,12 @@ pub fn load(path: &Path, cfg: &Resolved, services: &[String]) -> Result<Scenario
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let sc = parse(&text).with_context(|| format!("invalid scenario {}", path.display()))?;
     validate(&sc, cfg, services).with_context(|| format!("invalid scenario {}", path.display()))?;
+    if let Some(u) = &sc.users {
+        u.resolution_ns()
+            .with_context(|| format!("invalid scenario {}", path.display()))?;
+        crate::vusers::load_plan(&crate::vusers::journey_path(path, u))
+            .with_context(|| format!("invalid scenario {}: users", path.display()))?;
+    }
     Ok(sc)
 }
 
@@ -605,7 +613,13 @@ fn check_horizon(st: &Step, now_ns: i64, start_ns: i64, cap_ns: i64) -> Result<(
     Ok(())
 }
 
-fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Result<StepOutcome> {
+fn run_step(
+    st: &Step,
+    session: &Session,
+    client: &Client,
+    cfg: &Resolved,
+    users: &mut Option<crate::vusers::VirtualUsers>,
+) -> Result<StepOutcome> {
     let compose = session.compose();
     let done = |ok: bool, detail: String| StepOutcome {
         ok,
@@ -655,7 +669,10 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
                 no_probe: f.probe == Some(false),
                 pg_cron_all: false,
             };
-            let out = engine::advance_full(session, client, cfg, &opts)?;
+            let out = match users.as_mut() {
+                Some(u) => advance_with_users(session, client, cfg, opts, u)?,
+                None => engine::advance_full(session, client, cfg, &opts)?,
+            };
             let ok = out.code == 0;
             let detail = if ok {
                 format!(
@@ -665,7 +682,15 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
                         .map(|a| a.len())
                         .unwrap_or(0),
                     out.summary["trigger_runs"]
-                )
+                ) + &out.summary["user_actions"]
+                    .as_u64()
+                    .map(|n| {
+                        format!(
+                            ", {n} user action(s) at {} stop(s)",
+                            out.summary["user_stops"]
+                        )
+                    })
+                    .unwrap_or_default()
             } else {
                 advance_failure(&out.summary)
             };
@@ -804,7 +829,90 @@ fn run_step(st: &Step, session: &Session, client: &Client, cfg: &Resolved) -> Re
     }
 }
 
-/// Run a scenario; returns the exit code (0 passed, 6 failed).
+/// An `advance` with simulated users: move to each time a user is due, let the
+/// due users act, wait for the barriers, and go on to the step's target. Stops
+/// in between skip probes; the last one probes as configured.
+fn advance_with_users(
+    session: &Session,
+    client: &Client,
+    cfg: &Resolved,
+    opts: Options,
+    users: &mut crate::vusers::VirtualUsers,
+) -> Result<engine::Outcome> {
+    let now = client.clock()?.virtual_ns;
+    let target = match opts.target {
+        Target::By(d) => now + d,
+        Target::To(t) => t,
+    };
+    let (actions0, stops0) = (users.actions, users.stops);
+    let mut all_stops: Vec<Value> = Vec::new();
+    let mut trigger_runs = 0u64;
+    let mut sub = 0usize;
+    let fail = |summary: Value, code: i32| engine::Outcome { code, summary };
+    loop {
+        let now = client.clock()?.virtual_ns;
+        // Users due now (e.g. arrivals at the scenario's start) act first.
+        if users.run_due(now) > 0 {
+            if let Err((name, detail)) = crate::vusers::VirtualUsers::settle(session, cfg) {
+                let summary = json!({
+                    "exit_code": engine::EXIT_BARRIER_TIMEOUT,
+                    "stops": [{ "at": format_utc(now), "barriers": [
+                        { "name": format!("{name} (after users acted)"), "ok": false, "detail": detail }
+                    ] }],
+                    "trigger_runs": trigger_runs,
+                });
+                return Ok(fail(summary, engine::EXIT_BARRIER_TIMEOUT));
+            }
+        }
+        let Some(next) = users.next_due().filter(|t| *t < target) else {
+            break;
+        };
+        sub += 1;
+        if sub > crate::vusers::MAX_USER_STOPS {
+            bail!(
+                "more than {} user stops in one advance; raise users.resolution",
+                crate::vusers::MAX_USER_STOPS
+            );
+        }
+        let step_opts = Options {
+            target: Target::To(next),
+            no_probe: true,
+            ..opts.clone()
+        };
+        let out = engine::advance_full(session, client, cfg, &step_opts)?;
+        trigger_runs += out.summary["trigger_runs"].as_u64().unwrap_or(0);
+        all_stops.extend(out.summary["stops"].as_array().cloned().unwrap_or_default());
+        if out.code != 0 {
+            return Ok(out);
+        }
+    }
+    let mut out = if client.clock()?.virtual_ns < target {
+        engine::advance_full(
+            session,
+            client,
+            cfg,
+            &Options {
+                target: Target::To(target),
+                ..opts
+            },
+        )?
+    } else {
+        engine::Outcome {
+            code: 0,
+            summary: json!({ "stops": [], "trigger_runs": 0 }),
+        }
+    };
+    if out.code == 0 {
+        all_stops.extend(out.summary["stops"].as_array().cloned().unwrap_or_default());
+        out.summary["stops"] = Value::Array(all_stops);
+        out.summary["trigger_runs"] =
+            json!(trigger_runs + out.summary["trigger_runs"].as_u64().unwrap_or(0));
+    }
+    out.summary["user_actions"] = json!(users.actions - actions0);
+    out.summary["user_stops"] = json!(users.stops - stops0);
+    Ok(out)
+}
+
 /// How `chronostack run` reports and what it may do.
 #[derive(Debug, Default)]
 pub struct RunOptions {
@@ -816,6 +924,7 @@ pub struct RunOptions {
     pub junit: Option<PathBuf>,
 }
 
+/// Run a scenario; returns the exit code (0 passed, 6 failed).
 pub fn run(
     session: &Session,
     client: &Client,
@@ -835,6 +944,38 @@ pub fn run(
     getrandom::fill(&mut rid).map_err(|e| anyhow::anyhow!("no OS randomness: {e}"))?;
     let run_id: String = rid.iter().map(|b| format!("{b:02x}")).collect();
     let mut vars = std::collections::BTreeMap::from([("run_id".to_string(), run_id.clone())]);
+    let mut users = match &sc.users {
+        Some(u) => {
+            let plan = crate::vusers::load_plan(&crate::vusers::journey_path(path, u))?;
+            let targets = crate::users::targets(&plan)?;
+            let seed = match plan.file.seed {
+                Some(s) => s,
+                None => {
+                    let mut b = [0u8; 8];
+                    getrandom::fill(&mut b)
+                        .map_err(|e| anyhow::anyhow!("no OS randomness: {e}"))?;
+                    u64::from_le_bytes(b) >> 11
+                }
+            };
+            let users_total: u64 = plan.cohorts.iter().map(|c| u64::from(c.users)).sum();
+            if !json_out {
+                println!(
+                    "users: {users_total} from {} (seed {seed}, actions on a {} grid)",
+                    u.file(),
+                    format_span(u.resolution_ns()?).trim_start_matches('+')
+                );
+            }
+            Some(crate::vusers::VirtualUsers::new(
+                plan,
+                &targets,
+                seed,
+                &run_id,
+                u.resolution_ns()?,
+                start.virtual_ns,
+            ))
+        }
+        None => None,
+    };
     if !json_out {
         println!("scenario: {} ({total} steps, run id {run_id})\n", sc.name);
     }
@@ -869,7 +1010,7 @@ pub fn run(
                 if let Some(cap) = max_advance_ns {
                     check_horizon(&step, before.virtual_ns, start.virtual_ns, cap)?;
                 }
-                run_step(&step, session, client, cfg)
+                run_step(&step, session, client, cfg, &mut users)
             })
             .unwrap_or_else(|e| StepOutcome {
                 ok: false,
@@ -928,6 +1069,25 @@ pub fn run(
     }
 
     let end = client.clock()?;
+    let users_report = users.take().map(|u| u.finish());
+    if let (None, Some((r, _))) = (&failed, &users_report) {
+        if !r.passed() {
+            let first = r
+                .steps
+                .iter()
+                .find_map(|s| {
+                    s.errors
+                        .first()
+                        .map(|e| format!("{} / {}: {}", s.journey, s.name, redact(e)))
+                })
+                .unwrap_or_default();
+            failed = Some(json!({
+                "index": Value::Null, "name": "simulated users",
+                "virtual_time": format_utc(end.virtual_ns),
+                "detail": format!("{} user(s) failed; first error: {first}", r.users.failed),
+            }));
+        }
+    }
     let probes = probe::probe_all(session, client);
     let ev = client.events(first_seq).ok();
     let events: Vec<Value> = ev
@@ -975,6 +1135,18 @@ pub fn run(
         "faults": faults,
         "probes": probes,
     });
+    let mut report = report;
+    if let Some((r, v)) = &users_report {
+        report["users"] = v.clone();
+        if !json_out {
+            println!(
+                "simulated users ({} action(s) at {} stop(s)):\n",
+                v["actions"], v["stops"]
+            );
+            print!("{}", crate::users::table(r));
+            println!();
+        }
+    }
     let md = report::markdown(&report);
     let (jp, mp) = report::write(&report, &md, &sc.name, real_start)?;
     if let Some(j) = &opts.junit {

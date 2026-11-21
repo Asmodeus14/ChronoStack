@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=../../../docs/schema/journeys.schema.json
+# Users on the virtual clock (scenarios/users.yml): they arrive over a day and
+# think for hours, which takes no real time inside a scenario.
+version: 1
+seed: 11
+targets:
+  api: service://api:80
+  web: service://web:80
+cohorts:
+  - { name: visitors, users: 6, arrive: { over: 1d }, journey: visit }
+journeys:
+  visit:
+    - name: who am i
+      http: { url: "${api}/api" }
+      expect: { json: { /method: GET } }
+      save: { host: /hostname }
+    - think: { between: [6h, 30h] }
+    - branch: { p: 0.5 }
+    - name: come back
+      http: { url: "${web}/back/${user}?seen=${host}" }
