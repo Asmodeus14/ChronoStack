@@ -365,7 +365,7 @@ function animate() {
   // ---- the problem: words light up as you read, then the old ways get struck out
   const statement = $('[data-words]');
   const words = splitWords(statement).map((w) => w.parentElement);
-  gsap.fromTo(words, { opacity: 0.14 }, {
+  gsap.fromTo(words, { opacity: 0.45 }, {
     opacity: 1, ease: 'none', stagger: 0.1,
     scrollTrigger: { trigger: statement, start: 'top 78%', end: 'bottom 38%', scrub: true },
   });

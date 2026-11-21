@@ -195,7 +195,7 @@ steps:
 chronostack run scenarios/trial.yml      # exit 0 = passed, 6 = a step failed
 ```
 
-- Each run writes `.chronostack/reports/<time>-<name>.md`, which explains what failed, and `.json`, which has everything.
+- Each run writes `.chronostack/reports/<time>-<name>-<run id>.md`, which explains what failed, and `.json`, which has everything.
 - Secrets in command output are redacted.
 - `${run_id}` makes each run unique, so a scenario can run again on the same stack.
 - A value saved by an earlier step works as an advance target, for times that depend on data (calendar months differ in length): save `ends_at` as a UTC timestamp like `2026-12-14T17:10:00Z`, then `advance: { to: "${ends_at}" }`.
