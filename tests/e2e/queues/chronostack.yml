@@ -5,3 +5,5 @@ barriers:
     bullmq: { service: redis, queues: [emails] }
   - name: sidekiq-idle
     sidekiq: { service: redis }
+  - name: celery-idle
+    celery: { service: redis, worker: { service: celery, app: celery_tasks } }

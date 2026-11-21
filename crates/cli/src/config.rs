@@ -180,6 +180,34 @@ pub struct SidekiqSpec {
     pub namespace: Option<String>,
 }
 
+/// A Celery barrier (Redis broker): the queues are empty and, with `worker`,
+/// the worker has nothing running, prefetched, or scheduled and already due.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CelerySpec {
+    /// The Redis service Celery uses as its broker.
+    pub service: String,
+    /// Queue names (default `[celery]`).
+    #[serde(default = "default_celery_queues")]
+    pub queues: Vec<String>,
+    /// Also ask a worker (Celery's `inspect`) what it is running. Without it,
+    /// a task that has already been taken off the queue isn't seen.
+    pub worker: Option<CeleryWorker>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CeleryWorker {
+    /// The service running `celery worker`.
+    pub service: String,
+    /// The app, as given to `celery -A` (e.g. `proj` or `proj.celery:app`).
+    pub app: String,
+}
+
+fn default_celery_queues() -> Vec<String> {
+    vec!["celery".into()]
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Trigger {
@@ -202,6 +230,8 @@ pub struct Barrier {
     pub bullmq: Option<BullmqSpec>,
     #[serde(default)]
     pub sidekiq: Option<SidekiqSpec>,
+    #[serde(default)]
+    pub celery: Option<CelerySpec>,
     pub timeout: Option<String>,
     /// Wait this long at each stop before the first check, for schedulers that
     /// only enqueue work when they next poll (sidekiq-cron, Clockwork, …).
@@ -396,9 +426,12 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
             b.http.is_some(),
             b.bullmq.is_some(),
             b.sidekiq.is_some(),
+            b.celery.is_some(),
         ];
         if set.iter().filter(|x| **x).count() != 1 {
-            bail!("{what}: set exactly one of `sql`, `redis`, `exec`, `http`, `bullmq`, `sidekiq`");
+            bail!(
+                "{what}: set exactly one of `sql`, `redis`, `exec`, `http`, `bullmq`, `sidekiq`, `celery`"
+            );
         }
         if let Some(s) = &b.sql {
             check_service(&what, &s.service)?;
@@ -423,6 +456,20 @@ pub fn validate(config: Config, services: &[String]) -> Result<Resolved> {
         }
         if let Some(s) = &b.sidekiq {
             check_service(&what, &s.service)?;
+        }
+        if let Some(c) = &b.celery {
+            check_service(&what, &c.service)?;
+            if c.queues.is_empty() || c.queues.iter().any(|q| q.trim().is_empty()) {
+                bail!("{what}: `celery.queues` needs at least one non-empty queue name");
+            }
+            if let Some(w) = &c.worker {
+                check_service(&format!("{what}: celery.worker"), &w.service)?;
+                if w.app.trim().is_empty() {
+                    bail!(
+                        "{what}: `celery.worker.app` can't be empty (the name given to `celery -A`)"
+                    );
+                }
+            }
         }
         if let Some(v) = &b.settle {
             dur(&format!("{what}: settle"), v)?;
@@ -545,6 +592,29 @@ mod tests {
             "expose: [{service: worker, port: 1, extra: x}]",
         ] {
             assert!(parse(&format!("version: 1\n{bad}\n")).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn celery_barriers() {
+        let r = parse(
+            "version: 1\nbarriers:\n  - name: c\n    celery: { service: cache, worker: { service: worker, app: proj } }\n",
+        )
+        .unwrap();
+        let c = r.config.barriers[0].celery.as_ref().unwrap();
+        assert_eq!(c.queues, ["celery"], "default queue");
+        assert_eq!(c.worker.as_ref().unwrap().app, "proj");
+        for bad in [
+            "celery: { service: nope }",
+            "celery: { service: cache, queues: [] }",
+            "celery: { service: cache, worker: { service: nope, app: proj } }",
+            "celery: { service: cache, worker: { service: worker, app: ' ' } }",
+            "celery: { service: cache }\n    sql: { service: db, query: 'select 1' }",
+        ] {
+            assert!(
+                parse(&format!("version: 1\nbarriers:\n  - name: c\n    {bad}\n")).is_err(),
+                "{bad}"
+            );
         }
     }
 

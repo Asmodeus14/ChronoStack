@@ -192,6 +192,7 @@ impl Check {
             http: self.http.clone(),
             bullmq: None,
             sidekiq: None,
+            celery: None,
             timeout: self.timeout.clone(),
             settle: None,
         }

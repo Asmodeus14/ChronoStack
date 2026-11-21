@@ -15,7 +15,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::client::Client;
-use crate::config::{Barrier, ExecSpec, HttpSpec, Resolved, SidekiqSpec, Trigger};
+use crate::config::{Barrier, CelerySpec, ExecSpec, HttpSpec, Resolved, SidekiqSpec, Trigger};
 use crate::docker::{self, Compose};
 use crate::probe;
 use crate::queues;
@@ -519,7 +519,46 @@ pub(crate) fn barrier_once(
             Err(e) => (false, Some(e)),
         };
     }
+    if let Some(c) = &b.celery {
+        return celery_once(compose, c, quick);
+    }
     (false, Some("no condition".into()))
+}
+
+/// A Celery barrier: the broker's queues are empty and, with a `worker`, the
+/// worker has nothing running, prefetched, or scheduled and already due.
+fn celery_once(compose: &Compose, spec: &CelerySpec, timeout: Duration) -> (bool, Option<String>) {
+    let (ok, detail) = queue_pending(compose, &spec.service, queues::celery_args(spec), timeout);
+    if !ok {
+        return (false, detail.map(|d| format!("broker: {d}")));
+    }
+    let Some(w) = &spec.worker else {
+        return (true, None);
+    };
+    let mut args = compose.args(&["exec", "-T", &w.service]);
+    args.extend(queues::celery_inspect_command(w));
+    match docker::output_timeout(&args, timeout) {
+        Ok(t) if t.code == Some(0) => match queues::celery_workers(&t.stdout) {
+            Some(r) if r.workers == 0 => (
+                false,
+                Some("queues empty; no Celery worker answered `inspect`".into()),
+            ),
+            Some(r) if r.pending > 0 => (
+                false,
+                Some(format!(
+                    "{} task(s) running, prefetched or due on the worker",
+                    r.pending
+                )),
+            ),
+            Some(_) => (true, None),
+            None => (false, Some(tail(&t.stdout, 200))),
+        },
+        Ok(t) => (
+            false,
+            Some(format!("celery inspect: {}", tail(&t.stderr, 300))),
+        ),
+        Err(e) => (false, Some(e.to_string())),
+    }
 }
 
 fn sidekiq_once(
