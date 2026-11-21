@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=../../../docs/schema/scenario.schema.json
+# chronostack up --wait && chronostack run scenarios/cohort.yml
+# 20 trialists sign up over a week (journeys/trialists.yml) while the clock
+# runs for 30 virtual days. The partner's webhook endpoint is down on day 15
+# from 02:00 to 06:00, so the 03:00 job's webhooks that day must be retried.
+version: 1
+name: 20 trialists over 30 days, with a webhook outage
+description: >-
+  Every trialist must be downgraded when their 14 days are up, and each one's
+  trial.expired webhook must reach the partner exactly once, including the
+  ones queued during the outage. With compose.bug.yml the worker treats the
+  outage's 503s as delivered, and the last step fails.
+users: ../journeys/trialists.yml
+steps:
+  - name: start at a UTC midnight (the first users sign up on the way)
+    advance: { to: next 00:00 }
+
+  - name: the webhook receiver is down on day 15 from 02:00 to 06:00
+    fault: { target: webhooks, from: +15d2h, for: 4h }
+
+  - name: thirty days pass (the 03:00 job runs every day)
+    advance: 30d
+
+  - name: every trialist was downgraded
+    assert:
+      sql:
+        service: db
+        query: "select count(*) from users where email like '%-${run_id}@example.com' and plan = 'free'"
+        equals: "20"
+
+  - name: every trialist's trial.expired webhook reached the partner exactly once
+    assert:
+      exec: { service: api, command: [node, scripts/call.js, received, "${run_id}", "20"] }

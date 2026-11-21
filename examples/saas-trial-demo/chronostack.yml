@@ -22,6 +22,10 @@ barriers:
         select count(*) = 0 from webhook_outbox
          where delivered_at is null and failed_at is null and next_attempt_at <= now()
 
+# The API, reachable from the host for simulated users (scenarios/cohort.yml).
+expose:
+  - api:3000
+
 proxies:
   # Webhooks go through ChronoStack's fault proxy, so outages can be scheduled
   # in virtual time (`chronostack fault set webhooks …` or a scenario step).

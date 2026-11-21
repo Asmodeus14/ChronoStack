@@ -35,6 +35,20 @@ chronostack events          # clock changes, outage windows, proxied requests
 chronostack down -v
 ```
 
+## 20 trialists over 30 days
+
+[`scenarios/cohort.yml`](scenarios/cohort.yml) runs simulated users ([`journeys/trialists.yml`](journeys/trialists.yml)) on the virtual clock. 20 people sign up over a week, come back the same day (their session still works), and come back two days later (it has expired: a Redis TTL on the virtual clock). The partner's endpoint is down on day 15 from 02:00 to 06:00. After 30 virtual days, every trialist must be downgraded, and every `trial.expired` webhook must have reached the partner exactly once.
+
+```sh
+chronostack up --wait
+chronostack run scenarios/cohort.yml      # about 3 minutes; passes
+chronostack down -v
+chronostack -f compose.yml -f compose.bug.yml up --wait
+chronostack run scenarios/cohort.yml      # fails: 17 of 20 webhooks arrived exactly once
+```
+
+With `compose.bug.yml`, the worker treats the outage's 503s as delivered, so the webhooks queued during it never arrive. The users reach the API through `expose: [api:3000]` in `chronostack.yml`.
+
 ## The scenario
 
 [`scenarios/trial.yml`](scenarios/trial.yml) runs the whole story and checks it: a user signs up, the receiver is down on day 14 from 02:00 to 06:00, the trial expires at the 03:00 job, the webhook is retried during the outage and delivered exactly once at 07:00.

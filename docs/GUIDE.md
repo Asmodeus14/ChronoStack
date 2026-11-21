@@ -244,8 +244,31 @@ chronostack users run journeys.yml         # exit 0 = passed, 6 = a step failed
 - **A failed step stops that user:** an unexpected status, a JSON value that doesn't match, or a missing value to save. Other users carry on. The summary lists runs, failures and p50/p90/p99/max latency per step, and the errors.
 - **Reports:** `--json` prints the report, `--junit out.xml` writes one test case per step, and `--trace` adds every user's steps to the JSON.
 - **Reproducible:** `--seed` (or `seed:`) fixes arrivals, `between` thinks and branches. Without one, a seed is picked and printed, so you can repeat that run.
-- **Real time, for now:** users run on your machine's clock, and each think is capped at `max_think` (default 30s), so `think: 13d` doesn't hang. `--duration 10m` stops a run early. Running users along the virtual clock (thirteen days in seconds) is planned.
+- **`users run` is real time:** users run on your machine's clock, and each think is capped at `max_think` (default 30s), so `think: 13d` doesn't hang. `--duration 10m` stops a run early. To let thirteen days pass in seconds, put the users in a scenario (below).
 - **Not a load tester:** it simulates behaviour, with up to 256 users active at once. Against a trivial local server it drives about 8,000–24,000 requests per second depending on the machine ([benchmark](../bench/README.md#b3-simulated-users)); for high request rates against a real app, use k6 or similar.
+
+### On the virtual clock: users in a scenario
+
+Add `users:` to a scenario and the same journeys run on the **virtual** clock while the scenario advances. Arrivals and thinks count from the scenario's start, so a user who thinks for 13 days costs no real time.
+
+```yaml
+# scenarios/cohort.yml
+version: 1
+name: 20 trialists over 30 days
+users: ../journeys/trialists.yml      # or { file: ../journeys/trialists.yml, resolution: 5s }
+steps:
+  - advance: { to: next 00:00 }
+  - advance: 30d                      # users arrive and act during the advance
+  - name: every trialist was downgraded
+    assert: { sql: { service: db, query: "select count(*) from users where email like '%-${run_id}@example.com' and plan = 'free'", equals: "20" } }
+```
+
+- **During each `advance`, the clock also stops wherever users are due.** At each such stop, the due users act (up to `max_parallel` at once), then every barrier in `chronostack.yml` must hold again so their work settles, and time moves on. Triggers, pg_cron and outages run as in any advance. Stops between the users skip the probe step; the last one probes as usual.
+- **Times are rounded up to `resolution`** (default 1 minute, at least 1 second), so users due close together share a stop. Each stop costs real time; a coarser grid makes long runs faster.
+- **The same seed gives the same timeline.** A user's next action time is the stop's virtual time plus its think, never "whenever the requests finished". So who does which step at which virtual time depends only on the seed. How long each request took in real time can differ between runs.
+- **Reports:** the scenario report gets a users table; the JSON report has the full timeline under `users.timeline` (redacted); JUnit gets a test case per journey step. A failed user step fails the scenario (exit 6). Users still mid-journey when the scenario ends are reported as stopped, and users who never arrived as not started.
+- **`service://` targets** need the port under `expose:` in `chronostack.yml`.
+- A complete example: [the demo's cohort scenario](../examples/saas-trial-demo/scenarios/cohort.yml), with 20 trialists over 30 days and a webhook outage. It takes about 3 minutes of real time.
 
 ## 9. In CI
 

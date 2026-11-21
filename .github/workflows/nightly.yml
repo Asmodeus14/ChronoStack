@@ -32,6 +32,8 @@ jobs:
       - run: cargo build -p chronostack
       - run: python3 tests/e2e/run_m2.py --cli target/debug/chronostack --repeat 10 --skip-pgcron --skip-triggers
       - run: python3 tests/e2e/run_m3.py --cli target/debug/chronostack --repeat 5
+      - name: Simulated users on the virtual clock (×10 timeline, 30-day demo cohort, bug variant)
+        run: python3 tests/e2e/run_users_virtual.py --cli target/debug/chronostack --repeat 10
 
   schedulers:
     name: Scheduler matrix (${{ matrix.os }})
