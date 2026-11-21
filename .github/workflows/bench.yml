@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-# Benchmarks B1 (clock-read overhead) and B2 (advance latency), on demand.
+# Benchmarks B1 (clock-read overhead), B2 (advance latency) and B3 (simulated
+# users), on demand.
 # GitHub-hosted runners are shared VMs: use these runs to compare
 # configurations within one run, not as absolute numbers (bench/README.md).
 name: Benchmarks
@@ -10,6 +11,11 @@ on:
       reps:
         description: Repetitions per configuration
         default: "10"
+      only:
+        description: Run one benchmark only
+        type: choice
+        options: [all, b1, b2, b3]
+        default: all
 
 permissions:
   contents: read
@@ -29,9 +35,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: docker build -f docker/clockd.Dockerfile -t chronostack/clockd:dev .
       - run: cargo build --release -p chronostack
-      - run: python3 bench/run_bench.py --reps "$REPS" --label "github-$RUNNER_LABEL"
+      - run: |
+          only=()
+          if [ "$ONLY" != "all" ]; then only=(--only "$ONLY"); fi
+          python3 bench/run_bench.py --reps "$REPS" --label "github-$RUNNER_LABEL" "${only[@]}"
         env:
           REPS: ${{ inputs.reps }}
+          ONLY: ${{ inputs.only }}
           RUNNER_LABEL: ${{ matrix.os }}
       - uses: actions/upload-artifact@v7
         with:

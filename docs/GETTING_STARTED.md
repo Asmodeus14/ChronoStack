@@ -154,7 +154,7 @@ triggers:
 
 Now `chronostack advance 7d` runs `nightly-job` 7 times, each at its own virtual 03:00. Preview with `--dry-run`. BullMQ, Celery beat and pg_cron are handled without a trigger; see [which schedulers need what](GUIDE.md#4-make-your-scheduled-jobs-run).
 
-**Step 5: turn it into a test.** Write the steps and checks in a scenario file and run it with `chronostack run`. It exits with 0 if everything passed, so it can run in CI. [How to write scenarios](GUIDE.md#7-turn-it-into-a-test-scenarios) · [CI setup](GUIDE.md#8-in-ci)
+**Step 5: turn it into a test.** Write the steps and checks in a scenario file and run it with `chronostack run`. It exits with 0 if everything passed, so it can run in CI. [How to write scenarios](GUIDE.md#7-turn-it-into-a-test-scenarios) · [CI setup](GUIDE.md#9-in-ci)
 
 **When you're done:** `chronostack down -v` removes the copy and its data.
 
@@ -217,7 +217,7 @@ It's most likely a Go or static binary, which ChronoStack can't reach. Services 
 It should: everything runs in Docker's Linux VM, the same as on Windows. It hasn't been tested yet, though. If you have a Mac, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 **Can I use it in CI?**
-Yes, on Linux runners. There's a GitHub Action (`uses: Asmodeus14/ChronoStack@v0.1.0-alpha.7`); see the [CI section](GUIDE.md#8-in-ci).
+Yes, on Linux runners. There's a GitHub Action (`uses: Asmodeus14/ChronoStack@v0.1.0-alpha.7`); see the [CI section](GUIDE.md#9-in-ci).
 
 **Can an AI agent drive it?**
 Yes. `chronostack mcp` is an MCP server with a fixed, safe set of tools: `claude mcp add chronostack -- chronostack mcp --project-dir <your project>`. Two limits in `chronostack.yml` bound what an agent can do:

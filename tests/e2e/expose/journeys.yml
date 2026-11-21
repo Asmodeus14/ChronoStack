@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../../docs/schema/journeys.schema.json
 # Simulated users against the expose fixture (traefik/whoami echoes requests as
 # JSON at /api). run_expose.py runs this with a fixed seed, twice.
 version: 1

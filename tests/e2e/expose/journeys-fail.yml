@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../../docs/schema/journeys.schema.json
 # A journey that must fail: whoami answers 200, not 201.
 version: 1
 targets: { api: service://api:80 }
