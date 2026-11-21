@@ -229,6 +229,10 @@ enum Cmd {
         /// many nanoseconds past the scenario's start (set by `chronostack mcp`).
         #[arg(long, hide = true)]
         max_advance_ns: Option<i64>,
+        /// Check the scenario (and its users file) and show what it would do,
+        /// without running it: steps, how far virtual time moves, the users.
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -522,6 +526,7 @@ fn run(cli: Cli) -> Result<i32> {
                     mcp::Limits {
                         max_advance_ns: c.mcp_max_advance_ns,
                         max_wall_ns: c.mcp_max_wall_ns,
+                        max_users: c.mcp_max_users,
                     }
                 }
                 None => mcp::Limits::default(),
@@ -571,6 +576,41 @@ fn run(cli: Cli) -> Result<i32> {
             json,
             junit,
             max_advance_ns,
+            check: true,
+        } => {
+            let _ = (junit, max_advance_ns);
+            let session = Session::load().ok();
+            let cfg = match &session {
+                Some(s) => load_config(s)?,
+                None => match config::find(Path::new(".")) {
+                    Some(p) => config::load(&p, &[])?,
+                    None => config::Resolved::empty(),
+                },
+            };
+            let services: Vec<String> = session
+                .as_ref()
+                .map(|s| s.services.iter().map(|e| e.plan.service.clone()).collect())
+                .unwrap_or_default();
+            let path = Path::new(&file);
+            let sc = scenario::load(path, &cfg, &services)?;
+            let now = match session {
+                Some(mut s) => client(&mut s).clock().ok().map(|c| c.virtual_ns),
+                None => None,
+            };
+            let plan = scenario::check(path, &sc, now)?;
+            if json {
+                println!("{plan}");
+            } else {
+                print!("{}", scenario::check_text(&plan));
+            }
+            Ok(0)
+        }
+        Cmd::Run {
+            file,
+            json,
+            junit,
+            max_advance_ns,
+            check: false,
         } => {
             let mut s = Session::load()?;
             let cfg = load_config(&s)?;

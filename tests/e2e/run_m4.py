@@ -96,7 +96,7 @@ def mcp_checks(cli):
         check("mcp: initialize negotiates 2025-06-18", r["result"]["protocolVersion"] == "2025-06-18" and "tools" in r["result"]["capabilities"])
         m.send("notifications/initialized", notify=True)
         tools = [t["name"] for t in m.send("tools/list")["result"]["tools"]]
-        check("mcp: tools/list has the fixed tool set (11 tools)", len(tools) == 11 and "clock_advance" in tools and "scenario_run" in tools, str(tools))
+        check("mcp: tools/list has the fixed tool set (17 tools)", len(tools) == 17 and "clock_advance" in tools and "scenario_run" in tools, str(tools))
 
         err, st, _ = m.tool("clock_status")
         check("mcp: clock_status", not err and "virtual_ns" in st, json.dumps(st)[:200])
@@ -140,6 +140,43 @@ def mcp_checks(cli):
               not err and st.get("result") == "passed" and outcomes == ["fault", "fault", "fault", "forwarded"],
               f"{time.monotonic() - t0:.0f}s result={st.get('result')} {outcomes} {json.dumps(st.get('failed_step'))}")
 
+        run_a = st.get("run_id")
+
+        # Higher-level tools: inspect, validate, reports, users.
+        err, st, _ = m.tool("env_inspect")
+        trig = [t["name"] for t in st.get("triggers", [])]
+        check("mcp: env_inspect shows services, triggers, barriers, proxies and exposed ports",
+              not err and "services" in st.get("doctor", {}) and trig == ["expire-trials"]
+              and "outbox-settled" in st.get("barriers", []) and st.get("proxies", [{}])[0].get("name") == "webhooks"
+              and any(e["target"] == "service://api:3000" for e in st.get("exposed", [])), json.dumps(st)[:400])
+        err, st, _ = m.tool("scenario_validate", {"file": "scenarios/cohort.yml"})
+        check("mcp: scenario_validate plans the cohort scenario without running it",
+              not err and st.get("users", {}).get("total") == 20 and st.get("within_mcp_max_advance") is True
+              and st.get("total_advance_ns", 0) >= 30 * 86400 * 10**9, json.dumps(st)[:400])
+        err, st, _ = m.tool("report_get")
+        check("mcp: report_get returns the latest run", not err and st.get("run_id") == run_a
+              and st.get("result") == "passed" and len(st.get("steps", [])) > 5, json.dumps(st)[:300])
+        err, st, _ = m.tool("report_get", {"run_id": "nope"})
+        check("mcp: report_get with an unknown run id is a tool error", err is True)
+        err, st, _ = m.tool("scenario_run", {"file": "scenarios/trial.yml"})
+        run_b = st.get("run_id")
+        err, st, _ = m.tool("report_diff")
+        check("mcp: report_diff compares the last two runs (nothing changed)",
+              not err and st.get("a", {}).get("run_id") == run_a and st.get("b", {}).get("run_id") == run_b
+              and st.get("same_scenario") is True and st.get("result_changed") is False and st.get("step_changes") == [],
+              json.dumps(st)[:400])
+        err, st, _ = m.tool("users_validate", {"file": "journeys/trialists.yml"})
+        check("mcp: users_validate", not err and st.get("users") == 20, json.dumps(st)[:300])
+        t0 = time.monotonic()
+        err, st, _ = m.tool("users_run", {"file": "journeys/trialists.yml", "duration": "5s"})
+        u = st.get("users", {})
+        check("mcp: users_run stops itself at its duration and still reports",
+              not err and st.get("duration_limit_ms") == 5000 and u.get("total") == 20
+              and u.get("stopped", 0) + u.get("not_started", 0) + u.get("completed", 0) == 20
+              and time.monotonic() - t0 < 60, f"{time.monotonic() - t0:.0f}s {json.dumps(st)[:300]}")
+        err, st, _ = m.tool("users_run", {"file": "../../Cargo.toml"})
+        check("mcp: users_run outside the project is refused", err is True and "inside the project" in st.get("error", ""))
+
         r = m.send("nope/method")
         check("mcp: unknown method → -32601", r.get("error", {}).get("code") == -32601)
         r = m.send("tools/call", {"name": "shell", "arguments": {}})
@@ -161,7 +198,7 @@ def mcp_checks(cli):
         r = m.send("server/discover", {"_meta": META})
         check("mcp 2026-07-28: server/discover", r["result"]["supportedVersions"] == ["2026-07-28"] and r["result"]["resultType"] == "complete")
         r = m.send("tools/list", {"_meta": META})
-        check("mcp 2026-07-28: tools/list with _meta (caching hints)", len(r["result"]["tools"]) == 11 and r["result"]["cacheScope"] == "public")
+        check("mcp 2026-07-28: tools/list with _meta (caching hints)", len(r["result"]["tools"]) == 17 and r["result"]["cacheScope"] == "public")
         err, st, _ = m.tool("clock_status", meta=True)
         check("mcp 2026-07-28: tools/call", not err and "virtual_ns" in st)
         r = m.send("tools/list", {"_meta": {**META, "io.modelcontextprotocol/protocolVersion": "2031-01-01"}})

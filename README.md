@@ -122,7 +122,7 @@ When something breaks, the Markdown report says what was expected, what happened
 - **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports, with secrets redacted.
 - **Simulated users:** `chronostack users run` sends seeded cohorts of users through scripted journeys (requests, think times, branches) and reports failures and latency per step ([guide](docs/GUIDE.md#8-simulated-users)).
 - **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#9-in-ci), and a strict mode.
-- **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe tool set (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`).
+- **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe tool set: inspect the stack, move time, schedule outages, run scenarios with simulated users and compare runs (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`; [Cursor, Gemini CLI](docs/GUIDE.md#10-ai-agents-mcp)).
 - **Host-native Node:** `node -r sdk/node/register.js app.js` puts a Node process outside Docker on the same clock ([details](sdk/node/README.md)).
 - **Safe by design:** never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.
 

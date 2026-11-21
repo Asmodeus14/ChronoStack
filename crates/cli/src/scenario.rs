@@ -913,6 +913,128 @@ fn advance_with_users(
     Ok(out)
 }
 
+/// What a scenario would do, without running it (`chronostack run --check`).
+/// `now` is the current virtual time when a session is running; without one,
+/// `advance: { to: … }` targets can't be resolved and are reported as such.
+pub fn check(path: &Path, sc: &Scenario, now: Option<i64>) -> Result<Value> {
+    let mut t = now.unwrap_or(0);
+    let mut unresolved = 0;
+    let mut steps = Vec::new();
+    for (i, st) in sc.steps.iter().enumerate() {
+        let mut e = json!({ "index": i + 1, "name": st.title(), "kind": st.kind() });
+        if let Some(a) = &st.advance {
+            let by = |d: &str| parse_duration(d).map_err(anyhow::Error::msg);
+            let target = match a {
+                AdvanceStep::By(d) => Some(t + by(d)?),
+                AdvanceStep::Full(f) => match (&f.by, &f.to) {
+                    (Some(b), _) => Some(t + by(b)?),
+                    (_, Some(to)) => {
+                        // Relative forms work without a clock; `next HH:MM` and
+                        // absolute times need the session's virtual time.
+                        if now.is_some() || to.starts_with('+') {
+                            Some(fault::parse_when(to, t)?)
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                },
+            };
+            match target {
+                Some(x) if x > t => {
+                    e["advance_ns"] = json!(x - t);
+                    e["advance"] = json!(format_span(x - t).trim_start_matches('+'));
+                    t = x;
+                }
+                Some(_) => e["advance_ns"] = json!(0),
+                None => {
+                    unresolved += 1;
+                    e["advance"] = json!("depends on the current virtual time");
+                }
+            }
+        }
+        steps.push(e);
+    }
+    let start = now.unwrap_or(0);
+    let mut out = json!({
+        "scenario": sc.name,
+        "path": path.to_string_lossy().replace('\\', "/"),
+        "valid": true,
+        "steps": steps,
+        "total_advance_ns": t - start,
+        "total_advance": format_span(t - start).trim_start_matches('+'),
+        "unresolved_advances": unresolved,
+    });
+    if let Some(n) = now {
+        out["virtual_start"] = json!(format_utc(n));
+        out["virtual_end"] = json!(format_utc(t));
+    }
+    if let Some(u) = &sc.users {
+        let jp = crate::vusers::journey_path(path, u);
+        let plan = crate::vusers::load_plan(&jp)?;
+        let total: u64 = plan.cohorts.iter().map(|c| u64::from(c.users)).sum();
+        out["users"] = json!({
+            "file": jp.to_string_lossy().replace('\\', "/"),
+            "total": total,
+            "resolution": format_span(u.resolution_ns()?).trim_start_matches('+'),
+            "seed": plan.file.seed,
+            "targets": plan.file.targets,
+            "cohorts": plan.cohorts.iter().map(|c| json!({
+                "name": c.name, "users": c.users, "journey": c.journey,
+                "arrive_over": format_span(c.arrive_ns).trim_start_matches('+'),
+            })).collect::<Vec<_>>(),
+            "journeys": plan.step_names,
+        });
+    }
+    Ok(out)
+}
+
+/// `chronostack run --check` as text.
+pub fn check_text(v: &Value) -> String {
+    let mut o = format!(
+        "{} is valid: {} step(s), virtual time moves {}{}\n",
+        v["path"].as_str().unwrap_or(""),
+        v["steps"].as_array().map_or(0, Vec::len),
+        v["total_advance"].as_str().unwrap_or("?"),
+        match v["unresolved_advances"].as_u64() {
+            Some(0) | None => String::new(),
+            Some(n) => format!(
+                " plus {n} advance(s) that depend on the current time (start the stack to see them)"
+            ),
+        }
+    );
+    for s in v["steps"].as_array().into_iter().flatten() {
+        let adv = s["advance"]
+            .as_str()
+            .map(|a| format!("  ({a})"))
+            .unwrap_or_default();
+        o += &format!(
+            "  {}. {} [{}]{adv}\n",
+            s["index"],
+            s["name"].as_str().unwrap_or(""),
+            s["kind"].as_str().unwrap_or("")
+        );
+    }
+    if let Some(u) = v.get("users").filter(|u| u.is_object()) {
+        o += &format!(
+            "  users: {} from {}, on a {} grid\n",
+            u["total"],
+            u["file"].as_str().unwrap_or(""),
+            u["resolution"].as_str().unwrap_or("")
+        );
+        for c in u["cohorts"].as_array().into_iter().flatten() {
+            o += &format!(
+                "    cohort {}: {} user(s), journey {}, arriving over {}\n",
+                c["name"].as_str().unwrap_or(""),
+                c["users"],
+                c["journey"].as_str().unwrap_or(""),
+                c["arrive_over"].as_str().unwrap_or("")
+            );
+        }
+    }
+    o
+}
+
 /// How `chronostack run` reports and what it may do.
 #[derive(Debug, Default)]
 pub struct RunOptions {
