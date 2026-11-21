@@ -12,6 +12,7 @@ mod mcp;
 mod probe;
 mod queues;
 mod report;
+mod runs;
 mod scenario;
 mod session;
 mod update;
@@ -210,6 +211,11 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
+    /// Read scenario reports back: list runs, show one, compare two.
+    Report {
+        #[command(subcommand)]
+        cmd: ReportCmd,
+    },
     /// Simulated users: seeded journeys (HTTP requests, think times, branches).
     Users {
         #[command(subcommand)]
@@ -233,6 +239,35 @@ enum Cmd {
         /// without running it: steps, how far virtual time moves, the users.
         #[arg(long)]
         check: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReportCmd {
+    /// Recent runs, newest first.
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// A run's result, steps and simulated users (default: the latest run).
+    Show {
+        /// Run id (from `chronostack run` or `report list`).
+        run_id: Option<String>,
+        /// How many users timeline entries to show.
+        #[arg(long, default_value_t = 20)]
+        timeline: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    /// What changed between two runs: result, steps, users and their timeline
+    /// (default: the latest run against the one before it).
+    Diff {
+        /// Earlier run id.
+        a: Option<String>,
+        /// Later run id.
+        b: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -544,6 +579,47 @@ fn run(cli: Cli) -> Result<i32> {
             pre,
             force,
         }),
+        Cmd::Report { cmd } => {
+            let reports = runs::list_reports().map_err(anyhow::Error::msg)?;
+            match cmd {
+                ReportCmd::List { json } => {
+                    if json {
+                        let rows: Vec<_> = reports
+                            .iter()
+                            .map(|r| json!({ "run_id": r["run_id"], "real_start": r["real_start"], "result": r["result"], "scenario": r["scenario"]["name"] }))
+                            .collect();
+                        println!("{}", json!({ "reports": rows }));
+                    } else {
+                        print!("{}", runs::list_text(&reports));
+                    }
+                }
+                ReportCmd::Show {
+                    run_id,
+                    timeline,
+                    json,
+                } => {
+                    let r = runs::pick_report(&reports, run_id.as_deref(), 0)
+                        .map_err(anyhow::Error::msg)?;
+                    let s = runs::report_summary(&r, timeline.min(10_000));
+                    if json {
+                        println!("{s}");
+                    } else {
+                        print!("{}", runs::show_text(&s));
+                    }
+                }
+                ReportCmd::Diff { a, b, json } => {
+                    let (ra, rb) = runs::diff_pair(&reports, a.as_deref(), b.as_deref())
+                        .map_err(anyhow::Error::msg)?;
+                    let d = runs::report_diff(&ra, &rb);
+                    if json {
+                        println!("{d}");
+                    } else {
+                        print!("{}", runs::diff_text(&d));
+                    }
+                }
+            }
+            Ok(0)
+        }
         Cmd::Users { cmd } => match cmd {
             UsersCmd::Validate { file, json } => users::validate(Path::new(&file), json),
             UsersCmd::Run {

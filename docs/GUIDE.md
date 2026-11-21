@@ -200,6 +200,7 @@ chronostack run scenarios/trial.yml      # exit 0 = passed, 6 = a step failed
 - `${run_id}` makes each run unique, so a scenario can run again on the same stack.
 - A value saved by an earlier step works as an advance target, for times that depend on data (calendar months differ in length): save `ends_at` as a UTC timestamp like `2026-12-14T17:10:00Z`, then `advance: { to: "${ends_at}" }`.
 - Every step type: [scenario schema](schema/scenario.schema.json). A complete example: [the demo](../examples/saas-trial-demo/scenarios/trial.yml).
+- **Read and compare runs:** `chronostack report list` shows recent runs, `report show [RUN_ID]` a run's steps and users, and `report diff [A] [B]` what changed between two runs (by default the latest against the one before): the result, each step's outcome, the users' outcomes and whether their timeline is the same. Run ids and ports that change between runs don't count. Useful after a fix, or to check that a run repeats. `--json` on all three.
 
 ## 8. Simulated users
 

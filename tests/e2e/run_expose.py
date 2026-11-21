@@ -169,6 +169,20 @@ def main():
             timelines.append([r[:3] + (r[3].split(" ", 1)[0],) for r in rel])
         check("the same seed gives the same virtual timeline", timelines[0] == timelines[1],
               f"{timelines[0][:6]} vs {timelines[1][:6]}")
+        # The same comparison through `chronostack report` (the two runs above are
+        # the latest two reports).
+        p = run([cli, "report", "diff", "--json"])
+        try:
+            d = json.loads(p.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            d = {}
+        check("report diff: the two users runs have the same timeline and outcome",
+              p.returncode == 0 and d.get("result_changed") is False and d.get("step_changes") == []
+              and d.get("users", {}).get("timeline_same") is True, p.stdout[-1500:] + p.stderr)
+        p = run([cli, "report", "show"])
+        check("report show: the latest run, with its users", p.returncode == 0
+              and "Users over three virtual days" in p.stdout and "simulated users (seed 11)" in p.stdout,
+              p.stdout[-1500:] + p.stderr)
         p = run([cli, "run", "scenarios/users-fail.yml"], timeout=600)
         check("a scenario whose users fail exits 6 and names the users",
               p.returncode == 6 and "simulated users" in p.stdout and "unexpected HTTP 200" in p.stdout,
