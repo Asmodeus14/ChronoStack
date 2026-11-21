@@ -3,6 +3,8 @@
 // then every sweep of the minute hand inverts the screen again (black ↔ white).
 // Every shape is XOR'd with what is under it, so the hands are always the opposite colour.
 // Plain WebGL2, no dependencies. ?t=<seconds> freezes the timeline (for screenshots).
+// It plays once: phones, data-saver mode and repeat visits get the page straight
+// away ("Replay intro" still plays it; ?intro forces it).
 
 const TAU = Math.PI * 2;
 const $ = (s) => document.querySelector(s);
@@ -41,6 +43,18 @@ function goStatic() {
   announce('chronostack:intro-done');
 }
 const gl = REDUCED || params.has('nointro') ? null : canvas.getContext('webgl2', { antialias: false, alpha: false });
+
+// ---------------------------------------------------------------- when to skip it
+// The intro holds the page back for about six seconds: show the page at once on
+// small or touch screens, with data saver on, and once it has been seen here.
+const SEEN_KEY = 'chronostack:intro-seen';
+const stored = (fn) => { try { return fn(localStorage); } catch { return null; } };
+const AUTO_SKIP = !params.has('intro') && FREEZE == null && (
+  stored((s) => s.getItem(SEEN_KEY)) === '1' ||
+  matchMedia('(max-width: 760px), (pointer: coarse)').matches ||
+  Boolean(navigator.connection && navigator.connection.saveData)
+);
+addEventListener('chronostack:intro-done', () => stored((s) => s.setItem(SEEN_KEY, '1')));
 
 // ---------------------------------------------------------------- the hands (Canvas2D silhouettes)
 function cnv(w, h) {
@@ -460,4 +474,12 @@ async function start() {
 }
 
 if (!gl) goStatic();
-else start().catch((e) => { console.error(e); goStatic(); });
+else if (AUTO_SKIP) {
+  goStatic();
+  // "Replay intro" plays it on request; start() then handles later replays itself.
+  $('#replay').addEventListener('click', () => {
+    scrollTo(0, 0);
+    root.classList.remove('no-intro');
+    start().catch((e) => { console.error(e); goStatic(); });
+  }, { once: true });
+} else start().catch((e) => { console.error(e); goStatic(); });
