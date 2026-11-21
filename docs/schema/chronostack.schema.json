@@ -355,6 +355,11 @@
         "max_wall": {
           "$ref": "#/$defs/duration",
           "description": "Longest real time one MCP tool call may run before it is stopped (default 10m)."
+        },
+        "max_users": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Most simulated users one users_run may start (default 1000)."
         }
       }
     },

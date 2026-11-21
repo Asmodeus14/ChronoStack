@@ -11,7 +11,8 @@ This guide takes you from "installed" to "my time-dependent flow is tested", and
 - [7. Turn it into a test: scenarios](#7-turn-it-into-a-test-scenarios)
 - [8. Simulated users](#8-simulated-users)
 - [9. In CI](#9-in-ci)
-- [10. Troubleshooting](#10-troubleshooting)
+- [10. AI agents (MCP)](#10-ai-agents-mcp)
+- [11. Troubleshooting](#11-troubleshooting)
 
 ## 1. Start the copy
 
@@ -301,7 +302,56 @@ chronostack up --wait && chronostack run scenarios/trial.yml --junit junit.xml
 
 Keep `.chronostack/reports/` as a build artifact, so a failed run can be read later.
 
-## 10. Troubleshooting
+## 10. AI agents (MCP)
+
+`chronostack mcp` is an MCP server over stdio. An agent (Claude Code, Cursor, Gemini CLI, or any stdio MCP client) can then inspect the stack, move time, schedule outages, run scenarios with simulated users, and compare runs. The tool set is fixed: it can't run arbitrary commands, only the triggers declared in `chronostack.yml`.
+
+Start the stack first (`chronostack up --wait`), then add the server.
+
+**Claude Code:**
+
+```sh
+claude mcp add chronostack -- chronostack mcp --project-dir /path/to/your/project
+```
+
+**Cursor** (`.cursor/mcp.json` in the project, or `~/.cursor/mcp.json`) and **Gemini CLI** (`.gemini/settings.json` in the project, or `~/.gemini/settings.json`) use the same shape:
+
+```json
+{
+  "mcpServers": {
+    "chronostack": {
+      "command": "chronostack",
+      "args": ["mcp", "--project-dir", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+**Tools:**
+
+| Purpose | Tools |
+|---|---|
+| Look around | `env_inspect` (services and whether each sees virtual time, triggers with schedules, barriers, proxy targets, exposed ports), `doctor`, `probe`, `clock_status`, `fault_list`, `events_tail` |
+| Move time | `clock_advance` (runs triggers and waits on barriers at each stop), `clock_freeze`, `clock_unfreeze` |
+| Outages | `fault_set`, `fault_clear` |
+| Scenarios | `scenario_validate` (steps, how far time will move, the users, without running), `scenario_run` |
+| Reports | `report_get` (a run by id, or the latest), `report_diff` (did the result, a step, or the users' timeline change between two runs) |
+| Simulated users in real time | `users_validate`, `users_run` |
+
+Every result comes back as structured JSON. A typical session: `env_inspect`, then `scenario_validate` and `scenario_run`. After a code change, `scenario_run` again and `report_diff` to see what changed.
+
+**Limits** in `chronostack.yml` bound what an agent can do:
+
+```yaml
+mcp:
+  max_advance: 400d  # largest clock_advance, and largest total advance of a scenario_run
+  max_wall: 10m      # a tool call still running after this much real time is stopped
+  max_users: 1000    # most simulated users one users_run may start
+```
+
+Scenario and journey files must be inside the project directory, and `report_get` and `report_diff` only read `.chronostack/reports/`. `users_run` stops itself 30 s before `max_wall`, so it still returns a report.
+
+## 11. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
