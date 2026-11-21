@@ -11,7 +11,7 @@
    - builds the CLI for linux-x64/arm64 (static musl), darwin-arm64/x64 and win32-x64, with the image **pinned by digest** as the default;
    - extracts the 4 preload libraries, writes `SHA256SUMS` and an SPDX SBOM;
    - installs with `install.sh` on fresh Linux x86_64 and arm64 runners and runs the demo scenario (must finish in under 5 minutes);
-   - creates a **draft** release (marked pre-release for `-alpha/-beta/-rc`) with all files and notes from `scripts/release_notes.py`.
+   - creates a **draft** release, set to become **Latest** when published, with all files and notes from `scripts/release_notes.py`. Alphas, betas and release candidates are not marked pre-release: GitHub's repository page shows only the Latest release, and a pre-release can't be Latest. The version number says what stage it is.
 4. **First release only:** GHCR creates the `chronostack-clockd` package as **private**. Make it public in GitHub → Packages → chronostack-clockd → Package settings → Change visibility, otherwise users can't pull the image.
 5. Review the draft and publish it.
 6. Move the install links (README, `docs/`, `website/index.html`, `install/install.sh`) to the new version in a follow-up PR, once the release is published.

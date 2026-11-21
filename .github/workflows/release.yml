@@ -3,7 +3,7 @@ name: release
 # Builds every release artifact, smoke-tests the result on fresh runners, and,
 # only for a pushed tag `vX.Y.Z[-pre]`, publishes:
 #   - the controller image to GHCR (multi-arch, referenced by digest from the CLI),
-#   - a DRAFT GitHub Release (marked pre-release for -alpha/-beta/-rc) with the
+#   - a DRAFT GitHub Release with the
 #     CLI archives, the preload libraries, install scripts, SHA256SUMS and an SBOM.
 # Run it by hand (workflow_dispatch) for a dry run: everything is built and
 # tested, nothing is published.
@@ -326,8 +326,10 @@ jobs:
         with:
           name: release
           path: dl
+      # Not marked pre-release, even for -alpha/-beta/-rc: GitHub only shows a
+      # release marked Latest on the repository page, and a pre-release can't be
+      # Latest. The version (e.g. 0.1.0-alpha.9) still says what stage it is.
       - run: |
-          flags="--draft"
-          if [ "${{ needs.meta.outputs.prerelease }}" = "true" ]; then flags="$flags --prerelease"; fi
+          flags="--draft --latest"
           gh release create "v$VERSION" dl/release/* $flags \
             --repo "$GITHUB_REPOSITORY" --title "ChronoStack $VERSION" --notes-file dl/release-notes.md --verify-tag

@@ -3,8 +3,8 @@
 # Install the ChronoStack CLI on Linux or macOS.
 #
 #   curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v<VERSION>/install.sh | sh
-#   (or https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh once a
-#   stable release exists: GitHub's "latest" link skips pre-releases)
+#   (or https://github.com/Asmodeus14/ChronoStack/releases/latest/download/install.sh, which
+#   follows the release marked Latest)
 #
 # Options (environment variables):
 #   CHRONOSTACK_VERSION        version to install, e.g. 0.1.0-alpha.8 (default: the newest release,
