@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=../../../../docs/schema/scenario.schema.json
+version: 1
+name: Users whose journey fails
+users: { file: ../journeys-fail.yml, resolution: 5s }
+steps:
+  - advance: 1h

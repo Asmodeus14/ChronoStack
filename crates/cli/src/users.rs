@@ -71,7 +71,7 @@ pub fn validate(path: &Path, json: bool) -> Result<i32> {
 
 /// Resolve the file's targets to plain URLs; `service://` ones need a session
 /// with that port in `expose:`.
-fn targets(plan: &Plan) -> Result<BTreeMap<String, String>> {
+pub(crate) fn targets(plan: &Plan) -> Result<BTreeMap<String, String>> {
     let mut exposed = None;
     let mut out = BTreeMap::new();
     for (name, url) in &plan.file.targets {
@@ -150,6 +150,14 @@ fn ms(us: u64) -> String {
 
 /// The text summary.
 pub fn text(r: &Report, max_think_ns: i64) -> String {
+    let mut o = table(r);
+    let u = &r.users;
+    notes(&mut o, r, max_think_ns, u);
+    o
+}
+
+/// The per-step table, user outcomes and errors.
+pub fn table(r: &Report) -> String {
     let mut o = String::new();
     let w = r
         .steps
@@ -206,6 +214,10 @@ pub fn text(r: &Report, max_think_ns: i64) -> String {
             }
         }
     }
+    o
+}
+
+fn notes(o: &mut String, r: &Report, max_think_ns: i64, u: &chronostack_users::engine::UserTotals) {
     if r.thinks_capped > 0 {
         let _ = writeln!(
             o,
@@ -229,7 +241,6 @@ pub fn text(r: &Report, max_think_ns: i64) -> String {
         r.seed,
         r.run_id
     );
-    o
 }
 
 /// JUnit XML: one test case per journey step; a step fails if any run of it failed.

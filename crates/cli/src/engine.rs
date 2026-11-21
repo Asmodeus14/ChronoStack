@@ -31,17 +31,20 @@ const PG_CRON_DWELL_NS: i64 = 1_200_000_000;
 const STEP_DWELL_NS: i64 = 1_000_000_000;
 const PG_CRON_MAX_JUMP_NS: i64 = 3_600_000_000_000;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Target {
     By(i64),
     To(i64),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum MaxJump {
     Auto,
     Disabled,
     Fixed(i64),
 }
 
+#[derive(Debug, Clone)]
 pub struct Options {
     pub target: Target,
     pub step: Option<i64>,
