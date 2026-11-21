@@ -121,7 +121,9 @@ class Stack:
         return last_json(self.cs("now", "--json")[1])["virtual_ns"] / 1e9
 
 
-def environment(cli, stack=None):
+def environment(cli, stack=None, probe=False):
+    """Where a run happened. Linux facts come from a container of `stack`, or,
+    with `probe` and no stack, from a throwaway debian:bookworm-slim container."""
     env = {
         "date_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "host": {"os": platform.platform(), "machine": platform.machine(), "python": platform.python_version()},
@@ -130,7 +132,7 @@ def environment(cli, stack=None):
         "docker": sh(["docker", "version", "--format", "{{.Server.Version}} ({{.Server.Os}}/{{.Server.Arch}})"], ROOT)[1].strip(),
         "docker_context": sh(["docker", "context", "show"], ROOT)[1].strip(),
     }
-    if stack:
+    if stack or probe:
         # One `key=value` line per fact, so a fact the CPU doesn't report (ARM has
         # no "model name" in /proc/cpuinfo) can't shift or drop the others.
         script = (
@@ -140,7 +142,10 @@ def environment(cli, stack=None):
             "echo mem_kib=$(awk '/MemTotal/ {print $2}' /proc/meminfo); "
             "echo libfaketime_deb=$(dpkg-query -W -f '${Version}' libfaketime)"
         )
-        rc, out, _ = stack.exec("c", ["sh", "-c", script], env={"LD_PRELOAD": ""})
+        if stack:
+            rc, out, _ = stack.exec("c", ["sh", "-c", script], env={"LD_PRELOAD": ""})
+        else:
+            rc, out, _ = sh(["docker", "run", "--rm", "debian:bookworm-slim", "sh", "-c", script], ROOT, 600)
         facts = dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
         env["linux"] = {
             "cpus": int(facts["cpus"]) if facts.get("cpus", "").isdigit() else None,
@@ -257,7 +262,7 @@ def b3(cli, reps):
             if sh(["curl", "-fsS", "-o", os.devnull, url], BENCH, 10)[0] == 0:
                 break
             time.sleep(0.2)
-        env = environment(cli)
+        env = environment(cli, probe=True)
         results = {}
         for par in USERS_PARALLEL:
             path = os.path.join(BENCH, f"b3-users-{par}.yml")
