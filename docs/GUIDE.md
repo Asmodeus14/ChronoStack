@@ -123,7 +123,7 @@ To find the command for a job, look for how your scheduler calls it. Most projec
 
 ## 5. Wait for the work to finish: barriers
 
-Without barriers, ChronoStack moves on as soon as a trigger's command returns. If the job only *enqueues* work for a worker, wait for that work too. For BullMQ and Sidekiq there are built-in barriers:
+Without barriers, ChronoStack moves on as soon as a trigger's command returns. If the job only *enqueues* work for a worker, wait for that work too. For BullMQ, Sidekiq and Celery there are built-in barriers:
 
 ```yaml
 barriers:
@@ -131,10 +131,14 @@ barriers:
     bullmq: { service: redis, queues: [emails, reports] }    # prefix: "bull" by default
   - name: sidekiq-idle
     sidekiq: { service: redis }                               # namespace: myapp, if you use redis-namespace
+  - name: celery-idle
+    celery: { service: redis, worker: { service: worker, app: proj, restart_on_jump: true } }   # queues: [celery] by default
 ```
 
 - **`bullmq`** (also Bull) waits until the queues have nothing waiting, paused, running or prioritized, and no delayed job that is already due. It reads Redis's own clock, so jobs that became due with the jump count until a worker has finished them. Set `prefix` if your queues use BullMQ's `prefix` option.
 - **`sidekiq`** waits until every queue is empty, no scheduled or retry job is due, and no job is running. Sidekiq only reports running jobs on its heartbeat (every 10 s), so once the queues look empty the barrier waits for one more heartbeat before it trusts "nothing running". Expect up to about 10 s per stop.
+- **`celery`** (Redis broker) waits until the queues are empty, including Celery's per-priority queues. With `worker` (the service running `celery worker`, and the app as given to `celery -A`) it also asks the worker, with Celery's own `inspect`, what it holds: tasks running, tasks prefetched, and scheduled (ETA/countdown) tasks whose time has come. A task scheduled for later doesn't hold up the barrier. Without `worker`, a task already taken off the queue isn't seen; a worker that doesn't answer `inspect` fails the check.
+  - **`restart_on_jump: true`** restarts the worker after every jump (about 3 s per stop). Use it if you have ETA or countdown tasks (`apply_async(countdown=...)`, `eta=`, retries with a delay). A worker holds those tasks in memory on a real-time timer, so a jump past their time doesn't run them. Worse, with Redis a jump of more than the visibility timeout (1 h by default) makes the broker deliver the task again: that copy runs, and the held one runs a second time later. A restarted worker hands its held tasks back to the broker and runs the due ones once. Without it, the barrier stops the advance with a message saying so rather than waiting in real time.
 - **`settle: 3s`** on any barrier waits that long at each stop before the first check, for schedulers that only enqueue work when they next poll (sidekiq-cron, Clockwork).
 
 For anything else, use a query:

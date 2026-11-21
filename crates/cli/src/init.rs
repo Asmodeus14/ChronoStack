@@ -49,6 +49,22 @@ fn words(s: &Service) -> Vec<&str> {
         .collect()
 }
 
+/// The Celery app from `celery -A <app>`, `--app <app>` or `--app=<app>`.
+fn celery_app(ws: &[&str]) -> Option<String> {
+    for (i, w) in ws.iter().enumerate() {
+        if let Some(v) = w
+            .strip_prefix("--app=")
+            .or_else(|| w.strip_prefix("-A").filter(|v| !v.is_empty()))
+        {
+            return Some(v.to_string());
+        }
+        if (*w == "-A" || *w == "--app") && i + 1 < ws.len() {
+            return Some(ws[i + 1].to_string());
+        }
+    }
+    None
+}
+
 fn has_word(ws: &[&str], needle: &str) -> bool {
     ws.iter().any(|w| {
         w.to_ascii_lowercase()
@@ -191,11 +207,12 @@ pub fn generate(project: &Project, sources: &[String]) -> Generated {
                     }
                 }
                 if s.role == Role::CeleryWorker {
+                    let app = celery_app(&words(s.svc)).unwrap_or_else(|| "<app>".into());
                     suggested_barriers.push(format!(
-                        "  # Celery ({name}) with a Redis broker: wait until nothing is queued.\n  \
-                         # Running tasks aren't counted; see the guide, section 5, for more.\n  \
-                         # - name: {name}-queue-empty\n  \
-                         #   redis: {{ service: {redis_or_placeholder}, command: [LLEN, celery], equals: \"0\" }}\n"
+                        "  # Celery ({name}) with a Redis broker: wait until nothing is queued, running\n  \
+                         # or due on the worker. `queues` defaults to [celery].\n  \
+                         # - name: {name}-idle\n  \
+                         #   celery: {{ service: {redis_or_placeholder}, worker: {{ service: {name}, app: {app}, restart_on_jump: true }} }}\n"
                     ));
                 }
             }
@@ -325,6 +342,27 @@ mod tests {
     }
 
     #[test]
+    fn finds_the_celery_app() {
+        assert_eq!(
+            celery_app(&["celery", "-A", "proj", "worker"]).as_deref(),
+            Some("proj")
+        );
+        assert_eq!(
+            celery_app(&["celery", "-Aproj.celery:app", "worker"]).as_deref(),
+            Some("proj.celery:app")
+        );
+        assert_eq!(
+            celery_app(&["celery", "--app=proj", "worker"]).as_deref(),
+            Some("proj")
+        );
+        assert_eq!(
+            celery_app(&["celery", "--app", "proj", "worker"]).as_deref(),
+            Some("proj")
+        );
+        assert_eq!(celery_app(&["celery", "worker"]), None);
+    }
+
+    #[test]
     fn celery_beat_without_max_interval_warns() {
         let (_, g) = generated(
             r#"{"name":"x","services":{
@@ -336,7 +374,9 @@ mod tests {
         assert!(g.warnings[0].starts_with("beat:") && g.warnings[0].contains("--max-interval 1"));
         assert!(
             g.yaml
-                .contains("#   redis: { service: redis, command: [LLEN, celery]")
+                .contains("#   celery: { service: redis, worker: { service: worker, app: app, restart_on_jump: true } }"),
+            "{}",
+            g.yaml
         );
     }
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-# Fixture for run_queues.py: real BullMQ and Sidekiq workers whose jobs take
-# 4 s and count completions in Redis (done:bullmq, done:sidekiq).
+# Fixture for run_queues.py: real BullMQ, Sidekiq and Celery workers whose jobs
+# take 4 s and count completions in Redis (done:bullmq, done:sidekiq, done:celery).
 services:
   redis:
     image: redis:7.4-alpine
@@ -14,4 +14,10 @@ services:
     image: node:22
     working_dir: /work
     command: [bash, -c, "cp /app/bull-worker.mjs /app/bull-enqueue.mjs . && npm i -q --no-audit --no-fund bullmq@5.78.0 ioredis@5.8.2 >/dev/null && touch /tmp/ready && exec node bull-worker.mjs"]
+    volumes: ["./:/app:ro"]
+  celery:
+    build: ./celery
+    working_dir: /app
+    command: [bash, -c, "touch /tmp/ready && exec celery -A celery_tasks worker -c 3 --loglevel=info"]
+    environment: { REDIS_URL: "redis://redis:6379/0" }
     volumes: ["./:/app:ro"]

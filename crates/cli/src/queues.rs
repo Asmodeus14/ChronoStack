@@ -1,11 +1,11 @@
-//! Built-in barriers for job queues: BullMQ (and Bull) and Sidekiq.
+//! Built-in barriers for job queues: BullMQ (and Bull), Sidekiq and Celery.
 //!
 //! Each check is one `redis-cli EVAL` in the queue's Redis service. The script
 //! returns how many jobs are still pending, read with Redis's own clock (which
 //! ChronoStack virtualizes), so jobs that became due with the jump count as
 //! pending until a worker has picked them up and finished them.
 
-use crate::config::{BullmqSpec, SidekiqSpec};
+use crate::config::{BullmqSpec, CelerySpec, CeleryWorker, SidekiqSpec};
 
 /// Pending BullMQ jobs: waiting, paused, running, prioritized, and delayed jobs
 /// that are already due. ARGV[1] is the key prefix, ARGV[2..] the queue names.
@@ -67,6 +67,89 @@ for _, proc in ipairs(redis.call('SMEMBERS', p .. 'processes')) do
 end
 return {n, oldest, math.floor(now * 1000)}
 "#;
+
+/// Messages waiting in Celery's Redis queues. ARGV are the queue names. Kombu
+/// keeps one list per queue, plus one per priority level for prioritized
+/// messages (`<queue>\x06\x16<priority>`).
+const CELERY_QUEUED: &str = r#"
+local n = 0
+for i = 1, #ARGV do
+  n = n + redis.call('LLEN', ARGV[i])
+  for p = 1, 9 do
+    n = n + redis.call('LLEN', ARGV[i] .. '\6\22' .. p)
+  end
+end
+return n
+"#;
+
+/// Asks Celery's workers what they hold, with Celery's own `inspect`: tasks
+/// running, tasks prefetched, and scheduled (ETA/countdown) tasks whose time
+/// has come. Scheduled tasks due later don't count. Run inside the worker's
+/// container, so "now" is the virtual time. Prints `{"pending": n, "workers": n}`.
+const CELERY_INSPECT: &str = r#"
+import datetime, json, sys
+from celery.app.utils import find_app
+app = find_app(sys.argv[1])
+i = app.control.inspect(timeout=2.0)
+active = i.active() or {}
+reserved = i.reserved() or {}
+scheduled = i.scheduled() or {}
+now = datetime.datetime.now(datetime.timezone.utc)
+n = sum(len(v) for v in active.values()) + sum(len(v) for v in reserved.values())
+held = 0
+for tasks in scheduled.values():
+    for t in tasks:
+        try:
+            eta = datetime.datetime.fromisoformat(t["eta"])
+            if eta.tzinfo is None:
+                eta = eta.replace(tzinfo=datetime.timezone.utc)
+            if eta <= now:
+                held += 1
+        except Exception:
+            held += 1
+print(json.dumps({"pending": n + held, "held": held, "workers": len(set(active) | set(reserved) | set(scheduled))}))
+"#;
+
+/// `redis-cli` arguments for a Celery barrier's broker check.
+pub fn celery_args(spec: &CelerySpec) -> Vec<String> {
+    let mut args = vec!["EVAL".to_string(), CELERY_QUEUED.to_string(), "0".into()];
+    args.extend(spec.queues.iter().cloned());
+    args
+}
+
+/// The command that asks a Celery worker what it holds.
+pub fn celery_inspect_command(worker: &CeleryWorker) -> Vec<String> {
+    vec![
+        "python".into(),
+        "-c".into(),
+        CELERY_INSPECT.to_string(),
+        worker.app.clone(),
+    ]
+}
+
+/// What a Celery worker reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeleryWorkers {
+    pub pending: u64,
+    /// Of those, ETA/countdown tasks already due that the worker still holds.
+    pub held: u64,
+    /// Workers that answered.
+    pub workers: u64,
+}
+
+/// Reads the inspect script's output (its last line is the JSON).
+pub fn celery_workers(stdout: &str) -> Option<CeleryWorkers> {
+    let line = stdout
+        .lines()
+        .rev()
+        .find(|l| l.trim_start().starts_with('{'))?;
+    let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    Some(CeleryWorkers {
+        pending: v["pending"].as_u64()?,
+        held: v["held"].as_u64().unwrap_or(0),
+        workers: v["workers"].as_u64()?,
+    })
+}
 
 /// `redis-cli` arguments for a BullMQ barrier.
 pub fn bullmq_args(spec: &BullmqSpec) -> Vec<String> {
@@ -178,6 +261,50 @@ mod tests {
         assert_eq!(pending("0\n"), Some(0));
         assert_eq!(pending("(integer) 3"), Some(3));
         assert_eq!(pending("ERR unknown command"), None);
+    }
+
+    #[test]
+    fn celery_args_list_the_queues() {
+        let spec = CelerySpec {
+            service: "redis".into(),
+            queues: vec!["celery".into(), "emails".into()],
+            worker: None,
+        };
+        let a = celery_args(&spec);
+        assert_eq!(a[0], "EVAL");
+        assert!(a[1].contains("LLEN"));
+        assert_eq!(&a[2..], ["0", "celery", "emails"]);
+        let cmd = celery_inspect_command(&CeleryWorker {
+            service: "worker".into(),
+            app: "proj".into(),
+            restart_on_jump: false,
+        });
+        assert_eq!(
+            (cmd[0].as_str(), cmd[1].as_str(), cmd[3].as_str()),
+            ("python", "-c", "proj")
+        );
+        assert!(cmd[2].contains("inspect"));
+    }
+
+    #[test]
+    fn reads_the_celery_inspect_reply() {
+        assert_eq!(
+            celery_workers("some warning\n{\"pending\": 2, \"workers\": 1}\n"),
+            Some(CeleryWorkers {
+                pending: 2,
+                held: 0,
+                workers: 1
+            })
+        );
+        assert_eq!(
+            celery_workers("{\"pending\": 3, \"held\": 1, \"workers\": 2}"),
+            Some(CeleryWorkers {
+                pending: 3,
+                held: 1,
+                workers: 2
+            })
+        );
+        assert_eq!(celery_workers("Error: no app\n"), None);
     }
 
     #[test]

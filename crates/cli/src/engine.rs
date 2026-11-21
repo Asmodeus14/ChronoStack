@@ -15,7 +15,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::client::Client;
-use crate::config::{Barrier, ExecSpec, HttpSpec, Resolved, SidekiqSpec, Trigger};
+use crate::config::{Barrier, CelerySpec, ExecSpec, HttpSpec, Resolved, SidekiqSpec, Trigger};
 use crate::docker::{self, Compose};
 use crate::probe;
 use crate::queues;
@@ -89,6 +89,9 @@ pub struct StopResult {
     pub pinned: bool,
     pub triggers: Vec<ActionResult>,
     pub barriers: Vec<ActionResult>,
+    /// Celery workers restarted after the jump (`restart_on_jump`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub restarts: Vec<ActionResult>,
     pub dwell_ms: u128,
 }
 
@@ -519,7 +522,85 @@ pub(crate) fn barrier_once(
             Err(e) => (false, Some(e)),
         };
     }
+    if let Some(c) = &b.celery {
+        return celery_once(compose, c, quick);
+    }
     (false, Some("no condition".into()))
+}
+
+/// Celery worker services to restart after each jump (once each).
+fn restart_on_jump_services(barriers: &[crate::config::Barrier]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for b in barriers {
+        if let Some(w) = b.celery.as_ref().and_then(|c| c.worker.as_ref()) {
+            if w.restart_on_jump && !out.contains(&w.service) {
+                out.push(w.service.clone());
+            }
+        }
+    }
+    out
+}
+
+/// Restart a Celery worker. A warm shutdown hands the tasks it holds back to
+/// the broker, and the new worker (on the virtual clock) runs the due ones.
+fn restart_worker(compose: &Compose, service: &str) -> ActionResult {
+    let started = std::time::Instant::now();
+    let args = compose.args(&["restart", "-t", "30", service]);
+    let (ok, detail) = match docker::output_timeout(&args, Duration::from_secs(90)) {
+        Ok(t) if t.code == Some(0) => (true, None),
+        Ok(t) => (false, Some(tail(&t.stderr, 300))),
+        Err(e) => (false, Some(e.to_string())),
+    };
+    ActionResult {
+        name: service.to_string(),
+        ok,
+        elapsed_ms: started.elapsed().as_millis(),
+        detail,
+    }
+}
+
+/// A Celery barrier: the broker's queues are empty and, with a `worker`, the
+/// worker has nothing running, prefetched, or scheduled and already due.
+fn celery_once(compose: &Compose, spec: &CelerySpec, timeout: Duration) -> (bool, Option<String>) {
+    let (ok, detail) = queue_pending(compose, &spec.service, queues::celery_args(spec), timeout);
+    if !ok {
+        return (false, detail.map(|d| format!("broker: {d}")));
+    }
+    let Some(w) = &spec.worker else {
+        return (true, None);
+    };
+    let mut args = compose.args(&["exec", "-T", &w.service]);
+    args.extend(queues::celery_inspect_command(w));
+    match docker::output_timeout(&args, timeout) {
+        Ok(t) if t.code == Some(0) => match queues::celery_workers(&t.stdout) {
+            Some(r) if r.workers == 0 => (
+                false,
+                Some("queues empty; no Celery worker answered `inspect`".into()),
+            ),
+            Some(r) if r.held > 0 && !w.restart_on_jump => (
+                false,
+                Some(format!(
+                    "the worker holds {} ETA/countdown task(s) whose time has passed; Celery waits for \
+                     them in real time, so set `restart_on_jump: true` on the barrier's worker",
+                    r.held
+                )),
+            ),
+            Some(r) if r.pending > 0 => (
+                false,
+                Some(format!(
+                    "{} task(s) running, prefetched or due on the worker",
+                    r.pending
+                )),
+            ),
+            Some(_) => (true, None),
+            None => (false, Some(tail(&t.stdout, 200))),
+        },
+        Ok(t) => (
+            false,
+            Some(format!("celery inspect: {}", tail(&t.stderr, 300))),
+        ),
+        Err(e) => (false, Some(e.to_string())),
+    }
 }
 
 fn sidekiq_once(
@@ -851,6 +932,7 @@ pub fn advance_full(
                     pinned: false,
                     triggers: vec![],
                     barriers: drain.clone(),
+                    restarts: vec![],
                     dwell_ms: 0,
                 },
                 false,
@@ -858,9 +940,11 @@ pub fn advance_full(
         }
     }
 
+    let restart_services = restart_on_jump_services(barriers);
     'stops: for b in stops.iter().take_while(|_| code == 0) {
         let current = client.clock()?.virtual_ns;
-        if b.at_ns > current {
+        let jumped = b.at_ns > current;
+        if jumped {
             client.advance_to(b.at_ns)?;
         }
         let mut due: Vec<usize> = b.scheduled.clone();
@@ -875,8 +959,22 @@ pub fn advance_full(
             pinned: b.pinned,
             triggers: vec![],
             barriers: vec![],
+            restarts: vec![],
             dwell_ms: 0,
         };
+        if jumped {
+            for svc in &restart_services {
+                let a = restart_worker(&compose, svc);
+                let failed = !a.ok;
+                r.restarts.push(a);
+                if failed {
+                    code = EXIT_BARRIER_TIMEOUT;
+                    print_stop(&r, opts.json);
+                    results.push(r);
+                    break 'stops;
+                }
+            }
+        }
         for i in &due {
             let t = &cfg.config.triggers[*i];
             let a = run_trigger(&compose, t, cfg.trigger_timeouts_ns[*i]);
@@ -986,7 +1084,12 @@ fn print_plan_header(
 }
 
 fn print_stop(r: &StopResult, json: bool) {
-    if json || (r.sub_step && r.triggers.is_empty() && r.barriers.iter().all(|b| b.ok)) {
+    if json
+        || (r.sub_step
+            && r.triggers.is_empty()
+            && r.restarts.is_empty()
+            && r.barriers.iter().all(|b| b.ok))
+    {
         return;
     }
     let fmt = |a: &ActionResult| {
@@ -1005,6 +1108,12 @@ fn print_stop(r: &StopResult, json: bool) {
     let mut parts = Vec::new();
     if r.pinned {
         parts.push("pg_cron job(s) due".to_string());
+    }
+    if !r.restarts.is_empty() {
+        parts.push(format!(
+            "restarted {}",
+            r.restarts.iter().map(fmt).collect::<Vec<_>>().join(", ")
+        ));
     }
     if !r.triggers.is_empty() {
         parts.push(format!(
