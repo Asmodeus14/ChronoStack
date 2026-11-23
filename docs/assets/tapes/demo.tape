@@ -1,7 +1,8 @@
 # Demo video (1920x1080, 30 fps, H.264) for the README and launch posts.
 # Rendered by .github/workflows/demo-video.yml with the published release CLI,
-# against the demo app (examples/saas-trial-demo). Nothing is staged: `Wait`
-# holds the recording until the real output appears.
+# against the demo app (examples/saas-trial-demo), started off camera with
+# `chronostack up --wait` (the video says so). Nothing is staged: `Wait` holds
+# the recording until each real command has finished.
 Output docs/assets/demo/chronostack-demo.mp4
 
 Require chronostack
@@ -30,13 +31,15 @@ Enter
 Wait+Line /^\$ *$/
 Sleep 1500ms
 
-Type "# Postgres, Redis, an API, a worker and a webhook receiver, on one virtual clock:"
+Type "# The demo stack is already up (chronostack up --wait): Postgres, Redis, an API,"
+Enter
+Type "# a worker and a webhook receiver. Every service reads one virtual clock:"
 Enter
 Sleep 500ms
-Type "chronostack up --wait"
+Type "chronostack probe"
 Enter
 Wait+Line /^\$ *$/
-Sleep 3s
+Sleep 2500ms
 
 Hide
 Type "clear"
