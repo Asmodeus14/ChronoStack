@@ -1,0 +1,80 @@
+name: demo-video
+
+# Records docs/assets/demo/chronostack-demo.{mp4,gif} and the poster PNG from
+# docs/assets/tapes/demo*.tape, with the published release CLI against the demo
+# app, and uploads them as an artifact. Commit them by hand after checking them.
+# The job fails if the recorded scenario did not pass.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release to record (the CLI is installed from it)
+        default: 0.1.0-alpha.9
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      VERSION: ${{ inputs.version || '0.1.0-alpha.9' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the release CLI (not recorded)
+        run: |
+          curl -fsSL "https://github.com/Asmodeus14/ChronoStack/releases/download/v$VERSION/install.sh" | CHRONOSTACK_VERSION="$VERSION" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build the demo's images and pull the controller, then stop (not recorded)
+        working-directory: examples/saas-trial-demo
+        run: |
+          chronostack --version
+          chronostack up --wait --wait-timeout 300s
+          chronostack down -v
+      - name: Start the demo stack (not recorded; the video says it is already up)
+        working-directory: examples/saas-trial-demo
+        run: chronostack up --wait --wait-timeout 300s
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/assets/tapes/demo.tape
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/assets/tapes/demo-gif.tape
+      - name: Verify the recorded runs passed
+        working-directory: examples/saas-trial-demo
+        run: |
+          chronostack report list
+          n=$(chronostack report list | awk 'NR>1 && /Trial expires/' | head -2 | grep -c ' passed ')
+          echo "passed runs among the two recorded: $n"
+          test "$n" = 2
+          cat "$(ls -t .chronostack/reports/*.md | head -1)"
+      - name: Re-encode the MP4 at 30 fps (H.264, yuv420p, fast start)
+        run: |
+          ffmpeg -v error -y -i docs/assets/demo/chronostack-demo.mp4 -r 30 -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -movflags +faststart -an /tmp/demo30.mp4
+          mv /tmp/demo30.mp4 docs/assets/demo/chronostack-demo.mp4
+      - name: Describe the files
+        run: |
+          ls -l docs/assets/demo
+          ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate,pix_fmt -show_entries format=duration -of default=nw=1 docs/assets/demo/chronostack-demo.mp4
+          ffprobe -v error -show_entries stream=width,height -show_entries format=duration -of default=nw=1 docs/assets/demo/chronostack-demo.gif
+          mkdir -p frames
+          d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 docs/assets/demo/chronostack-demo.mp4)
+          for f in 0.04 0.12 0.25 0.4 0.55 0.7 0.82 0.9 0.99; do
+            t=$(python3 -c "print(round($d*$f,2))")
+            ffmpeg -v error -ss "$t" -i docs/assets/demo/chronostack-demo.mp4 -frames:v 1 "frames/at-$f.png"
+          done
+          ffmpeg -v error -i docs/assets/demo/chronostack-demo.gif -vf "select=eq(n\,0)" -frames:v 1 frames/gif-first.png
+          ffmpeg -v error -sseof -1 -i docs/assets/demo/chronostack-demo.gif -frames:v 1 frames/gif-last.png || true
+      - name: Stop the demo
+        if: always()
+        working-directory: examples/saas-trial-demo
+        run: chronostack down -v
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: demo-video
+          path: |
+            docs/assets/demo/
+            frames/
