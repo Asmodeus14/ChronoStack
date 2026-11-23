@@ -27,7 +27,7 @@ Enter
 Sleep 700ms
 Type "chronostack --version"
 Enter
-Wait+Screen /chronostack \d/
+Wait+Line /^\$ *$/
 Sleep 1500ms
 
 Type "# Postgres, Redis, an API, a worker and a webhook receiver, on one virtual clock:"
@@ -35,7 +35,7 @@ Enter
 Sleep 500ms
 Type "chronostack up --wait"
 Enter
-Wait+Screen /is up\. Try/
+Wait+Line /^\$ *$/
 Sleep 3s
 
 Hide
@@ -48,7 +48,7 @@ Enter
 Sleep 900ms
 Type "chronostack run scenarios/trial.yml"
 Enter
-Wait+Screen /(PASSED|FAILED) .* steps/
+Wait+Line /^\$ *$/
 Sleep 2500ms
 
 Hide
@@ -58,7 +58,7 @@ Sleep 300ms
 Show
 Type "chronostack report show"
 Enter
-Wait+Screen /12\. it was delivered/
+Wait+Line /^\$ *$/
 Sleep 1500ms
 Screenshot docs/assets/demo/chronostack-demo-poster.png
 Sleep 5s

@@ -25,7 +25,7 @@ Enter
 Sleep 700ms
 Type "chronostack run scenarios/trial.yml"
 Enter
-Wait+Screen /(PASSED|FAILED) .* steps/
+Wait+Line /^\$ *$/
 Sleep 1500ms
 Hide
 Type "clear"
@@ -34,5 +34,5 @@ Sleep 300ms
 Show
 Type "chronostack report show"
 Enter
-Wait+Screen /12\. it was delivered/
+Wait+Line /^\$ *$/
 Sleep 4s
