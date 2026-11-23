@@ -67,7 +67,7 @@ Screenshot docs/assets/demo/chronostack-demo-poster.png
 Sleep 5s
 
 Hide
-Type `clear && printf '\n\n\n\n\n\n\n\n\n            ChronoStack\n\n            Move time forward for your whole Docker Compose stack:\n            Postgres, Redis and your services, with no code changes.\n\n            GitHub: github.com/Asmodeus14/ChronoStack\n'`
+Type `PS1='' && clear && printf '\e[?25l\n\n\n\n\n\n\n\n\n            ChronoStack\n\n            Move time forward for your whole Docker Compose stack:\n            Postgres, Redis and your services, with no code changes.\n\n            GitHub: github.com/Asmodeus14/ChronoStack\n'`
 Enter
 Sleep 300ms
 Show
