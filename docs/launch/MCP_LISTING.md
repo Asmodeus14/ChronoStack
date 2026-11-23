@@ -16,7 +16,7 @@ Steps (once the release is **published**: the registry checks that the files are
 1. Install the publisher: `brew install mcp-publisher`, or the archive for your OS from https://github.com/modelcontextprotocol/registry/releases.
 2. Download `server.json` from the release into an empty folder.
 3. `mcp-publisher login github`. Sign in as **Asmodeus14**: the name `io.github.asmodeus14/chronostack` is tied to that account.
-4. `mcp-publisher publish`. Expect `✓ Server io.github.asmodeus14/chronostack version 0.1.0-alpha.8`.
+4. `mcp-publisher publish`. Expect `✓ Server io.github.asmodeus14/chronostack version 0.1.0-alpha.9`.
 5. Check: `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.asmodeus14/chronostack"`.
 
 Notes:
