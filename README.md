@@ -25,7 +25,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Alpha.** The latest release, [`v0.1.0-alpha.8`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.8), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest release, [`v0.1.0-alpha.9`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.9), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 
@@ -46,12 +46,12 @@ $ chronostack run scenarios/trial.yml   # a scripted, repeatable test with a rep
 
 ```sh
 # Linux / macOS
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.8/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.8 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.9/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.9 sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-$env:CHRONOSTACK_VERSION = "0.1.0-alpha.8"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.8/install.ps1 | iex
+$env:CHRONOSTACK_VERSION = "0.1.0-alpha.9"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.9/install.ps1 | iex
 ```
 
 Or with a package manager:
@@ -176,7 +176,7 @@ Each bug was reproduced on the project's own published image, with the whole sta
 | Twenty | The trash cleanup permanently deleted records up to a day before the retention period ended. | Fixed · [issue](https://github.com/twentyhq/twenty/issues/30460) · [PR](https://github.com/twentyhq/twenty/pull/30461) |
 | Chatwoot | Conversations whose snooze ended while background jobs were down for more than 3 days were never reopened. | Confirmed by maintainers · [issue](https://github.com/chatwoot/chatwoot/issues/16667) · [community fix PR](https://github.com/chatwoot/chatwoot/pull/16679) |
 | Formbricks | With a scheduling time zone at UTC+12 or later, such as New Zealand, surveys opened and closed a day late. | Confirmed by maintainers · [issue](https://github.com/formbricks/formbricks/issues/10021) |
-| tududi | Monthly recurring tasks moved to the wrong day: for users in the Americas, "on the 1st" became the last day of the previous month, and "last Friday" skipped months. | Fix proposed · [issue](https://github.com/chrisvel/tududi/issues/2100) · [PR](https://github.com/chrisvel/tududi/pull/2101) |
+| tududi | Monthly recurring tasks moved to the wrong day: for users in the Americas, "on the 1st" became the last day of the previous month, and "last Friday" skipped months. | Fixed · [issue](https://github.com/chrisvel/tududi/issues/2100) · [PR](https://github.com/chrisvel/tududi/pull/2101) |
 | Worklenz | Monthly "Nth weekday" recurring tasks landed on the wrong date: "1st Monday" moved back into the previous month and then stopped recurring, and "2nd Tuesday" came a week early. | Fixed · [issue](https://github.com/Worklenz/worklenz/issues/959) · [PR](https://github.com/Worklenz/worklenz/pull/960) |
 
 The setups, scenarios and run reports are in [docs/launch/outreach](docs/launch/outreach/).
