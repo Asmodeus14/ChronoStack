@@ -35,6 +35,14 @@ jobs:
           chronostack --version
           chronostack up --wait --wait-timeout 300s
           chronostack down -v
+      - name: Check that up finishes under a terminal (not recorded)
+        working-directory: examples/saas-trial-demo
+        env:
+          BUILDKIT_PROGRESS: quiet
+          COMPOSE_PROGRESS: quiet
+        run: |
+          timeout 300 script -qec "chronostack up --wait" /dev/null | tail -20
+          chronostack down -v
       - uses: charmbracelet/vhs-action@v2
         with:
           path: docs/assets/tapes/demo.tape

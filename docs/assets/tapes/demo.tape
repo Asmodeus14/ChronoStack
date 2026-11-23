@@ -17,7 +17,7 @@ Set Theme "Catppuccin Mocha"
 Set WaitTimeout 240s
 
 Hide
-Type `cd examples/saas-trial-demo && export PS1='$ ' && clear`
+Type `cd examples/saas-trial-demo && export PS1='$ ' BUILDKIT_PROGRESS=quiet COMPOSE_PROGRESS=quiet && clear`
 Enter
 Sleep 500ms
 Show
