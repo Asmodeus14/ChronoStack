@@ -1,0 +1,58 @@
+name: npm
+
+# Publishes the Node SDK (sdk/node, package `chronostack`) to npm when a
+# release is published, with provenance. Needs the NPM_TOKEN secret (an npm
+# automation token); without it the job says so and stops without failing.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Pack and check only, don't publish
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/node
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Version matches the release
+        if: github.event_name == 'release'
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have=$(node -p "require('./package.json').version")
+          echo "release $want, package $have"
+          test "$want" = "$have"
+      - run: npm test
+      - run: npm pack --dry-run
+      - name: Publish
+        if: github.event_name == 'release' || !inputs.dry_run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN is not set; not publishing to npm"
+            exit 0
+          fi
+          v=$(node -p "require('./package.json').version")
+          if npm view "chronostack@$v" version >/dev/null 2>&1; then
+            echo "chronostack@$v is already on npm"
+            exit 0
+          fi
+          npm publish --access public --provenance --tag latest

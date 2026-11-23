@@ -1,20 +1,43 @@
-# chronostack (Node register)
+# chronostack (Node and Playwright)
 
-Makes a Node.js process **running directly on your machine** follow a ChronoStack stack's virtual clock. Services inside the stack don't need it; they get the virtual time from the preload library.
+Makes a Node.js process **running directly on your machine**, or the browser in your **Playwright** tests, follow a ChronoStack stack's virtual clock. Services inside the stack don't need it; they get the virtual time from the preload library.
 
-Use it when your app runs on the host (`npm run dev`) and only its databases run in Docker.
+Use it when your app runs on the host (`npm run dev`) and only its databases run in Docker, or when end-to-end tests drive a browser against the stack.
 
 ```sh
-chronostack up --wait                         # in your project directory
-node -r ./path/to/sdk/node/register.js app.js # or NODE_OPTIONS="-r …/register.js"
+npm install --save-dev chronostack        # published with each ChronoStack release, from the next one
 ```
 
-The package isn't published to npm yet (ChronoStack is pre-alpha). Use it from a clone of the repository.
+Until then, use it from a clone of the repository (`require('./path/to/sdk/node')`).
 
-## What it changes
+## A Node process on your machine
+
+```sh
+chronostack up --wait                     # in your project directory
+node -r chronostack/register app.js       # or NODE_OPTIONS="-r chronostack/register"
+```
 
 - `Date.now()`, `new Date()` and `Date()` return virtual time. Dates built from explicit values (`new Date(0)`, `new Date('2026-01-01')`) are unchanged, and `instanceof Date` still works.
 - `performance.now()`, `process.hrtime()`, `setTimeout` and `setInterval` keep real time, like every other runtime under ChronoStack. A timer set for 24 hours does not fire when you advance 24 hours. Re-arm it from `onAdvance` if needed.
+
+## Playwright
+
+```js
+const { test, expect } = require('@playwright/test');
+const { syncClock } = require('chronostack/playwright');
+
+test.beforeEach(async ({ page }) => {
+  await syncClock(page);   // the page's Date follows the stack's virtual clock
+});
+
+test('the trial banner disappears after 14 days', async ({ page }) => {
+  // `chronostack advance 14d` (or a scenario step) moves the browser too
+});
+```
+
+`syncClock(pageOrContext)` uses Playwright's clock API (Playwright 1.45 or later): `setSystemTime` while virtual time runs, `setFixedTime` while it is frozen. After every `advance`, `freeze` or `unfreeze` the browser follows. The page's timers keep real time, as everywhere in ChronoStack. It resolves to a function that stops following.
+
+Checked with Playwright 1.52 and Chromium against the demo stack: the page's `Date.now()` matched `chronostack now` within about 50 ms (the time to start the CLI for the comparison), moved 3 days on `advance 3d`, stood still while frozen and ran again after `unfreeze`.
 
 ## How it stays in sync
 
@@ -32,12 +55,12 @@ In order:
 2. `CHRONOSTACK_SESSION`, the path to a `.chronostack/session.json`;
 3. the nearest `.chronostack/session.json` in the current directory or a parent.
 
-If none is found, or the controller is unreachable, the process keeps real time and prints one warning. With `CHRONOSTACK_STRICT=1` it fails instead, which is useful in CI.
+If none is found, or the controller is unreachable, the process keeps real time and prints one warning (and `syncClock` leaves the browser alone). With `CHRONOSTACK_STRICT=1` it fails instead, which is useful in CI.
 
 ## API
 
 ```js
-const cs = require('./path/to/sdk/node');
+const cs = require('chronostack');
 
 cs.onAdvance(({ virtualMs, offsetMs, frozen, generation }) => {
   // e.g. re-arm an in-process scheduler after the clock jumps
@@ -45,6 +68,9 @@ cs.onAdvance(({ virtualMs, offsetMs, frozen, generation }) => {
 cs.now();        // virtual ms since the epoch
 cs.active;       // false if it fell back to real time
 cs.RealDate;     // the original Date
+
+const { syncClock } = require('chronostack/playwright');
+const stop = await syncClock(page);   // or a BrowserContext
 ```
 
-Types are in `index.d.ts`. Tests: `node --test test/register.test.js`. They use a fake controller and need no Docker.
+Types are in `index.d.ts` and `playwright.d.ts`. Tests: `npm test`. They use a fake controller and need no Docker.
