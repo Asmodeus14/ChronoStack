@@ -20,7 +20,9 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 
 [Getting started](docs/GETTING_STARTED.md) · [Guide](docs/GUIDE.md) · [Demo](examples/saas-trial-demo/README.md) · [Docs](docs/README.md)
 
-<img src="docs/assets/quickstart.gif" alt="A user signs up for a 14-day trial; chronostack advance 15d runs the nightly job at each virtual 03:00, and the user ends up on the free plan" width="860">
+<img src="docs/assets/demo/chronostack-demo.gif" alt="chronostack run scenarios/trial.yml: 15 virtual days in seconds. The daily 03:00 job runs at each virtual day, the partner's webhook is down on day 14, the webhook is retried and delivered exactly once at 07:00; chronostack report show: PASSED, 12 of 12 checks" width="860">
+
+▶ [Watch the 50-second demo video](docs/assets/demo/chronostack-demo.mp4) (1080p, recorded with the published release)
 
 </div>
 
@@ -39,6 +41,8 @@ $ chronostack advance 14d        # 14 days later in Postgres, Redis, Node, Pytho
                                  # and your nightly job ran at each virtual 03:00
 $ chronostack run scenarios/trial.yml   # a scripted, repeatable test with a report
 ```
+
+<img src="docs/assets/quickstart.gif" alt="A user signs up for a 14-day trial; chronostack advance 15d runs the nightly job at each virtual 03:00, and the user ends up on the free plan" width="860">
 
 ## Quickstart
 
@@ -96,9 +100,7 @@ flowchart LR
 
 ### Scenarios: repeatable tests in virtual time
 
-Script the story, including an outage of an HTTP dependency in **virtual time**, and assert the outcome:
-
-<img src="docs/assets/scenario.gif" alt="chronostack run: 15 virtual days, the webhook receiver is down on day 14, the webhook is retried and delivered exactly once at 07:00; PASSED 12/12" width="860">
+Script the story, including an outage of an HTTP dependency in **virtual time**, and assert the outcome (this is the scenario in the demo above):
 
 ```yaml
 steps:
@@ -118,12 +120,13 @@ When something breaks, the Markdown report says what was expected, what happened
 
 - **No code changes:** works on your existing `compose.yml`, as a separate copy with its own containers and named volumes, and leaves your files untouched. Bind mounts and external volumes can't be copied, so `up` stops if one is writable instead of letting the copy change your real data.
 - **Scheduler-aware stepping:** triggers run at their exact virtual times. BullMQ and Celery beat fire on their own. For pg_cron, the clock stops on each job's minute so fixed-time jobs run; jobs like `*/5 * * * *` run once per stop unless you pass `--pg-cron-all`.
-- **Waits for your jobs:** built-in `bullmq` and `sidekiq` barriers hold each step until the queues are drained, and running jobs finish before the clock moves.
+- **Waits for your jobs:** built-in `bullmq`, `sidekiq` and `celery` barriers hold each step until the queues are drained, and running jobs finish before the clock moves. For Celery, `restart_on_jump` makes ETA/countdown tasks run once after a jump instead of waiting in real time.
 - **Outages in virtual time:** a small proxy in front of HTTP dependencies (`http` or `https`) makes "the payment API is down on day 3 from 09:00 to 11:00" a one-liner.
-- **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON and Markdown reports, with secrets redacted.
+- **Scenarios and reports:** YAML steps with SQL, Redis, HTTP and exec checks. JSON, Markdown and JUnit reports, with secrets redacted. `chronostack report list`, `show` and `diff` read runs back and show what changed between two of them.
+- **Reach the copy from your machine:** `expose: [api:3000]` publishes chosen ports of the copy on `127.0.0.1`, for your browser, scripts and simulated users.
 - **Simulated users:** `chronostack users run` sends seeded cohorts of users through scripted journeys (requests, think times, branches) and reports failures and latency per step ([guide](docs/GUIDE.md#8-simulated-users)).
 - **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#9-in-ci), and a strict mode.
-- **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe tool set: inspect the stack, move time, schedule outages, run scenarios with simulated users and compare runs (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`; [Cursor, Gemini CLI](docs/GUIDE.md#10-ai-agents-mcp)).
+- **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe set of 17 tools: inspect the stack, move time, schedule outages, run scenarios with simulated users and compare runs (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`; [Cursor, Gemini CLI](docs/GUIDE.md#10-ai-agents-mcp)).
 - **Host-native Node:** `node -r sdk/node/register.js app.js` puts a Node process outside Docker on the same clock ([details](sdk/node/README.md)).
 - **Safe by design:** never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.
 
@@ -139,7 +142,7 @@ Listed as tested only where an automated test covers it.
 | Node.js 20, Python 3.13+, MariaDB | Expected to work; not covered by tests |
 | BullMQ, Celery beat (`beat_max_loop_interval ≤ 1`), pg_cron | ✅ Work without triggers (measured) |
 | Celery beat crontab tasks under django-celery-beat's `DatabaseScheduler` | ⚠️ May not fire after a jump; use triggers ([#9](https://github.com/Asmodeus14/ChronoStack/issues/9)) |
-| BullMQ and Sidekiq barriers | ✅ Nightly, with real workers |
+| BullMQ, Sidekiq and Celery barriers | ✅ Nightly, with real workers (x86_64 and arm64) |
 | node-cron, APScheduler, Spring `@Scheduled`, Laravel `schedule:work`, sidekiq-cron, `setTimeout`-style loops | Need a trigger (measured) |
 | Go and other static or setuid binaries | ❌ Not supported (`LD_PRELOAD` can't reach them); flagged by `doctor` |
 | Hosts: Linux x86_64 / arm64 · Windows 11 (Docker Desktop) | ✅ CI · tested by hand |

@@ -11,8 +11,6 @@ on:
       version:
         description: Release to record (the CLI is installed from it)
         default: 0.1.0-alpha.9
-  push:
-    branches: [demo-video]
 
 permissions:
   contents: read
