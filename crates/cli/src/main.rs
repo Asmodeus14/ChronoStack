@@ -1270,7 +1270,8 @@ fn doctor(json_out: bool) -> Result<i32> {
             "virtualized": p.virtualized,
             "reason": p.reason,
             "running": is_running,
-            "shim_in_pid1": shim,
+            "shim_in_pid1": shim.map(|s| s != probe::ShimState::Missing),
+            "shim_stale": shim.map(|s| s == probe::ShimState::Stale),
             "processes": procs,
             "probe": pr,
         }));
@@ -1281,6 +1282,7 @@ fn doctor(json_out: bool) -> Result<i32> {
             && !completed
             && (r["running"] == false
                 || r["shim_in_pid1"] == false
+                || r["shim_stale"] == true
                 || !probe::status_passes(r["probe"]["status"].as_str().unwrap_or(""))
                 || r["processes"]["go_processes"]
                     .as_array()
@@ -1335,6 +1337,7 @@ fn doctor(json_out: bool) -> Result<i32> {
                 _ => "unknown".into(),
             };
             let shim = match r["shim_in_pid1"].as_bool() {
+                Some(true) if r["shim_stale"] == true => "STALE",
                 Some(true) => "yes",
                 Some(false) => "NO",
                 None => "-",
@@ -1363,6 +1366,12 @@ fn doctor(json_out: bool) -> Result<i32> {
             .chain(rows.iter().filter(|r| r["shim_in_pid1"] == false).map(|r| {
                 format!(
                     "  {}: shim not loaded in PID 1 — the main process may be statically linked (Go?) or setuid",
+                    r["service"].as_str().unwrap_or("")
+                )
+            }))
+            .chain(rows.iter().filter(|r| r["shim_stale"] == true).map(|r| {
+                format!(
+                    "  {}: PID 1 still runs the shim from before the controller was last replaced (another ChronoStack version?), so it may read the clock page wrongly; run `chronostack down` and `up` to restart it",
                     r["service"].as_str().unwrap_or("")
                 )
             }))

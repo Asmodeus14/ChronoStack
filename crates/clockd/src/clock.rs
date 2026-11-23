@@ -209,7 +209,11 @@ impl Clock {
 }
 
 /// Copy `*.so` from `src` into `dst` via temp file + rename, so a library that
-/// running processes have mapped is never modified in place.
+/// running processes have mapped is never modified in place. A library whose
+/// contents are already identical is left alone, so a controller restart doesn't
+/// replace it: running processes then still map the live file, and
+/// `chronostack doctor` can treat a replaced (`(deleted)`) mapping as a shim
+/// from another version.
 pub fn install_libs(src: &Path, dst: &Path) -> io::Result<usize> {
     fs::create_dir_all(dst)?;
     fs::set_permissions(dst, fs::Permissions::from_mode(0o755))?;
@@ -223,10 +227,15 @@ pub fn install_libs(src: &Path, dst: &Path) -> io::Result<usize> {
         if !name_str.ends_with(".so") {
             continue;
         }
+        let target = dst.join(&name);
+        if fs::read(entry.path()).ok() == fs::read(&target).ok() && target.exists() {
+            n += 1;
+            continue;
+        }
         let tmp = dst.join(format!(".{name_str}.tmp"));
         fs::copy(entry.path(), &tmp)?;
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o644))?;
-        fs::rename(&tmp, dst.join(&name))?;
+        fs::rename(&tmp, &target)?;
         n += 1;
     }
     Ok(n)
@@ -335,6 +344,23 @@ mod tests {
             b"elf"
         );
         assert!(!dst.join("README").exists());
+
+        // Same contents again: the installed file is left alone (same inode).
+        use std::os::unix::fs::MetadataExt;
+        let lib = dst.join("libchronoclock-x86_64-gnu.so");
+        let ino = fs::metadata(&lib).unwrap().ino();
+        assert_eq!(install_libs(&src, &dst).unwrap(), 1);
+        assert_eq!(
+            fs::metadata(&lib).unwrap().ino(),
+            ino,
+            "identical: not replaced"
+        );
+
+        // New contents (another version): replaced by rename (new inode).
+        fs::write(src.join("libchronoclock-x86_64-gnu.so"), b"elf v2").unwrap();
+        assert_eq!(install_libs(&src, &dst).unwrap(), 1);
+        assert_ne!(fs::metadata(&lib).unwrap().ino(), ino, "changed: replaced");
+        assert_eq!(fs::read(&lib).unwrap(), b"elf v2");
         fs::remove_dir_all(base).unwrap();
     }
 }

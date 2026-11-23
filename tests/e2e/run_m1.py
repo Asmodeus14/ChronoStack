@@ -215,6 +215,43 @@ def run_checks(cli):
     check("clockd restart: clock state preserved", after is not None and abs(after - before) < 2e9,
           f"{(after or 0) / 1e9 / DAY:.3f}d vs {before / 1e9 / DAY:.3f}d")
 
+    # --- stale shim: doctor tells a restart from a different shim ---------------------------
+    shimmed = ["db", "cache", "app", "legacy"]
+
+    def doctor_rows():
+        rc, out, _ = cs(cli, "doctor", "--json")
+        return rc, {r["service"]: r for r in json.loads(out)["services"]}
+
+    rc, rows = doctor_rows()
+    check("stale shim: a plain controller restart leaves the services' shim current",
+          not any(rows[n].get("shim_stale") for n in shimmed),
+          str({n: rows[n].get("shim_stale") for n in shimmed}))
+    # Simulate another ChronoStack version: change the shim the controller installs, restart it.
+    compose_exec("chronostack-clockd", "sh", "-c", "for f in /opt/chronostack/lib/*.so; do printf x >> \"$f\"; done")
+    sh(args + ["-p", s["project"], "restart", "chronostack-clockd"], timeout=120)
+    for _ in range(40):
+        try:
+            now_json(cli)
+            break
+        except Exception:  # noqa: BLE001
+            time.sleep(0.5)
+    rc, rows = doctor_rows()
+    check("stale shim: after the shim changes, doctor flags every running service (exit 3)",
+          all(rows[n].get("shim_stale") is True for n in shimmed) and rc == 3,
+          f"rc={rc} {({n: rows[n].get('shim_stale') for n in shimmed})}")
+    rc, out, _ = cs(cli, "doctor")
+    check("stale shim: doctor says how to fix it", "STALE" in out and "`chronostack down` and `up`" in out, out[-400:])
+    sh(args + ["-p", s["project"], "restart", *shimmed], timeout=300)
+    deadline = time.monotonic() + 90
+    while True:
+        rc, rows = doctor_rows()
+        if all((rows[n]["probe"] or {}).get("status") == "ok" for n in shimmed) or time.monotonic() > deadline:
+            break
+        time.sleep(2)
+    check("stale shim: restarted services load the current shim, and their clocks still agree",
+          all(rows[n].get("shim_stale") is False and (rows[n]["probe"] or {}).get("status") == "ok" for n in shimmed),
+          str({n: (rows[n].get("shim_stale"), (rows[n]["probe"] or {}).get("status")) for n in shimmed}))
+
     # --- API security & input validation -------------------------------------------------
     s = session()  # the CLI may have re-resolved the port after the restart
     req = urllib.request.Request(f"http://127.0.0.1:{s['port']}/v1/clock", headers={"Authorization": "Bearer wrong"})

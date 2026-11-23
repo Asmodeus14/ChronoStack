@@ -49,7 +49,7 @@ Each service gets one row:
 |---|---|
 | PLATFORM | CPU architecture and C library of the image: `x86_64/gnu`, `aarch64/musl`, …, or `…/static` |
 | VIRTUALIZED | `yes`, or `no — <reason>` |
-| SHIM IN PID1 | whether the preload library is loaded in the container's main process |
+| SHIM IN PID1 | whether the preload library is loaded in the container's main process: `yes`, `NO`, or `STALE` (loaded, but from a ChronoStack version other than the running controller's) |
 | PROBE | `ok` (sees virtual time), `skew` (sees another time), `unavailable` (the probe command failed), `completed` (a one-shot container such as a migrator exited with code 0; not a problem) |
 
 Reasons a service is **not virtualized**, and what to do:
@@ -59,6 +59,7 @@ Reasons a service is **not virtualized**, and what to do:
 | `no dynamic loader in image (static binary, e.g. Go or scratch)` | `LD_PRELOAD` needs a dynamic loader; static and `scratch` images have none | Usually fine if the service doesn't use time itself (proxies, static file servers). Go services are unsupported in v0.1. |
 | `Go process(es) … read the clock directly (vDSO)` | Go doesn't call libc for time | Same as above. The service runs, but on real time. |
 | `shim not loaded in PID 1` | The main process is static or setuid | Check what the image's entrypoint really runs. |
+| `PID 1 still runs the shim from before the controller was last replaced` (`STALE`) | The controller was replaced by another ChronoStack version (typically `up` after upgrading the CLI) but this container kept running with the old shim, which may read the clock page wrongly | `chronostack down`, then `up`. A plain controller restart doesn't cause this. |
 | `image is arm64 but the Docker engine is x86_64` | Emulated images aren't supported | Use an image built for your machine's architecture. |
 | `image could not be inspected` | Pull or build failed | Run `docker compose pull` / `build` and read the error. |
 
