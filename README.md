@@ -27,7 +27,7 @@ Move Postgres, Redis and your services forward in time together, run the jobs th
 </div>
 
 > [!NOTE]
-> **Alpha.** The latest release, [`v0.1.0-alpha.9`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.9), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
+> **Alpha.** The latest release, [`v0.1.0-alpha.10`](https://github.com/Asmodeus14/ChronoStack/releases/tag/v0.1.0-alpha.10), is tested in CI on Linux (x86_64 and arm64) and on macOS (Intel, Docker in a Linux VM), and by hand on Windows. On Apple-silicon Macs, the installer and the native CLI are tested in CI, but **running containers there is untested:** if you have one, [issue #5](https://github.com/Asmodeus14/ChronoStack/issues/5) has a 5-minute test.
 
 ## Why
 
@@ -50,12 +50,12 @@ $ chronostack run scenarios/trial.yml   # a scripted, repeatable test with a rep
 
 ```sh
 # Linux / macOS
-curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.9/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.9 sh
+curl -fsSL https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.10/install.sh | CHRONOSTACK_VERSION=0.1.0-alpha.10 sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-$env:CHRONOSTACK_VERSION = "0.1.0-alpha.9"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.9/install.ps1 | iex
+$env:CHRONOSTACK_VERSION = "0.1.0-alpha.10"; irm https://github.com/Asmodeus14/ChronoStack/releases/download/v0.1.0-alpha.10/install.ps1 | iex
 ```
 
 Or with a package manager:
@@ -127,7 +127,7 @@ When something breaks, the Markdown report says what was expected, what happened
 - **Simulated users:** `chronostack users run` sends seeded cohorts of users through scripted journeys (requests, think times, branches) and reports failures and latency per step ([guide](docs/GUIDE.md#8-simulated-users)).
 - **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#9-in-ci), and a strict mode.
 - **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe set of 17 tools: inspect the stack, move time, schedule outages, run scenarios with simulated users and compare runs (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`; [Cursor, Gemini CLI](docs/GUIDE.md#10-ai-agents-mcp)).
-- **Host-native Node and Playwright:** `node -r chronostack/register app.js` puts a Node process outside Docker on the same clock, and `syncClock(page)` from `chronostack/playwright` does the same for the browser in your Playwright tests. On npm as `chronostack` from the next release; until then, from the repository ([details](sdk/node/README.md)).
+- **Host-native Node and Playwright:** `node -r chronostack/register app.js` puts a Node process outside Docker on the same clock, and `syncClock(page)` from `chronostack/playwright` does the same for the browser in your Playwright tests. `npm install --save-dev chronostack` ([details](sdk/node/README.md)).
 - **Safe by design:** never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.
 
 ## Compatibility
