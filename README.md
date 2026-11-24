@@ -96,7 +96,7 @@ flowchart LR
 
 1. **One clock for every service.** A small C library loaded with `LD_PRELOAD` makes wall-clock reads (`now()`, `Date.now()`, `time.time()`, Redis expiry) return virtual time. It adds about 12–16 ns per read in C and 10–26 ns in Python and Node, measured on three machines ([benchmarks](bench/README.md)). Monotonic clocks are left alone, and absolute deadlines are translated back to real time, so the timed waits behind locks and timeouts return on time instead of hanging. That's checked in C, Python, Node and the JVM ([results](docs/M0_RESULTS.md)), and re-run every night in CI.
 2. **Moving the clock runs your scheduled work.** Changing the clock doesn't fire timers ([why](docs/TECHNICAL_FEASIBILITY.md#313-virtual-wall-clock-time-vs-virtual-monotonic-time)). So `advance` stops at each interesting virtual time, runs the **triggers** you declare (e.g. "the nightly job at 03:00"), and waits on **barriers** (e.g. "the queue is empty") before moving on. pg_cron is detected and handled automatically.
-3. **Everything is verified.** After each advance, every service is probed to confirm it sees the new time, and `doctor` explains anything it can't reach.
+3. **Everything is verified.** After each advance, every service is probed to confirm it sees the new time, and `doctor` explains anything it can't reach, including a container still running the shim from an older ChronoStack version after an upgrade.
 
 ### Scenarios: repeatable tests in virtual time
 
@@ -127,7 +127,7 @@ When something breaks, the Markdown report says what was expected, what happened
 - **Simulated users:** `chronostack users run` sends seeded cohorts of users through scripted journeys (requests, think times, branches) and reports failures and latency per step ([guide](docs/GUIDE.md#8-simulated-users)).
 - **CI ready:** exit codes, a [GitHub Action](docs/GUIDE.md#9-in-ci), and a strict mode.
 - **AI agents:** `chronostack mcp` is an MCP server with a fixed, safe set of 17 tools: inspect the stack, move time, schedule outages, run scenarios with simulated users and compare runs (`claude mcp add chronostack -- chronostack mcp --project-dir <project>`; [Cursor, Gemini CLI](docs/GUIDE.md#10-ai-agents-mcp)).
-- **Host-native Node and Playwright:** `node -r chronostack/register app.js` puts a Node process outside Docker on the same clock, and `syncClock(page)` from `chronostack/playwright` does the same for the browser in your Playwright tests ([details](sdk/node/README.md)).
+- **Host-native Node and Playwright:** `node -r chronostack/register app.js` puts a Node process outside Docker on the same clock, and `syncClock(page)` from `chronostack/playwright` does the same for the browser in your Playwright tests. On npm as `chronostack` from the next release; until then, from the repository ([details](sdk/node/README.md)).
 - **Safe by design:** never changes the host clock, needs no privileged containers, gives no container the Docker socket, and its API is local-only with a token.
 
 ## Compatibility
