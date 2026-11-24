@@ -9,6 +9,14 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Added
+
+- `chronostack doctor` flags a service whose main process still runs the shim from another ChronoStack version (`SHIM IN PID1` = `STALE`, `shim_stale` in `--json`, exit 3), and says to run `down` and `up`. This happens when the controller is replaced by a newer version while the app containers keep running.
+
+### Changed
+
+- The controller leaves an installed shim alone when its contents are identical, so restarting the controller no longer replaces the file under running services.
+
 ## [0.1.0-alpha.9] - 2026-11-21
 
 ### Added

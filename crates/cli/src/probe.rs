@@ -197,12 +197,41 @@ pub fn print_probes(results: &[ProbeResult]) {
     }
 }
 
-/// Is the shim mapped into PID 1 of the service? `None` = could not tell.
+/// The shim as PID 1 of a service has it mapped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShimState {
+    /// Mapped, and the file is the one installed now.
+    Loaded,
+    /// Mapped, but the file was replaced after the process started (`(deleted)`
+    /// in `/proc/1/maps`): the controller installed a different shim since, so
+    /// this process runs an older (or newer) one.
+    Stale,
+    /// Not mapped.
+    Missing,
+}
+
+/// Reads `grep libchronoclock /proc/1/maps` output.
+pub fn shim_state(maps_lines: &str) -> ShimState {
+    let lines: Vec<&str> = maps_lines
+        .lines()
+        .filter(|l| l.contains("libchronoclock"))
+        .collect();
+    if lines.is_empty() {
+        ShimState::Missing
+    } else if lines.iter().any(|l| l.trim_end().ends_with("(deleted)")) {
+        ShimState::Stale
+    } else {
+        ShimState::Loaded
+    }
+}
+
+/// Is the shim mapped into PID 1 of the service, and is it the current one?
+/// `None` = could not tell.
 ///
 /// `/proc/1/maps` is only readable by PID 1's own user (or with
 /// CAP_SYS_PTRACE). Postgres and Redis drop to non-root users, so the check
 /// runs as PID 1's uid.
-pub fn shim_loaded(compose: &Compose, service: &str) -> Option<bool> {
+pub fn shim_loaded(compose: &Compose, service: &str) -> Option<ShimState> {
     let uid_out =
         docker::output(&compose.args(&["exec", "-T", service, "stat", "-c", "%u", "/proc/1"]))
             .ok()?;
@@ -215,13 +244,12 @@ pub fn shim_loaded(compose: &Compose, service: &str) -> Option<bool> {
     args.extend(docker::s(&[
         service,
         "grep",
-        "-q",
         "libchronoclock",
         "/proc/1/maps",
     ]));
-    match docker::output(&args).ok()?.status.code() {
-        Some(0) => Some(true),
-        Some(1) => Some(false),
+    let out = docker::output(&args).ok()?;
+    match out.status.code() {
+        Some(0) | Some(1) => Some(shim_state(&String::from_utf8_lossy(&out.stdout))),
         _ => None,
     }
 }
@@ -394,6 +422,20 @@ fn completed_from(rows: &[ContainerState]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_shim_mapping() {
+        let live = "7f1c2a000000-7f1c2a001000 r--p 00000000 00:2f 123 /chronostack/lib/libchronoclock-x86_64-gnu.so\n\
+                    7f1c2a001000-7f1c2a004000 r-xp 00001000 00:2f 123 /chronostack/lib/libchronoclock-x86_64-gnu.so\n";
+        assert_eq!(shim_state(live), ShimState::Loaded);
+        let replaced = "7f1c2a000000-7f1c2a001000 r--p 00000000 00:2f 123 /chronostack/lib/libchronoclock-x86_64-musl.so (deleted)\n";
+        assert_eq!(shim_state(replaced), ShimState::Stale);
+        assert_eq!(shim_state(""), ShimState::Missing);
+        assert_eq!(
+            shim_state("7f1c2a000000-7f1c2a001000 r--p 00000000 00:2f 9 /usr/lib/libc.so\n"),
+            ShimState::Missing
+        );
+    }
 
     #[test]
     fn completed_only_counts_clean_exits() {
