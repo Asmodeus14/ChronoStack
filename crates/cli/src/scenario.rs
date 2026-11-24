@@ -166,6 +166,12 @@ pub struct FaultStep {
     pub duration: Option<String>,
     pub until: Option<String>,
     pub status: Option<u16>,
+    /// Share of requests that fail, 0 to 1 (seeded).
+    pub rate: Option<f64>,
+    /// `2s` or `500ms..3s`, real time, before each request.
+    pub delay: Option<String>,
+    /// Seed for the draws (default: the step's number, so every run of the scenario draws the same).
+    pub seed: Option<u64>,
 }
 
 fn now() -> String {
@@ -304,7 +310,12 @@ impl Step {
             "fault" => {
                 let f = self.fault.as_ref().expect("kind");
                 format!(
-                    "outage on {} from {} {}",
+                    "{} on {} from {} {}",
+                    if f.rate.is_some() || f.delay.is_some() {
+                        "fault"
+                    } else {
+                        "outage"
+                    },
                     f.target,
                     f.from,
                     match (&f.duration, &f.until) {
@@ -616,6 +627,7 @@ fn check_horizon(st: &Step, now_ns: i64, start_ns: i64, cap_ns: i64) -> Result<(
 
 fn run_step(
     st: &Step,
+    step_no: u64,
     session: &Session,
     client: &Client,
     cfg: &Resolved,
@@ -744,15 +756,19 @@ fn run_step(
                 &f.from,
                 f.duration.as_deref(),
                 f.until.as_deref(),
-                f.status,
+                &fault::Effect {
+                    status: f.status,
+                    rate: f.rate,
+                    delay: f.delay.clone(),
+                    seed: f.seed.or(Some(step_no)),
+                },
             )?;
             Ok(done(
                 true,
                 format!(
-                    "#{}: {} returns HTTP {} from {} until {} (virtual)",
+                    "#{}: {} from {} until {} (virtual)",
                     x.id,
-                    x.target,
-                    x.status,
+                    fault::summary(&x),
                     format_utc(x.from_ns),
                     format_utc(x.to_ns)
                 ),
@@ -1133,7 +1149,7 @@ pub fn run(
                 if let Some(cap) = max_advance_ns {
                     check_horizon(&step, before.virtual_ns, start.virtual_ns, cap)?;
                 }
-                run_step(&step, session, client, cfg, &mut users)
+                run_step(&step, idx as u64, session, client, cfg, &mut users)
             })
             .unwrap_or_else(|e| StepOutcome {
                 ok: false,

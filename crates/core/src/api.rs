@@ -54,8 +54,21 @@ pub struct ProxyTarget {
     pub upstream: String,
 }
 
-/// An outage window on a proxy target, in virtual time: requests arriving while
-/// `from_ns <= virtual now < to_ns` get `status` instead of being forwarded.
+/// Every request (`rate_ppm` = 100 %).
+pub const FULL_RATE_PPM: u32 = 1_000_000;
+/// Longest delay a fault may add to one request (the proxy's upstream timeout is 30 s).
+pub const MAX_FAULT_DELAY_MS: u64 = 25_000;
+
+fn full_rate() -> u32 {
+    FULL_RATE_PPM
+}
+
+/// A fault window on a proxy target, in virtual time. For each request arriving
+/// while `from_ns <= virtual now < to_ns`, the proxy first waits a delay drawn
+/// from `delay_min_ms..=delay_max_ms` (real time), then answers `status` for a
+/// fraction `rate_ppm` of requests and forwards the rest. Draws come from
+/// `seed` and the request's number in the window, so they repeat run to run.
+/// A plain outage is `rate_ppm` = 100 % with no delay.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fault {
     pub id: u64,
@@ -63,6 +76,51 @@ pub struct Fault {
     pub from_ns: i64,
     pub to_ns: i64,
     pub status: u16,
+    /// Share of requests answered with `status`, in parts per million.
+    #[serde(default = "full_rate")]
+    pub rate_ppm: u32,
+    #[serde(default)]
+    pub delay_min_ms: u64,
+    #[serde(default)]
+    pub delay_max_ms: u64,
+    #[serde(default)]
+    pub seed: u64,
+}
+
+impl Fault {
+    /// A plain outage: every request fails, none is delayed.
+    pub fn is_outage(&self) -> bool {
+        self.rate_ppm >= FULL_RATE_PPM && self.delay_max_ms == 0
+    }
+
+    /// One line, e.g. `HTTP 503`, `HTTP 503 for 30% of requests, 0.5-3 s delay`, `2 s delay`.
+    pub fn describe(&self) -> String {
+        let mut parts = Vec::new();
+        if self.rate_ppm >= FULL_RATE_PPM {
+            parts.push(format!("HTTP {}", self.status));
+        } else if self.rate_ppm > 0 {
+            let pct = f64::from(self.rate_ppm) / 10_000.0;
+            parts.push(format!(
+                "HTTP {} for {}% of requests",
+                self.status,
+                trim_float(pct)
+            ));
+        }
+        if self.delay_max_ms > 0 {
+            let s = |ms: u64| trim_float(ms as f64 / 1000.0);
+            parts.push(if self.delay_min_ms == self.delay_max_ms {
+                format!("{} s delay", s(self.delay_max_ms))
+            } else {
+                format!("{}-{} s delay", s(self.delay_min_ms), s(self.delay_max_ms))
+            });
+        }
+        parts.join(", ")
+    }
+}
+
+fn trim_float(x: f64) -> String {
+    let s = format!("{x:.3}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 /// `POST /v1/faults`.
@@ -74,6 +132,16 @@ pub struct FaultRequest {
     /// HTTP status returned during the window (default 503).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<u16>,
+    /// Share of requests that fail, in parts per million. Default: all of them,
+    /// or none when only a delay is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_ppm: Option<u32>,
+    /// Delay before each request, `[min, max]` milliseconds (real time).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_ms: Option<[u64; 2]>,
+    /// Seed for the rate and delay draws (default: the fault's id).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
 }
 
 /// `GET /v1/faults`.
@@ -108,6 +176,9 @@ pub struct Event {
     pub fault_id: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latency_ms: Option<u64>,
+    /// For `proxy`: delay added by a fault window before answering or forwarding.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delay_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }

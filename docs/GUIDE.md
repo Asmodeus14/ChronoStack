@@ -177,6 +177,20 @@ chronostack fault list
 chronostack events                                    # every proxied request: forwarded or blocked
 ```
 
+Not every failure is a clean outage. A window can also make the dependency **flaky** or **slow**:
+
+```sh
+chronostack fault set payments --from +2d --for 2h --rate 0.3 --status 500   # 30% of requests fail
+chronostack fault set payments --for 1h --delay 2s                           # every request 2 s slower
+chronostack fault set payments --for 1h --delay 500ms..3s --rate 0.1         # slow, and sometimes failing
+```
+
+- **`--rate`** fails that share of requests (with `--status`, default 503) and forwards the rest.
+- **`--delay`** waits before answering or forwarding, a fixed time or a range. The delay is real time, so your client's timeouts see it. At most 25 s per request. With only a delay, requests are slowed, not failed.
+- **Which requests** fail, and how long each waits, come from a seeded random sequence (`--seed`; in a scenario it defaults to the step's number). The same seed gives the same draws, so a run repeats as long as your code sends its requests in the same order.
+
+In a scenario: `- fault: { target: payments, from: +2d, for: 2h, rate: 0.3, status: 500, delay: 500ms..3s }`. Reports and `chronostack events` show each request's outcome, delay and window.
+
 The URL must come from an environment variable set in the compose file. Hard-coded URLs can't be routed.
 
 ## 7. Turn it into a test: scenarios

@@ -320,9 +320,19 @@ enum FaultCmd {
         /// End of the window (same forms as --from).
         #[arg(long, allow_hyphen_values = true)]
         until: Option<String>,
-        /// Status returned during the window.
+        /// Status returned during the window (default 503).
         #[arg(long)]
         status: Option<u16>,
+        /// Only this share of requests fails, 0 to 1 (e.g. 0.3); seeded, so runs repeat.
+        #[arg(long)]
+        rate: Option<f64>,
+        /// Delay each request first (real time): `2s`, or a range `500ms..3s`.
+        /// With only a delay, requests are slowed, not failed.
+        #[arg(long)]
+        delay: Option<String>,
+        /// Seed for the rate and delay draws (default: the window's id).
+        #[arg(long)]
+        seed: Option<u64>,
         #[arg(long)]
         json: bool,
     },
@@ -487,6 +497,9 @@ fn run(cli: Cli) -> Result<i32> {
                     duration,
                     until,
                     status,
+                    rate,
+                    delay,
+                    seed,
                     json,
                 } => {
                     let f = fault::set(
@@ -495,16 +508,21 @@ fn run(cli: Cli) -> Result<i32> {
                         &from,
                         duration.as_deref(),
                         until.as_deref(),
-                        status,
+                        &fault::Effect {
+                            status,
+                            rate,
+                            delay,
+                            seed,
+                        },
                     )?;
                     if json {
                         println!("{}", serde_json::to_string(&f)?);
                     } else {
                         println!(
-                            "outage #{}: `{}` returns HTTP {} from {} until {} (virtual time)",
+                            "{} #{}: {} from {} until {} (virtual time)",
+                            if f.is_outage() { "outage" } else { "fault" },
                             f.id,
-                            f.target,
-                            f.status,
+                            fault::summary(&f),
                             format_utc(f.from_ns),
                             format_utc(f.to_ns)
                         );

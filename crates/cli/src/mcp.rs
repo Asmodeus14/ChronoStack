@@ -114,14 +114,17 @@ fn tools() -> Vec<Value> {
         json!({ "name": "fault_list", "title": "List proxy targets and outages",
             "description": "Proxy targets declared in chronostack.yml and the outage windows (virtual time) on them.",
             "inputSchema": none, "annotations": { "readOnlyHint": true } }),
-        json!({ "name": "fault_set", "title": "Schedule an outage",
-            "description": "Make a proxy target (an HTTP dependency such as a webhook receiver) return an error status during a window of virtual time. Give exactly one of `for` or `until`.",
+        json!({ "name": "fault_set", "title": "Schedule an outage, errors or latency",
+            "description": "Make a proxy target (an HTTP dependency such as a webhook receiver) misbehave during a window of virtual time: return an error status (all requests, or a seeded share with `rate`), and/or delay each request (`delay`, real time). Give exactly one of `for` or `until`.",
             "inputSchema": schema(json!({
                 "target": { "type": "string", "description": "Proxy target name (see fault_list)." },
                 "from": { "type": "string", "description": format!("Start (default now): {when}.") },
                 "for": { "type": "string", "description": "Length, e.g. 2h." },
                 "until": { "type": "string", "description": format!("End: {when}.") },
-                "status": { "type": "integer", "minimum": 400, "maximum": 599, "description": "Status returned during the window (default 503)." }
+                "status": { "type": "integer", "minimum": 400, "maximum": 599, "description": "Status returned during the window (default 503)." },
+                "rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "Only this share of requests fails, e.g. 0.3 (seeded: the same requests fail on every run). Default: all, or none if only `delay` is given." },
+                "delay": { "type": "string", "description": "Delay each request first, real time: 2s, or a range 500ms..3s (at most 25 s)." },
+                "seed": { "type": "integer", "minimum": 0, "description": "Seed for the rate and delay draws (default: the window's id)." }
             }), &["target"]) }),
         json!({ "name": "fault_clear", "title": "Remove outages",
             "description": "Remove one outage window by id, or all of them with all=true.",
@@ -253,7 +256,9 @@ fn call_tool(name: &str, a: &Map<String, Value>, limits: Limits) -> Result<(Valu
     let max_wall = Duration::from_nanos(u64::try_from(limits.max_wall_ns).unwrap_or(0));
     let known: &[&str] = match name {
         "clock_advance" => &["duration", "to", "step", "dry_run"],
-        "fault_set" => &["target", "from", "for", "until", "status"],
+        "fault_set" => &[
+            "target", "from", "for", "until", "status", "rate", "delay", "seed",
+        ],
         "fault_clear" => &["id", "all"],
         "events_tail" => &["since", "limit"],
         "scenario_run" | "scenario_validate" | "users_validate" => &["file"],
@@ -344,6 +349,22 @@ fn call_tool(name: &str, a: &Map<String, Value>, limits: Limits) -> Result<(Valu
                     .filter(|v| (400..=599).contains(v))
                     .ok_or("`status` must be 400-599")?;
                 args.extend([s("--status"), st.to_string()]);
+            }
+            if let Some(r) = a.get("rate") {
+                let r = r
+                    .as_f64()
+                    .filter(|v| (0.0..=1.0).contains(v))
+                    .ok_or("`rate` must be a number from 0 to 1")?;
+                args.extend([s("--rate"), r.to_string()]);
+            }
+            if let Some(d) = arg_str(a, "delay")? {
+                args.extend([s("--delay"), d.to_string()]);
+            }
+            if let Some(seed) = a.get("seed") {
+                let seed = seed
+                    .as_u64()
+                    .ok_or("`seed` must be a non-negative integer")?;
+                args.extend([s("--seed"), seed.to_string()]);
             }
             args.push(s("--json"));
             run(args)

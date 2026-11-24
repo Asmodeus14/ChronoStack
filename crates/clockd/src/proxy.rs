@@ -1,9 +1,11 @@
 //! HTTP fault proxy (ADR-010). Each declared target gets its own port inside
 //! the Compose network. Requests are forwarded to the upstream unchanged unless
-//! an outage window covers the current *virtual* time, in which case the proxy
-//! answers with the window's status code (default 503). Every request is
-//! written to the event log. If forwarding fails the proxy answers 502: it
-//! fails closed, never silently bypassing a fault.
+//! a fault window covers the current *virtual* time. Then the proxy waits the
+//! window's delay (if any, in real time) and answers with the window's status
+//! code (default 503) for the window's share of requests, forwarding the rest;
+//! the draws are seeded, so they repeat run to run. Every request is written to
+//! the event log. If forwarding fails the proxy answers 502: it fails closed,
+//! never silently bypassing a fault.
 
 use std::io::Read;
 use std::time::{Duration, Instant};
@@ -19,8 +21,8 @@ use crate::server::log;
 
 /// Largest request or response body forwarded.
 const MAX_BODY: u64 = 16 * 1024 * 1024;
-/// Worker threads per target.
-const WORKERS: usize = 4;
+/// Worker threads per target (a delayed request holds one for its delay).
+const WORKERS: usize = 16;
 
 /// Headers that describe one connection, not the message (RFC 9110 §7.6.1).
 fn hop_by_hop(name: &str) -> bool {
@@ -104,22 +106,40 @@ fn handle(t: &ProxyTarget, shared: &Shared<'_>, agent: &ureq::Agent, mut req: Re
     ev.path = Some(path.chars().take(300).collect());
 
     if let Some(f) = shared.faults.active(&t.name, st.virtual_ns) {
-        ev.status = Some(f.status);
-        ev.outcome = Some("fault".into());
+        let d = shared.faults.next_draw(&f);
         ev.fault_id = Some(f.id);
-        ev.latency_ms = Some(start.elapsed().as_millis() as u64);
-        shared.events.push(&st, ev);
-        let body = serde_json::json!({
-            "error": format!("ChronoStack fault: `{}` is down until {} (virtual time)", t.name, format_utc(f.to_ns)),
-            "fault_id": f.id,
-        });
-        respond(
-            req,
-            f.status,
-            vec![json_header()],
-            body.to_string().into_bytes(),
-        );
-        return;
+        if d.delay_ms > 0 {
+            std::thread::sleep(Duration::from_millis(d.delay_ms));
+            ev.delay_ms = Some(d.delay_ms);
+        }
+        if d.fail {
+            ev.status = Some(f.status);
+            ev.outcome = Some("fault".into());
+            ev.latency_ms = Some(start.elapsed().as_millis() as u64);
+            shared.events.push(&st, ev);
+            let error = if f.is_outage() {
+                format!(
+                    "ChronoStack fault: `{}` is down until {} (virtual time)",
+                    t.name,
+                    format_utc(f.to_ns)
+                )
+            } else {
+                format!(
+                    "ChronoStack fault #{}: `{}` fails some requests until {} (virtual time)",
+                    f.id,
+                    t.name,
+                    format_utc(f.to_ns)
+                )
+            };
+            let body = serde_json::json!({ "error": error, "fault_id": f.id });
+            respond(
+                req,
+                f.status,
+                vec![json_header()],
+                body.to_string().into_bytes(),
+            );
+            return;
+        }
     }
 
     let mut body = Vec::new();

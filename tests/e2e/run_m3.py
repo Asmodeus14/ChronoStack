@@ -131,6 +131,45 @@ def proxy_checks(d, up_out):
     check("event log survives the clockd restart (all 4 proxied requests, in order)",
           [e["outcome"] for e in proxy] == ["forwarded", "fault", "fault", "forwarded"], json.dumps(proxy)[:400])
 
+    # --- seeded error rate and latency ------------------------------------------------
+    def burst(prefix, n):
+        code = ("(async()=>{const o=[];for(let i=0;i<%d;i++){const t=Date.now();"
+                "const r=await fetch(process.env.WEBHOOK_URL,{method:'POST',headers:{'content-type':'application/json'},"
+                "body:JSON.stringify({id:'%s-'+i,type:'probe'})});o.push([r.status,Date.now()-t]);}"
+                "console.log(JSON.stringify(o));})()") % (n, prefix)
+        _, out, err = d.compose("exec", "-T", "worker", "node", "-e", code, timeout=300)
+        try:
+            return json.loads(out.strip().splitlines()[-1])
+        except Exception:  # noqa: BLE001
+            return [[0, 0, (err or out)[-200:]]]
+
+    rc, f = d.js("fault", "set", "webhooks", "--for", "1h", "--rate", "0.5", "--status", "500", "--seed", "7")
+    check("fault set --rate 0.5 --status 500 --seed 7", rc == 0 and f.get("rate_ppm") == 500_000 and f.get("seed") == 7,
+          json.dumps(f)[:200])
+    a = [r[0] for r in burst("rate-a", 40)]
+    d.cs("fault", "clear", "--all")
+    d.js("fault", "set", "webhooks", "--for", "1h", "--rate", "0.5", "--status", "500", "--seed", "7")
+    b = [r[0] for r in burst("rate-b", 40)]
+    check("rate 0.5: some requests fail with 500, the rest are forwarded (200)",
+          set(a) == {200, 500} and 10 <= a.count(500) <= 30, f"{a.count(500)}/40 failed: {a}")
+    check("same seed, new window: exactly the same requests fail", a == b, f"{a} vs {b}")
+    d.cs("fault", "clear", "--all")
+
+    rc, f = d.js("fault", "set", "webhooks", "--for", "1h", "--delay", "1s")
+    check("fault set --delay 1s: latency only (no failures)", rc == 0 and f.get("rate_ppm") == 0, json.dumps(f)[:200])
+    slow = burst("slow", 3)
+    check("delay 1s: every request forwarded (200) after at least 1 s",
+          len(slow) == 3 and all(r[0] == 200 and r[1] >= 1000 for r in slow), str(slow))
+    rc, ev = d.js("events")
+    last = [e for e in ev.get("events", []) if e["kind"] == "proxy"][-3:]
+    check("events record the delay and the window",
+          len(last) == 3 and all(e.get("delay_ms") == 1000 and e.get("outcome") == "forwarded"
+                                 and e.get("fault_id") == f.get("id") for e in last),
+          json.dumps(last)[:400])
+    rc, out, _ = d.cs("fault", "list")
+    check("fault list describes the window", "1 s delay" in out, out[-300:])
+    d.cs("fault", "clear", "--all")
+
 
 def scenario_pass(d, n):
     t0 = time.monotonic()
