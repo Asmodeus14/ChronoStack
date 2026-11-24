@@ -1,6 +1,6 @@
 {
   "name": "chronostack",
-  "version": "0.1.0-alpha.9",
+  "version": "0.1.0-alpha.10",
   "description": "ChronoStack for host-native Node processes and Playwright: Date follows the stack's virtual clock",
   "keywords": ["chronostack", "time", "clock", "testing", "docker-compose", "playwright", "fake-timers", "time-travel"],
   "license": "(MIT OR Apache-2.0)",
