@@ -10,7 +10,7 @@ on:
       version:
         description: Release version to install
         required: true
-        default: 0.1.0-alpha.9
+        default: 0.1.0-alpha.10
 
 permissions:
   contents: read

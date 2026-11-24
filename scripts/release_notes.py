@@ -55,6 +55,8 @@ scoop install chronostack/chronostack
 
 crates.io: `cargo install chronostack@{version}`.
 
+Node SDK and Playwright helper on npm: `npm install --save-dev chronostack@{version}`.
+
 The CLI pulls the matching controller image (`ghcr.io/asmodeus14/chronostack-clockd:{version}`, pinned by digest) on first `chronostack up`. Every file below is listed in `SHA256SUMS`; the SBOM is SPDX JSON.
 
 ## Verified for this release

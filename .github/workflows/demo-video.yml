@@ -10,7 +10,7 @@ on:
     inputs:
       version:
         description: Release to record (the CLI is installed from it)
-        default: 0.1.0-alpha.9
+        default: 0.1.0-alpha.10
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      VERSION: ${{ inputs.version || '0.1.0-alpha.9' }}
+      VERSION: ${{ inputs.version || '0.1.0-alpha.10' }}
     steps:
       - uses: actions/checkout@v7
       - name: Install the release CLI (not recorded)

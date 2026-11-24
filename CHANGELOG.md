@@ -9,12 +9,14 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.10] - 2026-11-24
+
 ### Added
 
 - Seeded network faults: `fault set --rate 0.3` fails a share of requests and forwards the rest; `--delay 2s` or `--delay 500ms..3s` slows each request (real time, at most 25 s); both combine with `--status`. Draws come from `--seed` (in a scenario, the step's number by default), so the same requests fail on every run. Also in scenario `fault:` steps and the MCP `fault_set` tool; events and reports show each request's delay and window. The proxy has 16 workers per target (was 4), so delayed requests don't hold up the others.
 - `chronostack doctor` flags a service whose main process still runs the shim from another ChronoStack version (`SHIM IN PID1` = `STALE`, `shim_stale` in `--json`, exit 3), and says to run `down` and `up`. This happens when the controller is replaced by a newer version while the app containers keep running.
 - `chronostack/playwright`: `syncClock(page)` sets the browser clock of a Playwright page or context to the virtual time and follows every advance, freeze and unfreeze (Playwright's `page.clock`, 1.45+). Checked with Playwright 1.52 and Chromium against the demo stack.
-- The Node SDK is published to npm as `chronostack` with each release (`npm.yml`, with provenance), starting with the next one.
+- The Node SDK is published to npm as `chronostack` with each release (`npm.yml`, with provenance), starting with this release: `npm install --save-dev chronostack`.
 
 ### Changed
 
