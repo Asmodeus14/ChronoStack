@@ -306,6 +306,21 @@
                 "minimum": 400,
                 "maximum": 599,
                 "default": 503
+              },
+              "rate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Share of requests that fail (seeded). Default: all, or none when only `delay` is given."
+              },
+              "delay": {
+                "type": "string",
+                "description": "Delay before each request, real time: `2s` or a range `500ms..3s` (at most 25 s)."
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Seed for the rate and delay draws (default: the step's number)."
               }
             }
           },

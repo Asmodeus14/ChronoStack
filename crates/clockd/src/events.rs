@@ -140,6 +140,7 @@ pub fn event(kind: &str) -> Event {
         outcome: None,
         fault_id: None,
         latency_ms: None,
+        delay_ms: None,
         message: None,
     }
 }

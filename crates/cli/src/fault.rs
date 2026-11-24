@@ -1,7 +1,7 @@
 //! Fault proxy planning (`up`), `chronostack fault …` and `chronostack events`.
 
 use anyhow::{Result, bail};
-use chronostack_core::api::{Event, FaultRequest, PROXY_BASE_PORT, ProxyTarget};
+use chronostack_core::api::{Event, Fault, FaultRequest, PROXY_BASE_PORT, ProxyTarget};
 use chronostack_core::compose::{self, EnvRewrite, Project};
 use chronostack_core::duration::{format_utc, parse_duration, parse_time_of_day, parse_utc};
 
@@ -110,22 +110,76 @@ pub fn window(now: i64, from: &str, dur: Option<&str>, until: Option<&str>) -> R
     Ok((start, end))
 }
 
+/// What a fault window does to each request, beyond its time window.
+#[derive(Debug, Clone, Default)]
+pub struct Effect {
+    /// Status for failed requests (default 503).
+    pub status: Option<u16>,
+    /// Share of requests that fail, 0 to 1 (default: all, or none with only a delay).
+    pub rate: Option<f64>,
+    /// `2s`, or a range `500ms..3s` (real time, before answering or forwarding).
+    pub delay: Option<String>,
+    /// Seed for the rate and delay draws (default: the fault's id).
+    pub seed: Option<u64>,
+}
+
+/// `0.3` → 300 000 parts per million.
+pub fn rate_ppm(rate: f64) -> Result<u32> {
+    if !(0.0..=1.0).contains(&rate) {
+        bail!("rate must be between 0 and 1 (e.g. 0.3 for 30% of requests)");
+    }
+    Ok((rate * 1_000_000.0).round() as u32)
+}
+
+/// `2s` → [2000, 2000]; `500ms..3s` → [500, 3000] (milliseconds).
+pub fn parse_delay(s: &str) -> Result<[u64; 2]> {
+    let ms = |part: &str| -> Result<u64> {
+        let ns = parse_duration(part).map_err(|e| anyhow::anyhow!("delay `{s}`: {e}"))?;
+        Ok((ns / 1_000_000) as u64)
+    };
+    match s.split_once("..") {
+        Some((a, b)) => {
+            let (a, b) = (ms(a)?, ms(b)?);
+            if a > b {
+                bail!("delay `{s}`: the minimum is above the maximum");
+            }
+            Ok([a, b])
+        }
+        None => {
+            let d = ms(s)?;
+            Ok([d, d])
+        }
+    }
+}
+
 pub fn set(
     client: &Client,
     target: &str,
     from: &str,
     dur: Option<&str>,
     until: Option<&str>,
-    status: Option<u16>,
-) -> Result<chronostack_core::api::Fault> {
+    effect: &Effect,
+) -> Result<Fault> {
     let now = client.clock()?.virtual_ns;
     let (from_ns, to_ns) = window(now, from, dur, until)?;
     client.fault_add(&FaultRequest {
         target: target.into(),
         from_ns,
         to_ns,
-        status,
+        status: effect.status,
+        rate_ppm: effect.rate.map(rate_ppm).transpose()?,
+        delay_ms: effect.delay.as_deref().map(parse_delay).transpose()?,
+        seed: effect.seed,
     })
+}
+
+/// `webhooks returns HTTP 503` for an outage, `webhooks: HTTP 500 for 30% of requests, 2 s delay` otherwise.
+pub fn summary(f: &Fault) -> String {
+    if f.is_outage() {
+        format!("{} returns HTTP {}", f.target, f.status)
+    } else {
+        format!("{}: {}", f.target, f.describe())
+    }
 }
 
 pub fn print_list(client: &Client) -> Result<()> {
@@ -158,12 +212,12 @@ pub fn print_list(client: &Client) -> Result<()> {
             "over"
         };
         println!(
-            "  #{:<3} {:<16} {} → {}  HTTP {}  {state}",
+            "  #{:<3} {:<16} {} → {}  {}  {state}",
             f.id,
             f.target,
             format_utc(f.from_ns),
             format_utc(f.to_ns),
-            f.status
+            f.describe()
         );
     }
     Ok(())
@@ -181,8 +235,10 @@ pub fn describe(e: &Event) -> String {
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "-".into()),
             e.outcome.as_deref().unwrap_or("?"),
-            match (e.outcome.as_deref(), e.fault_id) {
-                (Some("fault"), Some(id)) => format!(" #{id}"),
+            match (e.outcome.as_deref(), e.fault_id, e.delay_ms) {
+                (Some("fault"), Some(id), Some(d)) => format!(" #{id}, after {d} ms"),
+                (Some("fault"), Some(id), None) => format!(" #{id}"),
+                (_, Some(id), Some(d)) => format!(", delayed {d} ms by #{id}"),
                 _ => String::new(),
             }
         ),
@@ -206,6 +262,23 @@ mod tests {
     use super::*;
 
     const H: i64 = 3_600_000_000_000;
+
+    #[test]
+    fn parses_delays_and_rates() {
+        assert_eq!(parse_delay("2s").unwrap(), [2000, 2000]);
+        assert_eq!(parse_delay("500ms..3s").unwrap(), [500, 3000]);
+        assert!(
+            parse_delay("3s..1s")
+                .unwrap_err()
+                .to_string()
+                .contains("minimum")
+        );
+        assert!(parse_delay("soon").is_err());
+        assert_eq!(rate_ppm(0.3).unwrap(), 300_000);
+        assert_eq!(rate_ppm(1.0).unwrap(), 1_000_000);
+        assert!(rate_ppm(1.5).is_err());
+        assert!(rate_ppm(-0.1).is_err());
+    }
 
     #[test]
     fn when_expressions() {

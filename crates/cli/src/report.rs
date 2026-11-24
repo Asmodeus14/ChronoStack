@@ -399,9 +399,28 @@ pub fn markdown(r: &Value) -> String {
     } else {
         m += "| Virtual time | Target | Request | Response | Outcome |\n|---|---|---|---|---|\n";
         for e in &proxy {
+            let delayed = match e["delay_ms"].as_u64() {
+                Some(d) => format!(
+                    " after a {} s delay (window #{})",
+                    d as f64 / 1000.0,
+                    e["fault_id"]
+                ),
+                None => String::new(),
+            };
             let outcome = match str_of(e, "outcome") {
-                "fault" => format!("blocked by outage window #{}", e["fault_id"]),
-                "forwarded" => "delivered to upstream".to_string(),
+                "fault" => format!(
+                    "blocked by outage window #{}{}",
+                    e["fault_id"],
+                    if delayed.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            ", after {} s",
+                            e["delay_ms"].as_u64().unwrap_or(0) as f64 / 1000.0
+                        )
+                    }
+                ),
+                "forwarded" => format!("delivered to upstream{delayed}"),
                 "upstream_error" => format!("upstream unreachable: {}", cell(str_of(e, "message"))),
                 o => o.to_string(),
             };
