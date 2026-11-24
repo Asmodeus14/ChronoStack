@@ -5,10 +5,8 @@ Makes a Node.js process **running directly on your machine**, or the browser in 
 Use it when your app runs on the host (`npm run dev`) and only its databases run in Docker, or when end-to-end tests drive a browser against the stack.
 
 ```sh
-npm install --save-dev chronostack        # published with each ChronoStack release, from the next one
+npm install --save-dev chronostack        # published with each ChronoStack release, with provenance
 ```
-
-Until then, use it from a clone of the repository (`require('./path/to/sdk/node')`).
 
 ## A Node process on your machine
 
