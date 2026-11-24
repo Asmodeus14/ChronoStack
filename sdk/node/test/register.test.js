@@ -182,3 +182,54 @@ test('wrong token: falls back to real time with a warning', async () => {
   assert.strictEqual(r.code, 0);
   assert.match(r.err, /401/);
 });
+
+test('playwright: syncClock sets the browser clock and follows advance, freeze and unfreeze', async () => {
+  const fake = await fakeClockd();
+  const pw = JSON.stringify(path.join(__dirname, '..', 'playwright.js'));
+  const calls = [];
+  const r = await run(
+    `const { syncClock } = require(${pw});
+     const page = { clock: {
+       setSystemTime: async (t) => console.log(JSON.stringify({ m: 'system', t, real: Date.now() - (Date.now() - require(${JSON.stringify(path.join(__dirname, '..', 'index.js'))}).RealDate.now()) })),
+       setFixedTime: async (t) => { console.log(JSON.stringify({ m: 'fixed', t })); },
+     } };
+     syncClock(page).then(() => console.log(JSON.stringify({ m: 'ready' })));
+     setInterval(() => {}, 1000);`,
+    { CHRONOSTACK_URL: fake.url, CHRONOSTACK_TOKEN: TOKEN },
+    (l, p) => {
+      calls.push(l);
+      if (l.m === 'ready') setTimeout(() => fake.change({ offsetMs: 30 * DAY_MS }), 100);
+      else if (calls.filter((c) => c.m === 'system').length === 2 && !calls.some((c) => c.m === 'fixed')) {
+        setTimeout(() => fake.change({ frozen: true, frozenMs: Date.UTC(2030, 0, 1) }), 50);
+      } else if (l.m === 'fixed') setTimeout(() => fake.change({ frozen: false, offsetMs: 40 * DAY_MS }), 50);
+      else if (calls.filter((c) => c.m === 'system').length === 3) p.kill();
+    },
+  );
+  await fake.close();
+  const sys = calls.filter((c) => c.m === 'system');
+  const fixed = calls.filter((c) => c.m === 'fixed');
+  assert.strictEqual(sys.length, 3, `${JSON.stringify(calls)} ${r.err}`);
+  assert.ok(Math.abs(sys[0].t - sys[0].real - 14 * DAY_MS) < 1000, 'starts at the virtual time (+14d)');
+  assert.ok(Math.abs(sys[1].t - sys[1].real - 30 * DAY_MS) < 1000, 'follows an advance (+30d)');
+  assert.deepStrictEqual(fixed.map((c) => c.t), [Date.UTC(2030, 0, 1)], 'frozen: fixed time');
+  assert.ok(Math.abs(sys[2].t - sys[2].real - 40 * DAY_MS) < 1000, 'unfrozen: flows again (+40d)');
+});
+
+test('playwright: syncClock without a stack changes nothing', async () => {
+  const pw = JSON.stringify(path.join(__dirname, '..', 'playwright.js'));
+  const lines = [];
+  const env = { CHRONOSTACK_URL: '', CHRONOSTACK_TOKEN: '', CHRONOSTACK_SESSION: path.join(__dirname, 'missing.json') };
+  const r = await run(
+    `const { syncClock } = require(${pw});
+     let n = 0;
+     const page = { clock: { setSystemTime: async () => n++, setFixedTime: async () => n++ } };
+     syncClock(page).then((off) => console.log(JSON.stringify({ n, off: typeof off })));`,
+    env,
+    (l) => lines.push(l),
+  );
+  assert.strictEqual(r.code, 0, r.err);
+  assert.deepStrictEqual(lines[0], { n: 0, off: 'function' });
+  const bad = await run(`require(${pw}).syncClock({}).catch((e) => { console.log(JSON.stringify({ e: e.name })); });`, env, (l) => lines.push(l));
+  assert.strictEqual(bad.code, 0);
+  assert.deepStrictEqual(lines[1], { e: 'TypeError' });
+});

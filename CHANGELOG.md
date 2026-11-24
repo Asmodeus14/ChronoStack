@@ -12,6 +12,8 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 ### Added
 
 - `chronostack doctor` flags a service whose main process still runs the shim from another ChronoStack version (`SHIM IN PID1` = `STALE`, `shim_stale` in `--json`, exit 3), and says to run `down` and `up`. This happens when the controller is replaced by a newer version while the app containers keep running.
+- `chronostack/playwright`: `syncClock(page)` sets the browser clock of a Playwright page or context to the virtual time and follows every advance, freeze and unfreeze (Playwright's `page.clock`, 1.45+). Checked with Playwright 1.52 and Chromium against the demo stack.
+- The Node SDK is published to npm as `chronostack` with each release (`npm.yml`, with provenance), starting with the next one.
 
 ### Changed
 
