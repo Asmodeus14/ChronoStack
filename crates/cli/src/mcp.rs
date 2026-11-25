@@ -83,13 +83,29 @@ fn schema(props: Value, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": props, "required": required, "additionalProperties": false })
 }
 
+/// All four MCP behaviour hints, always set explicitly: some clients and
+/// directories (e.g. OpenAI's) reject a tool when any hint is missing.
+/// Every tool works on the local stack only, so none is open-world.
+fn hints(read_only: bool, destructive: bool, idempotent: bool) -> Value {
+    json!({
+        "readOnlyHint": read_only,
+        "destructiveHint": destructive,
+        "idempotentHint": idempotent,
+        "openWorldHint": false
+    })
+}
+
+fn read_only() -> Value {
+    hints(true, false, true)
+}
+
 fn tools() -> Vec<Value> {
     let none = json!({ "type": "object", "additionalProperties": false });
     let when = "`now`, `+<duration>` (e.g. +2d, +1h30m), `next HH:MM` (UTC) or a UTC time like 2026-12-01T09:00:00Z";
     vec![
         json!({ "name": "clock_status", "title": "Clock status",
             "description": "Current virtual and real time, the offset between them, and whether the clock is frozen.",
-            "inputSchema": none, "annotations": { "readOnlyHint": true } }),
+            "inputSchema": none, "annotations": read_only() }),
         json!({ "name": "clock_advance", "title": "Advance virtual time",
             "description": "Move virtual time forward (never backward). At every stop ChronoStack runs the triggers declared in chronostack.yml (e.g. daily jobs at their virtual time) and waits on the declared barriers, then probes that every service sees the new time. Give exactly one of `duration` or `to`. Returns every stop with trigger and barrier results.",
             "inputSchema": schema(json!({
@@ -98,22 +114,22 @@ fn tools() -> Vec<Value> {
                 "step": { "type": "string", "description": "Optional: also stop every <step> (e.g. 1d) so per-step triggers run." },
                 "dry_run": { "type": "boolean", "description": "Only show the planned stops." }
             }), &[]),
-            "annotations": { "destructiveHint": false, "idempotentHint": false } }),
+            "annotations": hints(false, false, false) }),
         json!({ "name": "clock_freeze", "title": "Freeze virtual time",
             "description": "Stop virtual time where it is (services see a constant wall clock).",
-            "inputSchema": none }),
+            "inputSchema": none, "annotations": hints(false, false, true) }),
         json!({ "name": "clock_unfreeze", "title": "Unfreeze virtual time",
             "description": "Let virtual time flow again from where it was frozen.",
-            "inputSchema": none }),
+            "inputSchema": none, "annotations": hints(false, false, true) }),
         json!({ "name": "probe", "title": "Probe services",
             "description": "Check that every virtualized service (Postgres, Redis, app containers) sees the virtual time.",
-            "inputSchema": none, "annotations": { "readOnlyHint": true } }),
+            "inputSchema": none, "annotations": read_only() }),
         json!({ "name": "doctor", "title": "Doctor",
             "description": "Explain which services are virtualized, which are not (e.g. Go binaries) and why.",
-            "inputSchema": none, "annotations": { "readOnlyHint": true } }),
+            "inputSchema": none, "annotations": read_only() }),
         json!({ "name": "fault_list", "title": "List proxy targets and outages",
             "description": "Proxy targets declared in chronostack.yml and the outage windows (virtual time) on them.",
-            "inputSchema": none, "annotations": { "readOnlyHint": true } }),
+            "inputSchema": none, "annotations": read_only() }),
         json!({ "name": "fault_set", "title": "Schedule an outage, errors or latency",
             "description": "Make a proxy target (an HTTP dependency such as a webhook receiver) misbehave during a window of virtual time: return an error status (all requests, or a seeded share with `rate`), and/or delay each request (`delay`, real time). Give exactly one of `for` or `until`.",
             "inputSchema": schema(json!({
@@ -125,56 +141,56 @@ fn tools() -> Vec<Value> {
                 "rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "Only this share of requests fails, e.g. 0.3 (seeded: the same requests fail on every run). Default: all, or none if only `delay` is given." },
                 "delay": { "type": "string", "description": "Delay each request first, real time: 2s, or a range 500ms..3s (at most 25 s)." },
                 "seed": { "type": "integer", "minimum": 0, "description": "Seed for the rate and delay draws (default: the window's id)." }
-            }), &["target"]) }),
+            }), &["target"]), "annotations": hints(false, false, false) }),
         json!({ "name": "fault_clear", "title": "Remove outages",
             "description": "Remove one outage window by id, or all of them with all=true.",
             "inputSchema": schema(json!({
                 "id": { "type": "integer", "minimum": 1 },
                 "all": { "type": "boolean" }
-            }), &[]) }),
+            }), &[]), "annotations": hints(false, true, true) }),
         json!({ "name": "events_tail", "title": "Event log",
             "description": "Recent controller events: clock changes, outage windows set/cleared, and every request through the fault proxy (forwarded, blocked by a window, or upstream error), with virtual times.",
             "inputSchema": schema(json!({
                 "since": { "type": "integer", "minimum": 0, "description": "Only events after this sequence number." },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "Most recent N events (default 50)." }
-            }), &[]), "annotations": { "readOnlyHint": true } }),
+            }), &[]), "annotations": read_only() }),
         json!({ "name": "scenario_run", "title": "Run a scenario",
             "description": "Run a scenario YAML file from the project (steps like advance, fault, assert; optionally simulated users on the virtual clock) and return pass/fail with the failed step and, with users, their outcomes per step. A full report is written to .chronostack/reports/ (see report_get).",
             "inputSchema": schema(json!({
                 "file": { "type": "string", "description": "Path inside the project directory, e.g. scenarios/trial.yml." }
-            }), &["file"]), "outputSchema": object() }),
+            }), &["file"]), "outputSchema": object(), "annotations": hints(false, false, false) }),
         json!({ "name": "env_inspect", "title": "Inspect the environment",
             "description": "One look at what the stack is: every service and whether it sees virtual time (doctor), the triggers with their schedules, the barriers, the fault-proxy targets, and the ports exposed to the host (for service:// URLs). Start here.",
-            "inputSchema": none, "outputSchema": object(), "annotations": { "readOnlyHint": true } }),
+            "inputSchema": none, "outputSchema": object(), "annotations": read_only() }),
         json!({ "name": "scenario_validate", "title": "Check a scenario",
             "description": "Check a scenario file (and its users file) without running it: its steps, how far virtual time will move, and the simulated users (cohorts, counts, arrival windows). Says whether it fits mcp.max_advance.",
             "inputSchema": schema(json!({
                 "file": { "type": "string", "description": "Path inside the project directory, e.g. scenarios/cohort.yml." }
-            }), &["file"]), "outputSchema": object(), "annotations": { "readOnlyHint": true } }),
+            }), &["file"]), "outputSchema": object(), "annotations": read_only() }),
         json!({ "name": "report_get", "title": "Read a run's report",
             "description": "The report of a scenario run, by run_id or the latest: result, failed step, every step's status and detail, and with simulated users their outcomes, per-step failures and the start of the timeline (who did what at which virtual time).",
             "inputSchema": schema(json!({
                 "run_id": { "type": "string", "description": "Run id from scenario_run (default: the latest report)." },
                 "timeline": { "type": "integer", "minimum": 0, "maximum": 1000, "description": "How many timeline entries to include (default 50)." }
-            }), &[]), "outputSchema": object(), "annotations": { "readOnlyHint": true } }),
+            }), &[]), "outputSchema": object(), "annotations": read_only() }),
         json!({ "name": "report_diff", "title": "Compare two runs",
             "description": "Compare two scenario runs (by run_id; default the latest two): whether the result changed, which steps changed status, user outcome counts, per-step user failures, and whether the simulated users' timeline is the same. Use it to check a fix, or that a run repeats.",
             "inputSchema": schema(json!({
                 "a": { "type": "string", "description": "Earlier run id (default: the second-latest report)." },
                 "b": { "type": "string", "description": "Later run id (default: the latest report)." }
-            }), &[]), "outputSchema": object(), "annotations": { "readOnlyHint": true } }),
+            }), &[]), "outputSchema": object(), "annotations": read_only() }),
         json!({ "name": "users_validate", "title": "Check a journey file",
             "description": "Check a journey file (simulated users) without running it: cohorts, user counts, arrival windows and each journey's steps.",
             "inputSchema": schema(json!({
                 "file": { "type": "string", "description": "Path inside the project directory, e.g. journeys/trialists.yml." }
-            }), &["file"]), "outputSchema": object(), "annotations": { "readOnlyHint": true } }),
+            }), &["file"]), "outputSchema": object(), "annotations": read_only() }),
         json!({ "name": "users_run", "title": "Run simulated users (real time)",
             "description": "Run a journey file's simulated users in real time against the stack and return runs, failures and latency per step. Limited to mcp.max_users users; the run stops itself before mcp.max_wall. To run users on the virtual clock (days in seconds), put them in a scenario and use scenario_run.",
             "inputSchema": schema(json!({
                 "file": { "type": "string", "description": "Path inside the project directory." },
                 "seed": { "type": "integer", "minimum": 0, "description": "Fix every random choice (default: the file's seed or a random one)." },
                 "duration": { "type": "string", "description": "Stop after this much real time (e.g. 60s); capped below mcp.max_wall." }
-            }), &["file"]), "outputSchema": object() }),
+            }), &["file"]), "outputSchema": object(), "annotations": hints(false, false, false) }),
     ]
 }
 
@@ -934,6 +950,31 @@ mod tests {
             json!({"jsonrpc":"2.0","id":3,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}),
         );
         assert_eq!(r["error"]["code"], -32602, "clientCapabilities is required");
+    }
+
+    #[test]
+    fn every_tool_sets_all_four_hints() {
+        let t = tools();
+        assert_eq!(t.len(), 17);
+        for tool in &t {
+            for h in [
+                "readOnlyHint",
+                "destructiveHint",
+                "idempotentHint",
+                "openWorldHint",
+            ] {
+                assert!(
+                    tool["annotations"][h].is_boolean(),
+                    "{} is missing {h}",
+                    tool["name"]
+                );
+            }
+        }
+        let ro = |n: &str| {
+            t.iter().find(|x| x["name"] == n).unwrap()["annotations"]["readOnlyHint"] == true
+        };
+        assert!(ro("clock_status") && ro("report_get"));
+        assert!(!ro("clock_advance") && !ro("fault_set") && !ro("scenario_run"));
     }
 
     #[test]

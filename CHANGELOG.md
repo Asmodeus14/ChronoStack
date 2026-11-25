@@ -9,6 +9,10 @@ ChronoStack is in alpha. Pre-releases are published on GitHub Releases.
 
 ## [Unreleased]
 
+### Changed
+
+- Every MCP tool now sets all four behaviour hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) explicitly; 6 tools had none and the rest had only some. Clients and directories that require all four, such as OpenAI's, accept the server. `fault_clear` is the only tool marked destructive; none is open-world.
+
 ## [0.1.0-alpha.10] - 2026-11-24
 
 ### Added
